@@ -974,12 +974,8 @@ export function menuReady(s: State = state): boolean {
 }
 export function setCrop(id: string, crop: Crop): void { setWall(id, { crop }); set({ cropId: undefined }); void encodeWall(id); scheduleSave(); }
 
-// ------------------------------------------------------------------ soft focus
-/**
- * The soft focus switch: on, the firmware gets soft focus as a function of the ADJ lever (off /
- * weak / medium / strong, fixed strengths). The clarity table stays official. (GR Mod 0.4.x put
- * fixed strengths on clarity -2 / -3 / -4 instead; such files are still recognised, see `softText`.)
- */
+// ------------------------------------------------------------------ import fitting options
+/** GR IV: refit with an additive hue-sector correction (PR #21) or with the LUT's white kept (PR #22); both start off. */
 export function setAdditiveHue(value: boolean): void {
   if (state.info?.family !== 'gr4') return;
   set({ additiveHue: value }); scheduleSave();
@@ -998,6 +994,13 @@ export function setKeepWhite(value: boolean): void {
     if (p && p.kind === 'cube') void runPreset(id, p.fileName, p.kind, p.text);
   }
 }
+
+// ------------------------------------------------------------------ soft focus
+/**
+ * The soft focus switch: on, the firmware gets soft focus as a function of the ADJ lever (off /
+ * weak / medium / strong, fixed strengths). The clarity table stays official. (GR Mod 0.4.x put
+ * fixed strengths on clarity -2 / -3 / -4 instead; such files are still recognised, see `softText`.)
+ */
 export function setSoft(soft: boolean): void { set({ soft }); scheduleSave(); }
 export function softOn(s: State = state): boolean { return !!s.soft; }
 
