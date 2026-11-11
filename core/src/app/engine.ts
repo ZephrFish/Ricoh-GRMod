@@ -3,6 +3,7 @@
  * and offers everything the app does with it. Pure TypeScript, no platform APIs.
  */
 import {
+  COMP_OFFSET,
   CONTENT_AREA,
   FRAME_SIZE,
   Firmware,
@@ -202,6 +203,8 @@ export interface FirmwareSummary {
   dateStamp: boolean;
   /** True when the file unlocks the six looks of the GR IV Monochrome. */
   monoUnlock: boolean;
+  /** True when the file transforms HDR Tone into in-camera BT.2100 HLG HDR photo capture. */
+  hlgPhoto: boolean;
   /** Image Control slots the file adds (empty when none, or when they cannot be read). */
   extraSlots: { name: string; icon: Uint8Array }[];
   /** Power-off pictures chosen in the camera's End Screen menu (absent when none, or when they cannot be read). */
@@ -228,6 +231,8 @@ export interface BuildOptions {
   dateStamp?: boolean;
   /** The six black-and-white looks of the GR IV Monochrome. */
   monoUnlock?: boolean;
+  /** In-camera direct BT.2100 HLG HDR photo capture on HDR Tone slot. */
+  hlgPhoto?: boolean;
   /** Added Image Control slots (1 to 20), after the factory ones. */
   extraSlots?: ExtraSlotSpec[];
   /** Image Control menu order and hidden looks (factory ids 11..30 plus added styles 34..;
@@ -619,11 +624,11 @@ export class Engine {
           nameChanged: (!!looks!.films?.[i]?.name && looks!.films?.[i]?.name !== GR3X_FILM_NAMES[i]) || !!looks!.films?.[i]?.names,
           iconChanged: !!looks!.films?.[i]?.icon,
         })) : [], ratios: matched ? candidate!.ratios : [], softFocus: matched ? softFocus : [],
-        adjSoftFocus: matched && adjSoftFocus, dateStamp: matched && dateImprint, monoUnlock: matched && looks?.monoReplicas === true, extraSlots: [],
+        adjSoftFocus: matched && adjSoftFocus, dateStamp: matched && dateImprint, monoUnlock: matched && looks?.monoReplicas === true, extraSlots: [], hlgPhoto: false,
         ...(matched && pictures.length ? { shutdownPictures: pictures.map((p, k) => ({ id: p.id ?? k + 1, name: p.name, jpeg: p.jpeg })) } : {}),
         ...(matched && lookLayout ? { lookLayout: { order: [...lookLayout.order], hidden: [...lookLayout.hidden] } } : {}) };
     }
-    if (raw.length === BRIDGE_SIZE && sha256 === BRIDGE_SHA256) return { sha256, kind: 'bridge', changedBytes: 0, verified: true, slots: [], ratios: [], softFocus: [], adjSoftFocus: false, dateStamp: false, monoUnlock: false, extraSlots: [] };
+    if (raw.length === BRIDGE_SIZE && sha256 === BRIDGE_SHA256) return { sha256, kind: 'bridge', changedBytes: 0, verified: true, slots: [], ratios: [], softFocus: [], adjSoftFocus: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, extraSlots: [] };
     const describe = (d: Uint8Array): FirmwareSummary['slots'] =>
       this.g4.SLOTS.map((s) => {
         const names = {} as Record<LangCode, string>;
@@ -639,7 +644,7 @@ export class Engine {
         const iconChanged = !equalRange(d, s.iconOffset, this.decoded, s.iconOffset, icon.length);
         return { id: s.id, names, icon, colorChanged, nameChanged, iconChanged };
       });
-    if (sha256 === this.info.sha256) return { sha256, kind: 'official', changedBytes: 0, verified: true, slots: describe(this.decoded), ratios: [], softFocus: [], adjSoftFocus: false, dateStamp: false, monoUnlock: false, extraSlots: [] };
+    if (sha256 === this.info.sha256) return { sha256, kind: 'official', changedBytes: 0, verified: true, slots: describe(this.decoded), ratios: [], softFocus: [], adjSoftFocus: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, extraSlots: [] };
     try {
       const fw = new Firmware(raw);
       if (!equalRange(fw.header, 0, this.raw, 0, fw.header.length)) throw new Error('not 1.11');
@@ -648,12 +653,26 @@ export class Engine {
       // The monochrome looks on their own are written in place: all of their words, or none.
       if (!this.monoWords) this.monoWords = this.g4.monoUnlockWords(this.decoded);
       const monoUnlock = this.monoWords.every((w) => equalRange(fw.decoded, w.offset, w.bytes, 0, 4));
-      const allowed = monoUnlock ? [...this.editable, ...this.monoWords.map((w) => ({ what: 'monochrome looks', offset: w.offset, length: 4 }))] : this.editable;
+      // In-place HLG Photo check (e.g. from standalone patcher / test firmware)
+      const hookWord = (fw.decoded[0x823c60] | (fw.decoded[0x823c61] << 8) | (fw.decoded[0x823c62] << 16) | (fw.decoded[0x823c63] << 24)) >>> 0;
+      const hlgPhoto = hookWord === 0xea233caa;
+      let allowed = monoUnlock ? [...this.editable, ...this.monoWords.map((w) => ({ what: 'monochrome looks', offset: w.offset, length: 4 }))] : [...this.editable];
+      if (hlgPhoto) {
+        allowed.push(
+          { what: 'HLG hook', offset: 0x823c60, length: 4 },
+          { what: 'HLG landing block', offset: 0x10f2f10, length: 1456 },
+          { what: 'HLG T_REC[22]', offset: 0x13e6b28, length: 4 },
+          { what: 'HLG T_GAM[22]', offset: 0x13e64e0, length: 4 },
+          { what: 'HLG T_MA[22]', offset: 0x13e68ac, length: 4 },
+          { what: 'HLG UI labels', offset: 0x1395984, length: 0x10600 },
+          { what: 'HLG checksum word', offset: COMP_OFFSET, length: 4 }
+        );
+      }
       const checks = this.g4.selfCheck(this.raw, raw, allowed);
       const verified = Object.values(checks).every((v) => v === true);
-      return { sha256, kind: 'modified', changedBytes: countChangedBytes(fw.decoded, this.decoded), verified, slots: describe(fw.decoded), ratios: [], softFocus: this.g4.clarityChanges(fw.decoded), adjSoftFocus: false, dateStamp: false, monoUnlock, extraSlots: [] };
+      return { sha256, kind: 'modified', changedBytes: countChangedBytes(fw.decoded, this.decoded), verified, slots: describe(fw.decoded), ratios: [], softFocus: this.g4.clarityChanges(fw.decoded), adjSoftFocus: false, dateStamp: false, monoUnlock, hlgPhoto, extraSlots: [] };
     } catch {
-      return { sha256, kind: 'unknown', changedBytes: 0, verified: false, slots: [], ratios: [], softFocus: [], adjSoftFocus: false, dateStamp: false, monoUnlock: false, extraSlots: [] };
+      return { sha256, kind: 'unknown', changedBytes: 0, verified: false, slots: [], ratios: [], softFocus: [], adjSoftFocus: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, extraSlots: [] };
     }
   }
 
@@ -664,7 +683,7 @@ export class Engine {
    * payload, and the file passes the self-check for grown files.
    */
   private inspectGrown(sha256: string, raw: Uint8Array, dec: Uint8Array, describe: (d: Uint8Array) => FirmwareSummary['slots']): FirmwareSummary {
-    const unknown: FirmwareSummary = { sha256, kind: 'unknown', changedBytes: 0, verified: false, slots: [], ratios: [], softFocus: [], adjSoftFocus: false, dateStamp: false, monoUnlock: false, extraSlots: [] };
+    const unknown: FirmwareSummary = { sha256, kind: 'unknown', changedBytes: 0, verified: false, slots: [], ratios: [], softFocus: [], adjSoftFocus: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, extraSlots: [] };
     const so = sectionsOf(this.decoded);
     const sn = sectionsOf(dec);
     if (so.length !== sn.length) return unknown;
@@ -732,6 +751,7 @@ export class Engine {
       adjSoftFocus: !!features.adjSoftFocus,
       dateStamp: !!features.dateStamp,
       monoUnlock: !!features.monoUnlock,
+      hlgPhoto: !!features.hlgPhoto,
       extraSlots: (features.extraSlots ?? []).map((x) => ({ name: x.name, icon: x.icon })),
       ...(features.shutdown ? { shutdownPictures: [...features.shutdown.pictures] } : {}),
       ...(features.lookLayout ? { lookLayout: features.lookLayout } : {}),
@@ -1030,6 +1050,7 @@ export class Engine {
     const adjSoftFocus = !!(options && options.adjSoftFocus);
     const dateStamp = !!(options && options.dateStamp);
     const monoUnlock = !!(options && options.monoUnlock);
+    const hlgPhoto = !!(options && options.hlgPhoto);
     const extraSlots = options && options.extraSlots ? options.extraSlots : [];
     const pictures = options && options.shutdownPictures ? options.shutdownPictures : [];
     const lookLayout = options && options.lookLayout ? options.lookLayout : undefined;
@@ -1044,15 +1065,16 @@ export class Engine {
     if (exposurePreview && !on120) throw new FirmwareError('bad-edit', 'exposure preview needs GR IV firmware 1.20');
     if (exposurePreview && clarity.length > 0) throw new FirmwareError('bad-clarity', 'exposure preview cannot be combined with the clarity-table soft focus of 0.4.x');
     const softFocusMenu = adjSoftFocus && on120;
+    if (hdrGainMap && hlgPhoto) throw new FirmwareError('bad-hlg', 'the HLG photo mode cannot be combined with the HDR gain map');
     if (hdrGainMap && clarity.length > 0) throw new FirmwareError('bad-clarity', 'the HDR gain map cannot be combined with the clarity-table soft focus of 0.4.x');
     if (directFlash && clarity.length > 0) throw new FirmwareError('bad-clarity', 'Direct Flash cannot be combined with the clarity-table soft focus of 0.4.x');
     if (pictures.length > 0 && clarity.length > 0) throw new FirmwareError('bad-clarity', 'power-off pictures cannot be combined with the clarity-table soft focus of 0.4.x');
     if (adjSoftFocus && clarity.length > 0) throw new FirmwareError('bad-clarity', 'soft focus on the ADJ lever and on the clarity table cannot be combined');
     if (dateStamp && clarity.length > 0) throw new FirmwareError('bad-clarity', 'the date imprint cannot be combined with the clarity-table soft focus of 0.4.x');
     if (extraSlots.length > 0 && clarity.length > 0) throw new FirmwareError('bad-clarity', 'added slots cannot be combined with the clarity-table soft focus of 0.4.x');
-    if (edits.length === 0 && ratios.length === 0 && clarity.length === 0 && !adjSoftFocus && !dateStamp && !monoUnlock && extraSlots.length === 0 && pictures.length === 0 && !lookLayout && !directFlash && adjSlots === 5 && !hdrGainMap && !exposurePreview && !options.brightAuto) throw new FirmwareError('bad-edit', 'nothing to change');
+    if (edits.length === 0 && ratios.length === 0 && clarity.length === 0 && !adjSoftFocus && !dateStamp && !monoUnlock && !hlgPhoto && extraSlots.length === 0 && pictures.length === 0 && !lookLayout && !directFlash && adjSlots === 5 && !hdrGainMap && !exposurePreview && !options.brightAuto) throw new FirmwareError('bad-edit', 'nothing to change');
     if (Object.keys(cinemaHalation).length > 0 && clarity.length > 0) throw new FirmwareError('bad-clarity', 'halation cannot be combined with the clarity-table soft focus of 0.4.x');
-    const features = { ...(options.brightAuto ? { brightAuto: options.brightAuto } : {}), adjSoftFocus, guard: clarity.length === 0 && options.guard !== false, ...(Object.keys(cinemaHalation).length > 0 ? { cinemaHalation } : {}), ...(dateStamp ? { dateStamp } : {}), ...(monoUnlock ? { monoUnlock } : {}), ...(extraSlots.length > 0 ? { extraSlots } : {}), ...(pictures.length > 0 ? { shutdown: { pictures, factory: this.g4.aspect.factoryShutdownJpegs(this.decoded) } } : {}), ...(lookLayout ? { lookLayout } : {}), ...(directFlash ? { directFlash } : {}), ...(adjSlots > 5 ? { adjSlots } : {}), ...(hdrGainMap ? { hdrGainMap } : {}), ...(exposurePreview ? { exposurePreview } : {}), ...(softFocusMenu ? { softFocusMenu } : {}) };
+    const features = { ...(options.brightAuto ? { brightAuto: options.brightAuto } : {}), adjSoftFocus, guard: clarity.length === 0 && options.guard !== false, ...(Object.keys(cinemaHalation).length > 0 ? { cinemaHalation } : {}), ...(dateStamp ? { dateStamp } : {}), ...(monoUnlock ? { monoUnlock } : {}), ...(hlgPhoto ? { hlgPhoto } : {}), ...(extraSlots.length > 0 ? { extraSlots } : {}), ...(pictures.length > 0 ? { shutdown: { pictures, factory: this.g4.aspect.factoryShutdownJpegs(this.decoded) } } : {}), ...(lookLayout ? { lookLayout } : {}), ...(directFlash ? { directFlash } : {}), ...(adjSlots > 5 ? { adjSlots } : {}), ...(hdrGainMap ? { hdrGainMap } : {}), ...(exposurePreview ? { exposurePreview } : {}), ...(softFocusMenu ? { softFocusMenu } : {}) };
     const test = {
       ...(options && options.dateStampFixed ? { dateStampFixed: options.dateStampFixed, dateStampDiag: !!options.dateStampDiag } : {}),
       ...(options && options.halationDiag ? { halationDiag: true } : {}),
