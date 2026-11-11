@@ -12,7 +12,7 @@ import { applySlot } from './preview';
 import {
   addRatio, addWallFiles, askForOfficial, bridgeLoaded, loadFirmwareFile, loadIconImage, loadPresetFile, loadPreviewFile, moveWall, nameProblem, openCrop, outputFirmware, previewPhoto, removePreset, removeWall,
   maxRatios, ratioName, ratioProblem, removeRatio, setActiveRatio, setActiveSlot, setCrop, setIcon, setName, setPreviewMode, setRatio, setRatioBackdrop, useStore, wallBitmap,
-  setSoft, setAdditiveHue,
+  setSoft, setAdditiveHue, setKeepWhite,
   setDateStamp,
   setMonoUnlock,
   setDirectFlash, setAdjSlots, adjSlotsOf, setHdr, setExposurePreview, setBrightAuto,
@@ -700,6 +700,7 @@ function FeatureSwitches({ mono, boxRef, from }: { mono: boolean; boxRef?: (el: 
   const brightAuto = useStore((s) => s.brightAuto);
   const brightAutoOk = useStore((s) => !!s.info?.features.brightAuto);
   const additiveHue = useStore((s) => s.additiveHue);
+  const keepWhite = useStore((s) => s.keepWhite);
   const hdrOk = useStore((s) => !!s.info?.features.hdrGainMap);
   const preview = useStore((s) => s.exposurePreview);
   const previewOk = useStore((s) => !!s.info?.features.exposurePreview);
@@ -727,6 +728,7 @@ function FeatureSwitches({ mono, boxRef, from }: { mono: boolean; boxRef?: (el: 
       {adjMax > 5 && <AdjSlotsRow max={adjMax} />}
       {brightAutoOk && <div className="soft-switch"><Select value={brightAuto || 'off'} options={[{ value: 'off', label: t('brightAutoOff') }, { value: 'balanced', label: t('brightAutoBalanced') }, { value: 'bright', label: t('brightAutoBright') }]} onChange={(v) => setBrightAuto(v === 'off' ? false : v as 'bright' | 'balanced')} label={t('navBrightAuto')} variant="row" /></div>}
       {!gr3x && <FeatureRow icon={Ico.image} title={t('additiveHueTitle')} sub={t('additiveHueSub')} on={additiveHue} onChange={setAdditiveHue} />}
+      {!gr3x && <FeatureRow icon={Ico.image} title={t('keepWhiteTitle')} sub={t('keepWhiteSub')} on={keepWhite} onChange={setKeepWhite} />}
     </div>
   );
 }
