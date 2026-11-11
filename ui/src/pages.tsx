@@ -703,6 +703,9 @@ function FeatureSwitches({ mono, boxRef, from }: { mono: boolean; boxRef?: (el: 
   const brightAutoOk = useStore((s) => !!s.info?.features.brightAuto);
   const additiveHue = useStore((s) => s.additiveHue);
   const keepWhite = useStore((s) => s.keepWhite);
+  // The import-fitting switches act only on GR IV firmware; additive hue only on added slots.
+  const gr4 = useStore((s) => s.info?.family === 'gr4');
+  const hasExtras = useStore((s) => s.extras.length > 0);
   const hdrOk = useStore((s) => !!s.info?.features.hdrGainMap);
   const preview = useStore((s) => s.exposurePreview);
   const previewOk = useStore((s) => !!s.info?.features.exposurePreview);
@@ -730,8 +733,8 @@ function FeatureSwitches({ mono, boxRef, from }: { mono: boolean; boxRef?: (el: 
       {previewOk && <FeatureRow icon={Ico.preview} title={t('navPreview')} sub={t('previewSub')} on={preview} onChange={setExposurePreview} />}
       {adjMax > 5 && <AdjSlotsRow max={adjMax} />}
       {brightAutoOk && <div className="soft-switch"><Select value={brightAuto || 'off'} options={[{ value: 'off', label: t('brightAutoOff') }, { value: 'balanced', label: t('brightAutoBalanced') }, { value: 'bright', label: t('brightAutoBright') }]} onChange={(v) => setBrightAuto(v === 'off' ? false : v as 'bright' | 'balanced')} label={t('navBrightAuto')} variant="row" /></div>}
-      {!gr3x && <FeatureRow icon={Ico.image} title={t('additiveHueTitle')} sub={t('additiveHueSub')} on={additiveHue} onChange={setAdditiveHue} />}
-      {!gr3x && <FeatureRow icon={Ico.image} title={t('keepWhiteTitle')} sub={t('keepWhiteSub')} on={keepWhite} onChange={setKeepWhite} />}
+      {gr4 && hasExtras && <FeatureRow icon={Ico.image} title={t('additiveHueTitle')} sub={t('additiveHueSub')} on={additiveHue} onChange={setAdditiveHue} />}
+      {gr4 && <FeatureRow icon={Ico.image} title={t('keepWhiteTitle')} sub={t('keepWhiteSub')} on={keepWhite} onChange={setKeepWhite} />}
     </div>
   );
 }

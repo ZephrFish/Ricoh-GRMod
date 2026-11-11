@@ -7,6 +7,8 @@
   "workspaces": ["core", "ui"],
   "scripts": {
     "test": "npm -w core test",
-    "build": "npm -w ui run build"
+    "build": "npm -w ui run build",
+    "typecheck": "npm -w core run typecheck && npm -w ui run typecheck",
+    "check": "npm run typecheck && npm test"
   }
 }

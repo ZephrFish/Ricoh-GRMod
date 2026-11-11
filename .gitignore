@@ -24,5 +24,9 @@ worktrees/
 bin/
 
 
-# Git worktrees used for feature work
+# Git worktrees used for feature work, build and test leftovers
 .worktrees/
+*.tsbuildinfo
+coverage/
+.vite/
+tmp/

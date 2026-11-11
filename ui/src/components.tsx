@@ -267,7 +267,7 @@ export function Toasts() {
         <div key={x.id} className={`toast ${x.kind}`} role="status">
           <span className="toast-text">{x.text}</span>
           {x.action && <button className="toast-action" onClick={() => { x.action!.run(); dismissToast(x.id); }}>{x.action.label}</button>}
-          <button className="toast-x" aria-label="close" onClick={() => dismissToast(x.id)}>{Ico.x}</button>
+          <button className="toast-x" aria-label={t('closeLabel')} onClick={() => dismissToast(x.id)}>{Ico.x}</button>
         </div>
       ))}
     </div>
