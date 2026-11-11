@@ -12,10 +12,10 @@ import { applySlot } from './preview';
 import {
   addRatio, addWallFiles, askForOfficial, bridgeLoaded, loadFirmwareFile, loadIconImage, loadPresetFile, loadPreviewFile, moveWall, nameProblem, openCrop, outputFirmware, previewPhoto, removePreset, removeWall,
   maxRatios, ratioName, ratioProblem, removeRatio, setActiveRatio, setActiveSlot, setCrop, setIcon, setName, setPreviewMode, setRatio, setRatioBackdrop, useStore, wallBitmap,
-  setSoft,
+  setSoft, setAdditiveHue, setKeepWhite,
   setDateStamp,
   setMonoUnlock,
-  setDirectFlash,
+  setDirectFlash, setAdjSlots, adjSlotsOf, setHdr, setExposurePreview, setBrightAuto,
   extraName, extraNameProblem, extraProblem, halationOf, removeExtraSlot, setExtraCount, setExtraName, setHalation, slotOf,
   filmCountChoosable, removeFilm, setFilmCount,
   hasLookLayout, isGr3, KEEP_VISIBLE, lookHiddenNow, lookMonoOnly, lookName, lookOrderAvailable, lookOrderNow, moveLook, moveLookTo, resetLookLayout, setLookHidden,
@@ -66,9 +66,10 @@ function PhotoCompare({ params }: { params?: color.SlotParams }) {
   const after = useMemo(() => {
     if (!base || !halo) return base;
     const out = new ImageData(new Uint8ClampedArray(base.data), base.width, base.height);
-    halateRgba(out.data, out.width, out.height, halo.preview as 1 | 2 | 3, light, haloColour);
+    // GR IV's white from 0.9 scatters at Weak / Medium; GR III / IIIx keep the 0.8.2 white glow
+    halateRgba(out.data, out.width, out.height, halo.preview as 1 | 2 | 3, light, haloColour, gr3x ? 'classic' : 'scatter');
     return out;
-  }, [base, haloLevel, light, haloColour]);
+  }, [base, haloLevel, light, haloColour, gr3x]);
   return <Compare photo={photo} after={after} label={t('preset')} />;
 }
 
@@ -666,6 +667,22 @@ function FeatureRow({ icon, title, sub, on, onChange }: { icon: ReactNode; title
   );
 }
 
+/** ADJ lever slots: the camera's five, or 6..8 (set in the camera, Customize Settings). */
+function AdjSlotsRow({ max }: { max: number }) {
+  const n = useStore((s) => adjSlotsOf(s));
+  const options = Array.from({ length: max - 4 }, (_, i) => ({ value: String(5 + i), label: String(5 + i) }));
+  return (
+    <div className={`soft-switch ${n > 5 ? 'on' : ''}`}>
+      <span className="page-icon soft-ico">{Ico.adj}</span>
+      <div className="soft-text">
+        <b>{t('navAdjSlots')}</b>
+        <span className="muted small ellipsis">{t('adjSlotsSub')}</span>
+      </div>
+      <Segmented value={String(n)} onChange={(v) => setAdjSlots(Number(v))} options={options} />
+    </div>
+  );
+}
+
 /**
  * The additions that are not slots: soft focus on the ADJ lever (off / weak / medium / strong),
  * the date imprint with its menu, and the six monochrome looks (colour models only).
@@ -678,6 +695,15 @@ function FeatureSwitches({ mono, boxRef, from }: { mono: boolean; boxRef?: (el: 
   const dateOk = useStore(s => !!s.info?.features.dateStamp);
   const flash = useStore((s) => s.directFlash);
   const flashOk = useStore((s) => !!s.info?.features.directFlash);
+  const adjMax = useStore((s) => s.info?.features.maxAdjSlots ?? 5);
+  const hdr = useStore((s) => s.hdr);
+  const brightAuto = useStore((s) => s.brightAuto);
+  const brightAutoOk = useStore((s) => !!s.info?.features.brightAuto);
+  const additiveHue = useStore((s) => s.additiveHue);
+  const keepWhite = useStore((s) => s.keepWhite);
+  const hdrOk = useStore((s) => !!s.info?.features.hdrGainMap);
+  const preview = useStore((s) => s.exposurePreview);
+  const previewOk = useStore((s) => !!s.info?.features.exposurePreview);
   const own = useRef<HTMLDivElement | null>(null);
   // Moved to the other column: glide from where it was (FLIP). Rectangles are in window pixels,
   // the transform is in the zoomed interface's pixels.
@@ -697,6 +723,12 @@ function FeatureSwitches({ mono, boxRef, from }: { mono: boolean; boxRef?: (el: 
       {(!gr3x || dateOk) && <FeatureRow icon={Ico.date} title={t('navDate')} sub={t('dateSub')} on={date} onChange={setDateStamp} />}
       {!mono && !gr3x && <FeatureRow icon={Ico.mono} title={t(gr3x ? 'gr3xReplicaTitle' : 'navMono')} sub={t(gr3x ? 'gr3xReplicaSub' : 'monoSub')} on={looks} onChange={setMonoUnlock} />}
       {flashOk && <FeatureRow icon={Ico.flash} title={t('navFlash')} sub={t('flashSub')} on={flash} onChange={setDirectFlash} />}
+      {hdrOk && <FeatureRow icon={Ico.hdr} title={t('navHdr')} sub={t('hdrSub')} on={hdr} onChange={setHdr} />}
+      {previewOk && <FeatureRow icon={Ico.preview} title={t('navPreview')} sub={t('previewSub')} on={preview} onChange={setExposurePreview} />}
+      {adjMax > 5 && <AdjSlotsRow max={adjMax} />}
+      {brightAutoOk && <div className="soft-switch"><Select value={brightAuto || 'off'} options={[{ value: 'off', label: t('brightAutoOff') }, { value: 'balanced', label: t('brightAutoBalanced') }, { value: 'bright', label: t('brightAutoBright') }]} onChange={(v) => setBrightAuto(v === 'off' ? false : v as 'bright' | 'balanced')} label={t('navBrightAuto')} variant="row" /></div>}
+      {!gr3x && <FeatureRow icon={Ico.image} title={t('additiveHueTitle')} sub={t('additiveHueSub')} on={additiveHue} onChange={setAdditiveHue} />}
+      {!gr3x && <FeatureRow icon={Ico.image} title={t('keepWhiteTitle')} sub={t('keepWhiteSub')} on={keepWhite} onChange={setKeepWhite} />}
     </div>
   );
 }

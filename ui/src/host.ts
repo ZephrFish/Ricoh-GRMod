@@ -101,7 +101,7 @@ export const host = {
     try { return (await call('GET', '/api/firmware/latest?model=' + q(model))).json(); }
     catch (e) { if (e instanceof HostError && e.code === 'not-found') return null; throw e; }
   },
-  /** `version`: the supported release (a `fallback`); omitted for the site's current one. */
+  /** `version`: which release (the site's current one or its `fallback`); omitted for the current one. */
   async firmwareDownload(model: string, version?: string, signal?: AbortSignal): Promise<{ name: string; version: string; data: Uint8Array }> {
     const res = await call('POST', '/api/firmware/download', JSON.stringify(version ? { model, version } : { model }), true, signal);
     let data: Uint8Array;
@@ -123,6 +123,11 @@ export const host = {
   async updateState(): Promise<UpdateState> { return (await call('GET', '/api/update/state')).json(); },
   /** The published releases with their text, newest first. */
   async updateNotes(): Promise<UpdateState & { releases: ReleaseNote[] }> { return (await call('GET', '/api/update/notes')).json(); },
+  /** The acknowledgements file (credits.json) from the project's site; null when it cannot be had. */
+  async credits(): Promise<unknown> {
+    try { return ((await (await call('GET', '/api/credits')).json()) as { credits?: unknown }).credits ?? null; }
+    catch { return null; }
+  },
   /** Show a release's page in the browser. */
   async releasePage(version: string): Promise<void> { try { await post('/api/update/page', { version }); } catch { /* no browser */ } },
   /** A file the user may keep next to the program (e.g. `preview.jpg`); null when there is none. */
