@@ -16,3 +16,17 @@ examples/gr3x/T6/sources/
 
 # Update signing keys never go into the repository
 *.key
+
+# Git worktrees directory
+worktrees/
+
+# Local binaries and launchers
+bin/
+
+
+# Git worktrees used for feature work, build and test leftovers
+.worktrees/
+*.tsbuildinfo
+coverage/
+.vite/
+tmp/

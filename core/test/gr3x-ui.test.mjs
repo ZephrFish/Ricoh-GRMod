@@ -55,11 +55,10 @@ describe('GR IIIx UI family isolation', () => {
   });
   it('blocks all unported output actions before a destination can be selected', async () => {
     await store.adoptFirmware('fwdc243b.bin', '1.60', new Uint8Array([1]));
-    await store.outputBridge({ kind: 'folder' });
+    expect(store.outputBridge).toBeUndefined(); // no bridge firmware since 0.9.0 (628c475)
     expect(store.outputEntry).toBeUndefined();
     expect(store.outputWallpaper).toBeUndefined();
-    store.setBridgeOpen(true);
-    expect(store.getState().bridgeOpen).toBe(false);
+    expect(store.setBridgeOpen).toBeUndefined();
     for (const fn of [mocks.host.pickDirectory, mocks.host.write, mocks.engine.build, mocks.engine.bridge, mocks.engine.script]) expect(fn).not.toHaveBeenCalled();
   });
   it('exports exactly the ratios added through the real build action', async () => {
@@ -240,17 +239,18 @@ describe('GR IIIx UI family isolation', () => {
     await store.outputFirmware({ kind: 'folder' }, true); // nothing open: returns before asking
     expect(mocks.host.write).not.toHaveBeenCalled();
   });
-  it.each(['outputBridge'])('cancels GR IV %s when the user switches to IIIx in the folder picker', async action => {
+  it.each(['outputFirmware'])('cancels GR IV %s when the user switches to IIIx in the folder picker', async action => {
     const gr4 = { ...info(), family: 'gr4', models: ['HDF'], filename: 'fwdc248b.bin' };
     gr4.capabilities = { ...gr4.capabilities, factoryEntry: true, bridge: true };
     mocks.engine.open.mockResolvedValueOnce(gr4);
     await store.adoptFirmware('fwdc248b.bin', '1.11', new Uint8Array([1]));
     let finish;
     mocks.host.pickDirectory.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    store.setSoft(true);
     const pending = store[action]({ kind: 'folder' });
     store.setModel('GR3X_HDF'); finish('/chosen'); await pending;
     expect(mocks.host.write).not.toHaveBeenCalled();
-    expect(mocks.engine.bridge).not.toHaveBeenCalled();
+    expect(mocks.engine.build).not.toHaveBeenCalled();
   });
   it('opens GR III 2.10 as its own model in the same family and writes fwdc239b.bin', async () => {
     mocks.engine.open.mockResolvedValue({ ...info(), version: '2.10', filename: 'fwdc239b.bin', models: ['GR3_HDF'], });
@@ -266,9 +266,8 @@ describe('GR IIIx UI family isolation', () => {
       { adjSoftFocus: false, dateStamp: false, monoUnlock: false },
     ]);
     expect(mocks.host.write).toHaveBeenCalledWith('/chosen/fwdc239b.bin', new Uint8Array([9, 2]));
-    // no bridge firmware for this family
-    store.setBridgeOpen(true);
-    expect(store.getState().bridgeOpen).toBe(false);
+    // no bridge firmware for this family (nor, since 0.9.0, for any)
+    expect(store.setBridgeOpen).toBeUndefined();
   });
   it('switching between GR III and GR IIIx closes the other camera\'s firmware', async () => {
     mocks.engine.open.mockResolvedValue({ ...info(), version: '2.10', filename: 'fwdc239b.bin', models: ['GR3_HDF'], });

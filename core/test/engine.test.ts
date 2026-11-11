@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Engine, SHUTDOWN_H, SHUTDOWN_W, card, fw, jpeg, wallpaper } from '../src';
 
-const P = new URL('../testdata/private/', import.meta.url).pathname;
+const P = fileURLToPath(new URL('../testdata/private/', import.meta.url));
 
 /** Change one more word so that the 32-bit word sum of the payload is zero again (as a foreign tool would). */
 function fixSum(d: Uint8Array): Uint8Array {
@@ -13,8 +16,9 @@ function fixSum(d: Uint8Array): Uint8Array {
   dv.setUint32(o, (dv.getUint32(o, true) - sum) >>> 0, true);
   return d;
 }
-const have = existsSync(P + 'official.bin');
-const OUT = '/tmp/claude-0/-home-claude/88a14fdf-ef79-5caf-8cde-fe4ab6536e46/scratchpad/e2e/';
+const have = existsSync(P + 'official.bin') && existsSync(P + 'B.bin');
+/** Built files are kept here for a look by hand: GRMOD_E2E_OUT, or grmod-e2e in the system's temporary folder. */
+const OUT = join(process.env.GRMOD_E2E_OUT ?? join(tmpdir(), 'grmod-e2e'), '/');
 
 describe.skipIf(!have)('engine end to end', () => {
   let eng: Engine;
