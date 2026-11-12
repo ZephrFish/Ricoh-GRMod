@@ -4,8 +4,8 @@ import type { CameraModel, ClarityChange, ExtraSlotSpec, FirmwareInfo, FirmwareS
 import { engine, EngineError } from './engine';
 import { host, HostError, sha256Hex } from './host';
 import type { ParkedEntry, Volume } from './host';
-import { t } from './i18n';
-import type { Key } from './i18n';
+import { normaliseUiLang, setUiLang, t } from './i18n';
+import type { Key, UiLangMode } from './i18n';
 import { cropToRgb, defaultCrop, ensureIconFont, imageIcon, loadBitmap, textIcon, workingCopy } from './pixels';
 import type { Crop } from './pixels';
 import { decodePreview } from './preview';
@@ -55,6 +55,8 @@ export const TOUR_IDS: readonly TourId[] = ['overview', 'ic', 'ratio', 'wall', '
 export interface TourState { id: TourId; steps: number[]; index: number; replay: boolean }
 /** `reset`: the firmware written is the official one; the dialog asks in red whether the camera's settings were reset first. */
 export interface Confirm { title: string; warn?: string; reset?: boolean; lines: string[]; ok: string; resolve: (v: boolean) => void }
+/** A firmware file being inspected: `error` is `needs-open` (no official firmware to compare with), `unreadable` (not a file the engine can read) or `size`. */
+export interface InspectView { name: string; size: number; busy: boolean; summary?: FirmwareSummary; error?: 'needs-open' | 'unreadable' | 'size' }
 export interface State {
   ready: boolean; page: Page;
   fwName?: string; fwBusy: boolean; info?: FirmwareInfo; raw?: Uint8Array;
@@ -81,6 +83,12 @@ export interface State {
   /** GR III / IIIx: how many films the build has (1..info.features.maxFilms). */
   filmCount: number;
   previewMode: PreviewMode; photoRev: number; activeSlot: SlotKey;
+  /** QoL wave C. Preset library entries of both cameras (loaded on first use, see loadLibrary). */
+  library: LibraryEntry[];
+  /** QoL wave C. What the left side of the photo preview shows: `orig` (the photo as it is, the default) or another slot's key. View state, saved with previewMode. */
+  compareWith: string;
+  /** The library dialog: which slot it works on and whether it saves that slot's preset or applies an entry to it. */
+  libraryPicker?: { slot: SlotKey; mode: 'save' | 'apply' };
   /** Added Image Control slots, in the camera's order (none by default). */
   extras: ExtraSlot[];
   /** Image Control menu order (`f11`..`f30`, or an added slot's key) and hidden keys. Empty = factory order, nothing hidden. */
@@ -95,6 +103,10 @@ export interface State {
   /** Why the download dialog is open, when it says so: a 1.12 bridge firmware file is open. */
   onlineReason?: 'bridge-loaded';
   tour?: TourState; toursSeen: TourId[];
+  /** The app's own interface language (not the camera menu language `lang`); persisted in project.json as `uiLang`. */
+  uiLang: UiLangMode;
+  /** QoL wave B: the "Inspect a firmware file" dialog (open while set). */
+  inspectView?: InspectView;
 }
 
 const SLOT_IDS: readonly SlotId[] = GR3X_FILM_IDS;
@@ -107,10 +119,15 @@ export const shownSlots = (s: State = state): FirmwareInfo['slots'] => (s.info ?
 const availableSlots = (s: State = state): SlotId[] => s.info ? shownSlots(s).map(slot => slot.id) : (isGr3(s.model) ? [...GR3X_FILM_IDS] : ['CY', 'CG']);
 const emptySlot = (): SlotState => ({ names: {}, icon: { mode: 'keep', text: '', style: 'film' } });
 const emptySlots = (): Record<SlotId, SlotState> => Object.fromEntries(SLOT_IDS.map(id => [id, emptySlot()])) as Record<SlotId, SlotState>;
+/**
+ * The camera menu language a new project starts on (and a saved project with an unknown one falls
+ * back to). English, not the upstream zh-CN, for this fork; a project that already saved a language keeps it.
+ */
+const DEFAULT_CAMERA_LANG: LangCode = 'en';
 let state: State = {
-  ready: false, page: 'ic', fwBusy: false, model: 'HDF', lang: 'zh-CN',
-  slots: emptySlots(), extras: [], lookOrder: [], lookHidden: [], lookOrder3: [], lookHidden3: [], wall: [], ratios: [], ratioBackdrop: 'photo', brightAuto: false, additiveHue: false, keepWhite: false, soft: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, directFlash: false, hdr: false, exposurePreview: false, adjSlots: 5, filmCount: 0, previewMode: 'photo', photoRev: 0, activeSlot: 'CY', volumes: [],
-  copySource: 'card', parked: [], backups: [], copySel: [], copyInfo: {}, builds: [], showAll: false, toasts: [], onlineOpen: false, toursSeen: [],
+  ready: false, page: 'ic', fwBusy: false, model: 'HDF', lang: DEFAULT_CAMERA_LANG,
+  slots: emptySlots(), extras: [], lookOrder: [], lookHidden: [], lookOrder3: [], lookHidden3: [], wall: [], ratios: [], ratioBackdrop: 'photo', brightAuto: false, additiveHue: false, keepWhite: false, soft: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, directFlash: false, hdr: false, exposurePreview: false, adjSlots: 5, filmCount: 0, previewMode: 'photo', photoRev: 0, activeSlot: 'CY', library: [], compareWith: 'orig', volumes: [],
+  copySource: 'card', parked: [], backups: [], copySel: [], copyInfo: {}, builds: [], showAll: false, toasts: [], onlineOpen: false, toursSeen: [], uiLang: 'auto',
 };
 const listeners = new Set<() => void>();
 function set(patch: Partial<State> | ((s: State) => Partial<State>)): void {
@@ -167,12 +184,133 @@ function askOfficial(lines: string[], warn?: string): Promise<boolean> {
   return ask(t('resetConfirmTitle'), lines, t('resetConfirmOk'), warn, true);
 }
 export function answerConfirm(v: boolean): void { const c = state.confirm; set({ confirm: undefined }); c?.resolve(v); }
-function fail(e: unknown): void {
+/** Exported for the tests. A code with a plain-language hint (errorHint) shows the hint and the short code; others show code and message. */
+export function fail(e: unknown): void {
   const code = e instanceof HostError || e instanceof EngineError ? e.code : '';
   const msg = e instanceof Error ? e.message : String(e);
   console.error(e);
+  const hint = code ? errorHint(code, msg) : undefined;
+  if (hint) { toast(`${t('error')} · ${t(hint)} (${code})`.slice(0, 220), 'error'); return; }
   toast(`${t('error')}${code ? ` · ${code}` : ''}${msg && msg !== code ? ` · ${msg}` : ''}`.slice(0, 220), 'error');
 }
+
+// ------------------------------------------------------------------ QoL wave B: undo for deletes
+/**
+ * @decision DEC-QOLB-UNDO-001
+ * @title One last-deleted record; host files are deleted only when the undo window closes
+ * @status accepted
+ * @rationale Removing an added slot, a ratio or a picture used to be final at once. The delete now
+ *   leaves one record (a new delete replaces it) and a toast with an Undo button. Everything the
+ *   item needs to come back is already in memory (preset text, icon, blob, preview), so the only
+ *   thing deferred is the removal of its host store files (`preset-<key>`, `wall-<id>`): `commit`
+ *   runs when the toast's window ends, or when another delete replaces the record. Deleting the files at once and re-writing them on undo would work too, but a
+ *   crash in between would then lose the preset for good; an orphaned file after a crash only costs a few kB.
+ */
+interface Deleted { model: CameraModel; restore: () => void; commit: () => void; timer: ReturnType<typeof setTimeout> }
+let lastDeleted: Deleted | undefined;
+const UNDO_MS = 12000;
+/** Whether a delete can still be taken back. */
+export const undoPending = (): boolean => !!lastDeleted;
+function flushDeleted(): void { const d = lastDeleted; lastDeleted = undefined; if (d) { clearTimeout(d.timer); d.commit(); } }
+function recordDeleted(text: string, restore: () => void, commit: () => void): void {
+  flushDeleted();
+  const d: Deleted = { model: state.model, restore, commit, timer: setTimeout(() => { if (lastDeleted === d) flushDeleted(); }, UNDO_MS) };
+  lastDeleted = d;
+  toast(text, 'info', { label: t('undo'), run: () => undoDelete() });
+}
+/** Take the last delete back (the toast's button and Cmd/Ctrl+Z). */
+export function undoDelete(): void {
+  const d = lastDeleted; if (!d) return;
+  lastDeleted = undefined; clearTimeout(d.timer);
+  if (d.model !== state.model) { d.commit(); return; }
+  d.restore();
+  scheduleSave();
+}
+
+// ------------------------------------------------------------------ QoL wave B: inspect any firmware file
+/**
+ * @decision DEC-QOLB-INSPECT-001
+ * @title Inspect compares with the open official firmware, so it needs one open
+ * @status accepted
+ * @rationale engine.inspect (core app/engine.ts) diffs a file against the official firmware the
+ *   engine has open and reports kind / verified / features; the summary carries no model or version
+ *   of its own. The dialog therefore names the open firmware (family and version) as the reference
+ *   and asks for one when none is open, instead of guessing a model from the bytes.
+ */
+let inspectGen = 0;
+export function closeInspect(): void { inspectGen++; set({ inspectView: undefined }); }
+export async function inspectFile(file: File): Promise<void> {
+  const gen = ++inspectGen;
+  const view = { name: file.name, size: file.size };
+  if (!state.info) { set({ inspectView: { ...view, busy: false, error: 'needs-open' } }); return; }
+  if (file.size < 1_000_000 || file.size > 200_000_000) { set({ inspectView: { ...view, busy: false, error: 'size' } }); return; }
+  set({ inspectView: { ...view, busy: true } });
+  try {
+    const summary = await engine.inspect(new Uint8Array(await file.arrayBuffer()));
+    if (gen === inspectGen) set({ inspectView: { ...view, busy: false, summary } });
+  } catch (e) {
+    console.warn('inspect', e);
+    if (gen === inspectGen) set({ inspectView: { ...view, busy: false, error: 'unreadable' } });
+  }
+}
+
+// ------------------------------------------------------------------ QoL wave B: keyboard shortcuts
+/**
+ * @decision DEC-QOLB-KEYS-001
+ * @title One global handler in the store; it yields to anything that already owns the key
+ * @status accepted
+ * @rationale Cmd/Ctrl+E (export to a folder, through the build summary), Cmd/Ctrl+Z (undo the last
+ *   delete, only while one is pending) and the arrow keys (Left/Right through the Image Control
+ *   slots, whose tabs are horizontal; Up/Down through the ratios, a vertical list). The handler is a
+ *   plain function of the key event so it can be tested without a DOM, and app.tsx only installs it
+ *   on window. It does nothing while the focus is in a field (the browser's own text undo and
+ *   caret keys win), while a dialog, the crop editor, the guided tour or a busy overlay is up,
+ *   with Alt held, or when a widget already handled the key (`defaultPrevented`: the tab lists,
+ *   the compare slider, select menus). Escape is never touched: the dialogs keep their own handlers.
+ */
+export interface ShortcutKey {
+  key: string; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean; defaultPrevented?: boolean;
+  target?: unknown; preventDefault?: () => void;
+}
+const typing = (target: unknown): boolean => {
+  const el = target as { tagName?: string; isContentEditable?: boolean; closest?: (sel: string) => unknown } | null;
+  if (!el) return false;
+  return /^(INPUT|TEXTAREA|SELECT)$/i.test(el.tagName ?? '') || !!el.isContentEditable || !!el.closest?.('[contenteditable="true"],[role="listbox"],[role="menu"],[role="slider"]');
+};
+/** The slot keys the Image Control page shows as tabs, in order. */
+export function slotTabKeys(s: State = state): SlotKey[] {
+  return s.info?.family === 'gr3x' ? shownSlots(s).map((x) => x.id) : ['CY', 'CG', ...s.extras.map((x) => x.key)];
+}
+/** Whether something modal is up (a dialog of the store, the crop editor, the tour, the busy overlay, or any open dialog element). */
+const modalUp = (s: State): boolean =>
+  !!(s.confirm || s.inspectView || s.cropId || s.onlineOpen || s.tour || s.busy)
+  || (typeof document !== 'undefined' && typeof document.querySelector === 'function' && !!document.querySelector('[role="dialog"],[role="alertdialog"]'));
+/** Handle a key press; returns whether it was taken. */
+export function handleShortcut(e: ShortcutKey): boolean {
+  if (e.defaultPrevented || e.altKey || typing(e.target) || modalUp(state)) return false;
+  const take = (): true => { e.preventDefault?.(); return true; };
+  const mod = !!(e.metaKey || e.ctrlKey), key = e.key.toLowerCase();
+  if (mod && !e.shiftKey && key === 'z') { if (!undoPending()) return false; undoDelete(); return take(); }
+  if (mod && !e.shiftKey && key === 'e') {
+    if (state.page === 'copies' || !state.info) return false;
+    if (bridgeLoaded()) askForOfficial(); else void outputFirmware({ kind: 'folder' });
+    return take();
+  }
+  if (mod || e.shiftKey) return false;
+  if (state.page === 'ic' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    const keys = slotTabKeys(); const at = Math.max(0, keys.indexOf(state.activeSlot));
+    const next = keys[Math.max(0, Math.min(keys.length - 1, at + (e.key === 'ArrowRight' ? 1 : -1)))];
+    if (next === undefined) return false;
+    setActiveSlot(next); return take();
+  }
+  if (state.page === 'ratio' && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && state.ratios.length) {
+    const ids = state.ratios.map((r) => r.id); const at = Math.max(0, ids.indexOf(state.activeRatio ?? ''));
+    setActiveRatio(ids[Math.max(0, Math.min(ids.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)))]); return take();
+  }
+  return false;
+}
+/** The modifier key's name for hints: Cmd on a Mac, Ctrl elsewhere. */
+export const modKeyName = (): string => (typeof navigator !== 'undefined' && /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent || '') ? 'Cmd' : 'Ctrl');
 
 // ------------------------------------------------------------------ camera families
 /**
@@ -337,7 +475,7 @@ function enterFamily(fam: Family): void {
 // ------------------------------------------------------------------ persistence
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 function scheduleSave(): void {
-  if (!host.available || !state.ready) return;
+  if (!host.available || !state.ready || importingProject) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => { void saveProject(); }, 400);
 }
@@ -347,12 +485,45 @@ async function saveProject(): Promise<void> {
   const doc = {
     ...(familyDocs.gr4 ?? {}),
     v: 1, page: s.page, model: s.model, lang: s.lang, fwName: s.fwName, showAll: s.showAll, previewMode: s.previewMode, ratioBackdrop: s.ratioBackdrop,
-    tours: s.toursSeen, toursV: 2,
+    tours: s.toursSeen, toursV: 2, uiLang: s.uiLang,
+    compareWith: s.compareWith,
   };
   try {
     await host.storeSet('project.json', JSON.stringify(doc));
     if (familyDocs.gr3) await host.storeSet(GR3_PROJECT, JSON.stringify({ v: 1, ...familyDocs.gr3 }));
-  } catch (e) { console.warn('save failed', e); }
+    saveFailing = false;
+  } catch (e) {
+    console.warn('save failed', e);
+    // One toast per failure streak: saves are debounced and a full disk would otherwise toast on every edit.
+    if (!saveFailing) { saveFailing = true; toast(t('saveFailed'), 'error'); }
+  }
+}
+/** True from the first failed save until the next successful one. */
+let saveFailing = false;
+/**
+ * The project documents (project.json as `doc`, project-gr3.json as `gr3Doc` or null) become the
+ * state, then the open camera's kept firmware, presets and pictures are read. Shared by init() and
+ * by importing a project, so that old project files keep working through one path.
+ */
+async function restoreProject(doc: FamilyDoc, gr3Doc: FamilyDoc | null): Promise<void> {
+  familyDocs.gr4 = null; familyDocs.gr3 = null; gr3Legacy = false;
+  const model: CameraModel = ['GR3', 'GR3_HDF', 'GR3X', 'GR3X_HDF', 'HDF', 'STANDARD', 'MONO'].includes(doc.model) ? doc.model : 'HDF';
+  if (gr3Doc && gr3Doc.v === 1) { familyDocs.gr4 = doc; familyDocs.gr3 = gr3Doc; }
+  else if (familyOf(model) === 'gr3') { familyDocs.gr3 = doc; gr3Legacy = true; } // a GR III project of the test builds
+  else familyDocs.gr4 = doc;
+  const fam = familyOf(model), work = familyDocs[fam];
+  set({ ...parseFamily(work), model,
+    page: doc.page === 'wall' || doc.page === 'copies' || doc.page === 'ratio' || doc.page === 'ic' ? doc.page : doc.page === 'script' ? 'wall' : 'ic',
+    lang: (LANGS as readonly string[]).includes(doc.lang) ? doc.lang : DEFAULT_CAMERA_LANG, fwName: doc.fwName, showAll: !!doc.showAll,
+    previewMode: doc.previewMode === 'swatch' ? 'swatch' : 'photo', ratioBackdrop: doc.ratioBackdrop === 'gray' ? 'gray' : 'photo',
+    compareWith: typeof doc.compareWith === 'string' && doc.compareWith ? doc.compareWith : 'orig',
+    uiLang: applyUiLang(doc.uiLang),
+    // GR Mod 0.8 changed the power-off page: its tour (which now says where the pictures are chosen) shows once more
+    toursSeen: TOUR_IDS.filter((id) => Array.isArray(doc.tours) && doc.tours.includes(id) && (id !== 'wall' || doc.toursV >= 2)) });
+  // The kept file of the camera that was open (a 0.8.x data folder: its one file moves to its camera's place).
+  const fwRaw = await keptFirmware(fwGroupOf(model), doc.fwName);
+  if (fwRaw) await openFirmware(fwRaw, LEGACY_FW_GROUP_NAME[fwGroupOf(model)], false);
+  await loadFamilyFiles(work, fam, familyGen);
 }
 export async function init(): Promise<void> {
   if (!host.available) { set({ ready: true }); return; }
@@ -364,23 +535,8 @@ export async function init(): Promise<void> {
     const raw = await host.storeGet('project.json');
     const doc = raw ? JSON.parse(new TextDecoder().decode(raw)) : null;
     if (doc && doc.v === 1) {
-      const model: CameraModel = ['GR3', 'GR3_HDF', 'GR3X', 'GR3X_HDF', 'HDF', 'STANDARD', 'MONO'].includes(doc.model) ? doc.model : 'HDF';
       const gr3Raw = await host.storeGet(GR3_PROJECT).catch(() => null);
-      const gr3Doc = gr3Raw ? JSON.parse(new TextDecoder().decode(gr3Raw)) : null;
-      if (gr3Doc && gr3Doc.v === 1) { familyDocs.gr4 = doc; familyDocs.gr3 = gr3Doc; }
-      else if (familyOf(model) === 'gr3') { familyDocs.gr3 = doc; gr3Legacy = true; } // a GR III project of the test builds
-      else familyDocs.gr4 = doc;
-      const fam = familyOf(model), work = familyDocs[fam];
-      set({ ...parseFamily(work), model,
-        page: doc.page === 'wall' || doc.page === 'copies' || doc.page === 'ratio' || doc.page === 'ic' ? doc.page : doc.page === 'script' ? 'wall' : 'ic',
-        lang: (LANGS as readonly string[]).includes(doc.lang) ? doc.lang : 'zh-CN', fwName: doc.fwName, showAll: !!doc.showAll,
-        previewMode: doc.previewMode === 'swatch' ? 'swatch' : 'photo', ratioBackdrop: doc.ratioBackdrop === 'gray' ? 'gray' : 'photo',
-        // GR Mod 0.8 changed the power-off page: its tour (which now says where the pictures are chosen) shows once more
-        toursSeen: TOUR_IDS.filter((id) => Array.isArray(doc.tours) && doc.tours.includes(id) && (id !== 'wall' || doc.toursV >= 2)) });
-      // The kept file of the camera that was open (a 0.8.x data folder: its one file moves to its camera's place).
-      const fwRaw = await keptFirmware(fwGroupOf(model), doc.fwName);
-      if (fwRaw) await openFirmware(fwRaw, LEGACY_FW_GROUP_NAME[fwGroupOf(model)], false);
-      await loadFamilyFiles(work, fam, familyGen);
+      await restoreProject(doc, gr3Raw ? JSON.parse(new TextDecoder().decode(gr3Raw)) : null);
     } else {
       const fwRaw = await keptFirmware(fwGroupOf(state.model));
       if (fwRaw) await openFirmware(fwRaw, LEGACY_FW_GROUP_NAME[fwGroupOf(state.model)], false);
@@ -490,7 +646,7 @@ async function openFirmware(raw: Uint8Array, name: string, persist: boolean): Pr
   } catch (e) {
     set({ fwBusy: false, info: undefined, raw: undefined, fwName: undefined });
     scheduleSave();
-    if (e instanceof EngineError && (e.code === 'unsupported-firmware' || e.code.startsWith('bad-') || e.code === 'too-short')) toast(t('badFirmware'), 'error');
+    if (e instanceof EngineError && isBadFirmwareCode(e.code)) toast(t('badFirmware'), 'error');
     else fail(e);
     return false;
   }
@@ -522,15 +678,22 @@ const PRESET_ERRORS: Record<string, Key> = {
 /** The newest conversion of each slot: an older one that finishes later is dropped. */
 const presetRuns = new Map<SlotKey, number>();
 let presetRun = 0;
+/**
+ * The fitting options a slot's conversion runs with. GR IV added slots also try hue sectors (the
+ * conversion keeps them only when they come out closer); additive hue and keep-white are GR IV
+ * options. Shared by runPreset and the library's compatibility check (fitKeyOf), so the two cannot disagree.
+ */
+function fitOptions(id: SlotKey, kind: 'xmp' | 'cube'): { hue?: boolean; additiveHue?: boolean; keepWhite?: boolean } {
+  const hue = isExtra(id) && state.info?.family !== 'gr3x';
+  return { ...(hue ? { hue: true } : {}), ...(state.info?.family === 'gr4' && state.additiveHue && hue ? { additiveHue: true } : {}), ...(state.info?.family === 'gr4' && state.keepWhite && kind === 'cube' ? { keepWhite: true } : {}) };
+}
 async function runPreset(id: SlotKey, fileName: string, kind: 'xmp' | 'cube', text: string): Promise<void> {
   patchSlot(id, { preset: { fileName, kind, text, busy: !!state.info?.capabilities.presets } });
   if (!state.info?.capabilities.presets) return;
   const run = ++presetRun;
   presetRuns.set(id, run);
-  // GR IV added slots also try hue sectors; the conversion keeps them only when they come out closer.
-  const hue = isExtra(id) && state.info.family !== 'gr3x';
   try {
-    const result = await engine.convert(kind, text, { ...(hue ? { hue: true } : {}), ...(state.info.family === 'gr4' && state.additiveHue && hue ? { additiveHue: true } : {}), ...(state.info.family === 'gr4' && state.keepWhite && kind === 'cube' ? { keepWhite: true } : {}) });
+    const result = await engine.convert(kind, text, fitOptions(id, kind));
     if (presetRuns.get(id) !== run || slotOf(id)?.preset?.text !== text) return; // replaced, removed or converted again meanwhile
     patchSlot(id, { preset: { fileName, kind, text, busy: false, result } });
   } catch (e) {
@@ -565,6 +728,156 @@ export function removePreset(id: SlotKey): void {
   if (host.available) void host.storeDel(presetKey(id)).catch(() => undefined);
   scheduleSave();
 }
+
+// ------------------------------------------------------------------ QoL wave C: preset library
+/**
+ * @decision DEC-QOL-LIBRARY-001
+ * @title The preset library lives in its own host store files, apart from both projects
+ * @status accepted
+ * @rationale A project holds the presets of one camera's slots, so a look imported once had to be
+ *   imported again for the other camera, a new project or a reset. The library keeps looks across
+ *   projects and camera switches. Files (store keys are lower case, at most 64 characters):
+ *   `library.json` is the index `{ v: 1, entries: [{ id, name, kind, family, fileName, date, fit? }] }`
+ *   (written last, so an interrupted save leaves only orphan files, never an entry without data),
+ *   `library-<id>` is the source file (XMP / CUBE text, UTF-8), `library-<id>-fit` the fitted result
+ *   (PresetResult as JSON, typed arrays tagged so they come back exactly). `family` is the camera
+ *   family ('gr4' | 'gr3', GR III and IIIx share one) and `fit` the key of the options that produced
+ *   the stored result.
+ *   Compatibility. (1) An entry is offered to, and applied on, only a slot of its own family: GR IV
+ *   and GR III / IIIx fit to different camera models, so a result from one is wrong on the other (the
+ *   source file alone could be refitted, but the user saved a look for a camera, not a file; the
+ *   library never crosses families). (2) Within the family the stored result is reused, with no
+ *   fitting, only when `fit` equals the key the target would fit with now (family, kind, hue sectors
+ *   for an added slot, additive hue, keep white: fitKeyOf). Otherwise the source is refitted with the
+ *   current options through the normal runPreset path. A result that cannot be read back also falls
+ *   back to a refit. Saving under a name already in the library for that family replaces that entry.
+ */
+export interface LibraryEntry { id: string; name: string; kind: 'xmp' | 'cube'; family: Family; fileName: string; date: number; fit?: string }
+const LIBRARY_INDEX = 'library.json';
+const libSrcKey = (id: string): string => 'library-' + id;
+const libFitKey = (id: string): string => 'library-' + id + '-fit';
+/** The options a fit was made with, as a comparable string (null when nothing can be fitted: no preset support). */
+function fitKeyOf(id: SlotKey, kind: 'xmp' | 'cube'): string | undefined {
+  if (!state.info?.capabilities.presets) return undefined;
+  return [familyOf(state.model), kind, JSON.stringify(fitOptions(id, kind))].join('|');
+}
+const TYPED: Record<string, new (a: number[]) => ArrayLike<number>> = { Int16Array, Uint16Array, Float64Array, Float32Array, Uint8Array } as never;
+/** A fit result as JSON; typed arrays are tagged `{ __ta, data }` so that reading it back gives the same arrays. */
+function packFit(r: PresetResult): string {
+  return JSON.stringify(r, (_k, v) => (ArrayBuffer.isView(v) ? { __ta: v.constructor.name, data: Array.from(v as unknown as ArrayLike<number>) } : v));
+}
+function unpackFit(text: string): PresetResult | undefined {
+  try {
+    const r = JSON.parse(text, (_k, v) => (v && typeof v === 'object' && typeof v.__ta === 'string' && TYPED[v.__ta] && Array.isArray(v.data) ? Reflect.construct(TYPED[v.__ta] as never, [v.data]) : v));
+    return r && Array.isArray(r.curves) && r.matrixQ13 && r.params ? r as PresetResult : undefined;
+  } catch { return undefined; }
+}
+let libraryLoad: Promise<void> | undefined;
+/** Read the library index once (later calls share the first); a missing or damaged index is an empty library. */
+export function loadLibrary(): Promise<void> {
+  if (!host.available) return Promise.resolve();
+  libraryLoad ??= (async () => {
+    const raw = await host.storeGet(LIBRARY_INDEX).catch(() => null);
+    let entries: LibraryEntry[] = [];
+    try {
+      const doc = raw ? JSON.parse(new TextDecoder().decode(raw)) : null;
+      if (doc && doc.v === 1 && Array.isArray(doc.entries)) {
+        entries = doc.entries.filter((e: Partial<LibraryEntry>) => e && typeof e.id === 'string' && /^[a-z0-9]{1,40}$/.test(e.id) && typeof e.name === 'string' && (e.kind === 'xmp' || e.kind === 'cube') && (e.family === 'gr4' || e.family === 'gr3')).map((e: LibraryEntry) => ({ id: e.id, name: e.name, kind: e.kind, family: e.family, fileName: String(e.fileName ?? e.name), date: Number(e.date) || 0, ...(typeof e.fit === 'string' ? { fit: e.fit } : {}) }));
+      }
+    } catch { /* damaged index: start empty rather than refuse to open */ }
+    set({ library: entries });
+  })();
+  return libraryLoad;
+}
+/** The entries a slot may use: those of the open camera family, newest first. */
+export function libraryFor(s: State = state): LibraryEntry[] {
+  const fam = familyOf(s.model);
+  return s.library.filter((e) => e.family === fam).sort((a, b) => b.date - a.date);
+}
+async function writeLibraryIndex(entries: LibraryEntry[]): Promise<boolean> {
+  try { await host.storeSet(LIBRARY_INDEX, JSON.stringify({ v: 1, entries })); return true; } catch { return false; }
+}
+/** The name a slot's preset is saved under unless the user types one: the preset's title, else its file name without extension. */
+export function defaultLibraryName(id: SlotKey): string {
+  const p = slotOf(id)?.preset;
+  return (p?.result?.title || p?.fileName.replace(/\.(xmp|cube)$/i, '') || '').trim();
+}
+export function openLibrary(slot: SlotKey, mode: 'save' | 'apply'): void { set({ libraryPicker: { slot, mode } }); void loadLibrary(); }
+export function closeLibrary(): void { set({ libraryPicker: undefined }); }
+/** Keep the fitted preset of a slot (with its source file) in the library. False when there is nothing fitted to keep or it could not be written. */
+export async function saveToLibrary(id: SlotKey, name: string = defaultLibraryName(id)): Promise<boolean> {
+  const p = slotOf(id)?.preset;
+  const key = p?.result ? fitKeyOf(id, p.kind) : undefined;
+  const clean = name.trim().slice(0, 60);
+  if (!host.available || !p?.result || !clean) return false;
+  await loadLibrary();
+  const fam = familyOf(state.model);
+  const old = state.library.find((e) => e.family === fam && e.name === clean);
+  const entryId = old?.id ?? (Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+  const entry: LibraryEntry = { id: entryId, name: clean, kind: p.kind, family: fam, fileName: p.fileName, date: Date.now(), ...(key ? { fit: key } : {}) };
+  try {
+    await host.storeSet(libSrcKey(entryId), p.text);
+    await host.storeSet(libFitKey(entryId), packFit(p.result));
+  } catch { toast(t('libSaveFailed'), 'error'); return false; }
+  const entries = [...state.library.filter((e) => e.id !== entryId), entry];
+  if (!(await writeLibraryIndex(entries))) { toast(t('libSaveFailed'), 'error'); return false; }
+  set({ library: entries });
+  toast(t('libSaved', { name: clean }), 'ok');
+  return true;
+}
+/** Put a library entry on a slot: its stored fit when the options match (no fitting), else a refit of the stored source. */
+export async function applyFromLibrary(id: SlotKey, entryId: string): Promise<boolean> {
+  const e = state.library.find((x) => x.id === entryId);
+  if (!e || !host.available) return false;
+  if (e.family !== familyOf(state.model)) { toast(t('libWrongFamily'), 'error'); return false; }
+  const src = await host.storeGet(libSrcKey(e.id)).catch(() => null);
+  if (!src) { toast(t('libMissing'), 'error'); return false; }
+  const text = new TextDecoder().decode(src);
+  setActiveSlot(id);
+  await host.storeSet(presetKey(id), text).catch(() => undefined);
+  const key = fitKeyOf(id, e.kind);
+  const stored = key && e.fit === key ? await host.storeGet(libFitKey(e.id)).catch(() => null) : null;
+  const result = stored ? unpackFit(new TextDecoder().decode(stored)) : undefined;
+  if (result) {
+    presetRuns.set(id, ++presetRun); // a conversion still running for this slot is now stale
+    patchSlot(id, { preset: { fileName: e.fileName, kind: e.kind, text, busy: false, result } });
+  } else await runPreset(id, e.fileName, e.kind, text);
+  scheduleSave();
+  closeLibrary();
+  toast(t('libApplied', { name: e.name }), 'ok');
+  return true;
+}
+/** Delete an entry (after asking): the index first, so a failure halfway leaves orphan files and no broken entry. */
+export async function deleteLibraryEntry(entryId: string): Promise<void> {
+  const e = state.library.find((x) => x.id === entryId);
+  if (!e || !(await ask(t('libDeleteTitle'), [e.name], t('remove')))) return;
+  const entries = state.library.filter((x) => x.id !== entryId);
+  if (!(await writeLibraryIndex(entries))) { toast(t('libSaveFailed'), 'error'); return; }
+  set({ library: entries });
+  await host.storeDel(libSrcKey(entryId)).catch(() => undefined);
+  await host.storeDel(libFitKey(entryId)).catch(() => undefined);
+}
+
+// ------------------------------------------------------------------ QoL wave C: compare two slots
+/**
+ * @decision DEC-QOL-COMPARE-001
+ * @title The left side of the photo preview can be another slot's look; the choice is saved view state
+ * @status accepted
+ * @rationale The preview split showed the photo before and after one slot, so judging two looks meant
+ *   switching tabs and remembering. `compareWith` is `orig` (the default and the fallback) or a slot
+ *   key. It is saved with previewMode because that is saved too. It is a key, not a copy of the look,
+ *   so it follows later edits of that slot; a slot that was removed or lost its preset, or the active
+ *   slot itself, counts as `orig` (compareSlot), never an error. The left image is rendered with the
+ *   same applySlot pipeline as the right one, deferred a tick so choosing does not stall the UI.
+ */
+/** Slots that have a fitted look, in menu order: what the compare choice can offer. */
+export function slotsWithLook(s: State = state): SlotKey[] { return allSlotKeys(s).filter((k) => slotOf(k, s)?.preset?.result); }
+/** The slot whose look is on the left of the preview, or undefined for the original photo. */
+export function compareSlot(s: State = state): SlotKey | undefined {
+  const k = s.compareWith;
+  return k !== 'orig' && k !== s.activeSlot && slotsWithLook(s).includes(k) ? k : undefined;
+}
+export function setCompareWith(compareWith: string): void { set({ compareWith }); scheduleSave(); }
 
 // ------------------------------------------------------------------ added slots
 /** Every slot key: the two Cinema slots, then the added ones. */
@@ -809,16 +1122,24 @@ export function addExtraSlot(): void {
   void renderIcon(key);
   scheduleSave();
 }
-export function removeExtraSlot(key: string): void {
+export function removeExtraSlot(key: string, undoable = true): void {
+  const was = state, index = was.extras.findIndex((x) => x.key === key), item = was.extras[index];
+  const orderAt = lookOrderNow(was).indexOf(key), hidden = was.lookHidden.includes(key), active = was.activeSlot === key;
   set((s) => ({ extras: s.extras.filter((x) => x.key !== key), activeSlot: s.activeSlot === key ? 'CY' : s.activeSlot, lookOrder: normalizeLookOrder(s.lookOrder, s.extras.filter((x) => x.key !== key)), lookHidden: s.lookHidden.filter((k) => k !== key) }));
-  if (host.available) void host.storeDel(presetKey(key)).catch(() => undefined);
+  const del = (): void => { if (host.available) void host.storeDel(presetKey(key)).catch(() => undefined); };
   scheduleSave();
+  if (!undoable || !item) { del(); return; }
+  recordDeleted(t('undoExtra'), () => set((s) => {
+    const extras = s.extras.slice(); extras.splice(Math.min(index, extras.length), 0, item);
+    const order = normalizeLookOrder(s.lookOrder, extras).filter((k) => k !== key); order.splice(orderAt < 0 ? order.length : Math.min(orderAt, order.length), 0, key);
+    return { extras, lookOrder: order, lookHidden: hidden ? [...s.lookHidden, key] : s.lookHidden, ...(active ? { activeSlot: key } : {}) };
+  }), del);
 }
 /** Set how many slots are added: the last ones are taken away, new empty ones appended. */
 export function setExtraCount(n: number): void {
   const want = Math.max(0, Math.min(MAX_EXTRA_SLOTS, Math.round(n)));
   while (state.extras.length < want) addExtraSlot();
-  while (state.extras.length > want) removeExtraSlot(state.extras[state.extras.length - 1].key);
+  while (state.extras.length > want) removeExtraSlot(state.extras[state.extras.length - 1].key, false);
 }
 export function setExtraName(key: string, name: string): void {
   set((s) => ({ extras: s.extras.map((x) => (x.key === key ? { ...x, name } : x)) }));
@@ -923,10 +1244,13 @@ export async function addWallFiles(files: File[]): Promise<void> {
   scheduleSave();
 }
 export function removeWall(id: string): void {
+  const index = state.wall.findIndex((w) => w.id === id), item = state.wall[index];
   set((s) => ({ wall: s.wall.filter((w) => w.id !== id) }));
   wallBitmaps.get(id)?.close(); wallBitmaps.delete(id);
-  if (host.available) void host.storeDel('wall-' + id).catch(() => undefined);
   scheduleSave();
+  const del = (): void => { if (host.available) void host.storeDel('wall-' + id).catch(() => undefined); };
+  if (!item) { del(); return; }
+  recordDeleted(t('undoWall'), () => set((s) => { const wall = s.wall.slice(); wall.splice(Math.min(index, wall.length), 0, item); return { wall }; }), del);
 }
 export function moveWall(id: string, toIndex: number): void {
   set((s) => {
@@ -1124,8 +1448,14 @@ export function setRatio(id: string, patch: { ratio?: string; name?: string }): 
   if (patch.ratio !== undefined) ratiosChanged(); else scheduleSave();
 }
 export function removeRatio(id: string): void {
+  const index = state.ratios.findIndex((r) => r.id === id), item = state.ratios[index], active = state.activeRatio === id;
   set((s) => { const ratios = s.ratios.filter((r) => r.id !== id); return { ratios, activeRatio: s.activeRatio === id ? ratios[0]?.id : s.activeRatio }; });
   ratiosChanged(true);
+  if (!item) return;
+  recordDeleted(t('undoRatio'), () => {
+    set((s) => { const ratios = s.ratios.slice(); ratios.splice(Math.min(index, ratios.length), 0, item); return { ratios, ...(active ? { activeRatio: id } : {}) }; });
+    ratiosChanged(true);
+  }, () => undefined);
 }
 /** GR III / IIIx: how many films (1..maxFilms); the active slot stays among them. */
 export function setFilmCount(n: number): void {
@@ -1357,7 +1687,10 @@ export async function outputFirmware(dest: Dest, stock = false): Promise<void> {
   const fresh = newFirmwareWarning(sourceInfo);
   // The cannot-go-back warning is a paragraph (the dialog's lines are cut to one line each).
   if (stock && !(await askOfficial([t('copyOfficial')], fresh && dest.kind === 'card' ? fresh : undefined))) return;
-  if (dest.kind === 'card' && !stock) {
+  // @decision DEC-QOLB-SUMMARY-001: the summary of what the build contains is asked before every
+  // modified build, to the card and to a folder alike (it used to be the card only). Cancel returns
+  // before the destination is chosen and before engine.build runs.
+  if (!stock) {
     const lines = changes.map((c) => `${state.info?.family === 'gr3x' ? (state.slots[c.id].names[state.lang] || state.info.slots.find(s => s.id === c.id)?.defaultName || c.id) : t(('slot' + c.id) as Key)}  ·  ${c.labels.join(' / ')}`);
     if (ratios.length) lines.push(t('ratioLine', { n: ratios.length, l: ratios.map((r) => r.name).join(' / ') }));
     if (soft) lines.push(sourceInfo.features.softFocus === 'clarity' ? t('softLine', { l: softText(GR3X_SOFT_FOCUS) }) : t(sourceInfo.features.exposurePreview ? 'softAdjMenuLine' : 'softAdjLine'));
@@ -1374,7 +1707,7 @@ export async function outputFirmware(dest: Dest, stock = false): Promise<void> {
     if (extras.length) lines.push(t('extraLine', { n: extras.length, l: extras.map((x) => (x.halation ? `${x.name} (${t('halation')})` : x.name)).join(' / ') }));
     if (lookLayout) lines.push(t('lookOrderLine', { n: lookLayout.hidden.length }));
     if (pictures.length) lines.push(t('wallMenuLine', { n: pictures.length, l: pictures.map((p) => p.name).join(' / ') }));
-    if (!(await ask(t('confirmTitle'), lines, t('confirmOk'), fresh ?? undefined))) return;
+    if (!(await ask(dest.kind === 'card' ? t('confirmTitle') : t('exportConfirmTitle'), lines, dest.kind === 'card' ? t('confirmOk') : t('exportConfirmOk'), fresh ?? undefined))) return;
   }
   const target = await destination(dest);
   if (!target || state.info !== sourceInfo || state.raw !== sourceRaw || state.model !== sourceModel || state.fwBusy) return;
@@ -1593,4 +1926,173 @@ export async function writeCopy(): Promise<void> {
   } catch (e) { set({ busy: undefined }); fail(e); }
   await refreshCopies();
   void refreshVolumes();
+}
+
+// ================================================================== QoL wave A
+// Plain-language error hints, project export / import, and the app's own UI language. Kept in one
+// section (and one block of i18n keys) so that it merges cleanly beside other work on this file.
+
+// ------------------------------------------------------------------ plain-language error hints
+/**
+ * @decision DEC-QOL-HINT-001
+ * @title Known error codes get a plain-language hint; the short code stays for bug reports
+ * @status accepted
+ * @rationale fail() used to toast `Error · code · message`, which means nothing to most users. The
+ *   codes below are the user-actionable ones thrown by the engine (core FirmwareError / JpegError)
+ *   and the host (shell/internal/server/errors.go, plus the client-side `offline` / `no-host`). A host
+ *   `io` error carries only the OS text, so card-full and card-removed are told apart by that text.
+ *   Unknown codes keep the old `code · message` format.
+ */
+/** Codes meaning "this is not a firmware file GR Mod can open" (also used by openFirmware's own toast). */
+const FIRMWARE_CODES = ['unsupported-firmware', 'too-short', 'unexpected-layout', 'bad-checksum', 'bad-footer', 'bad-stream', 'bad-stream-length', 'bad-decoded-length', 'bad-models'];
+export const isBadFirmwareCode = (code: string): boolean => code === 'unsupported-firmware' || code.startsWith('bad-') || code === 'too-short';
+const ERROR_HINTS: Record<string, Key> = {
+  ...Object.fromEntries(FIRMWARE_CODES.map((c) => [c, 'hintFirmware' as Key])),
+  'gr3x-unsupported': 'hintUnsupportedHere', 'bad-hlg': 'hintConflict', 'no-space': 'hintFwFull',
+  'too-many-ratios': 'hintTooMany', 'too-many-pictures': 'hintTooMany',
+  'not-found': 'hintNotFound', forbidden: 'hintDenied', 'too-large': 'errTooBig', network: 'fwNetError', checksum: 'fwChecksum',
+  offline: 'hintOffline', 'no-host': 'hintOffline',
+};
+/** The hint for an error code (and message, for the host's catch-all `io`), or undefined for a code without one. */
+export function errorHint(code: string, message = ''): Key | undefined {
+  if (code === 'io') {
+    if (/no space left|not enough space|disk (is )?full|enospc|quota/i.test(message)) return 'hintCardFull';
+    if (/not ready|no such device|enodev|input\/output error|i\/o error|removed|unplugged|no longer available/i.test(message)) return 'hintRemoved';
+    return undefined;
+  }
+  return Object.prototype.hasOwnProperty.call(ERROR_HINTS, code) ? ERROR_HINTS[code] : undefined;
+}
+
+// ------------------------------------------------------------------ app UI language
+/** Sets the dictionary and returns the normalised mode (unknown or missing values mean 'auto'). */
+function applyUiLang(v: unknown): UiLangMode { const m = normaliseUiLang(v); setUiLang(m); return m; }
+/** Switch the interface language now; every subscribed component re-renders and the choice is saved in project.json. */
+export function setUiLanguage(m: UiLangMode): void { set({ uiLang: applyUiLang(m) }); scheduleSave(); }
+
+// ------------------------------------------------------------------ project export / import
+/**
+ * @decision DEC-QOL-PROJECT-001
+ * @title A project file is one JSON document holding both family docs and every file they point at
+ * @status accepted
+ * @rationale The project is spread over the host store: project.json (GR IV doc plus app settings),
+ *   project-gr3.json, one preset file per slot (`preset-*`, `gr3-preset-*`), the power-off pictures
+ *   (`wall-*`) and the preview photo. Exporting only the two docs would restore names and order but
+ *   lose every preset and picture, so the export lists the store and takes those prefixes. All files
+ *   are base64 (presets are text, pictures binary; one encoding keeps the reader simple). The official
+ *   firmware (`firmware-*.bin`) and build history are left out: the first is Ricoh's and large, the
+ *   second belongs to this computer. Import writes new files first, the docs next and removes stale
+ *   project files last, so a failure part-way never leaves the docs pointing at files that are gone.
+ */
+export const PROJECT_FORMAT = 'grmod-project';
+export const PROJECT_FORMAT_VERSION = 1;
+const PROJECT_FILE_RE = /^(preset-|gr3-preset-|wall-)[a-z0-9._-]{1,56}$|^preview\.jpg$/;
+const PROJECT_MAX_FILES = 600;
+export interface ProjectExport {
+  format: typeof PROJECT_FORMAT; formatVersion: number; appVersion: string; exported: string;
+  project: FamilyDoc; projectGr3: FamilyDoc | null; files: Record<string, string>;
+}
+/** Thrown for a file that is not a (supported) project export; `code` is `bad-project` or `project-too-new`. */
+export class ProjectFileError extends Error {
+  code: string;
+  constructor(code: string, message: string) { super(message); this.code = code; }
+}
+const bad = (m: string): ProjectFileError => new ProjectFileError('bad-project', m);
+function toBase64(b: Uint8Array): string {
+  let s = '';
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function fromBase64(s: string): Uint8Array {
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+/** The project documents as they would be saved now (the open family's from the live state). */
+function projectDocs(): { doc: FamilyDoc; gr3: FamilyDoc | null } {
+  const s = state;
+  familyDocs[familyOf(s.model)] = currentFamilyDoc();
+  const doc = { ...(familyDocs.gr4 ?? {}), v: 1, page: s.page, model: s.model, lang: s.lang, fwName: s.fwName, showAll: s.showAll, previewMode: s.previewMode, ratioBackdrop: s.ratioBackdrop, tours: s.toursSeen, toursV: 2, uiLang: s.uiLang };
+  return { doc, gr3: familyDocs.gr3 ? { v: 1, ...familyDocs.gr3 } : null };
+}
+/** Everything needed to restore the work, read from the host store and the live state. */
+export async function buildProjectExport(): Promise<ProjectExport> {
+  const { doc, gr3 } = projectDocs();
+  const files: Record<string, string> = {};
+  for (const { key } of await host.storeList()) {
+    if (!PROJECT_FILE_RE.test(key)) continue;
+    const bytes = await host.storeGet(key);
+    if (bytes) files[key] = toBase64(bytes);
+  }
+  return { format: PROJECT_FORMAT, formatVersion: PROJECT_FORMAT_VERSION, appVersion: host.info?.version ?? '', exported: new Date().toISOString(), project: doc, projectGr3: gr3, files };
+}
+/** Checks the format, version and shape of an export; throws ProjectFileError, returns the export otherwise. */
+export function parseProjectExport(text: string): ProjectExport {
+  let p: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  try { p = JSON.parse(text); } catch { throw bad('not JSON'); }
+  if (!p || typeof p !== 'object' || p.format !== PROJECT_FORMAT) throw bad('not a GR Mod project');
+  if (!Number.isInteger(p.formatVersion) || p.formatVersion < 1) throw bad('no format version');
+  if (p.formatVersion > PROJECT_FORMAT_VERSION) throw new ProjectFileError('project-too-new', `format ${p.formatVersion}`);
+  if (!p.project || typeof p.project !== 'object' || p.project.v !== 1) throw bad('no project document');
+  if (p.projectGr3 != null && (typeof p.projectGr3 !== 'object' || p.projectGr3.v !== 1)) throw bad('bad GR III document');
+  if (!p.files || typeof p.files !== 'object' || Array.isArray(p.files)) throw bad('no files');
+  const keys = Object.keys(p.files);
+  if (keys.length > PROJECT_MAX_FILES) throw bad('too many files');
+  for (const k of keys) {
+    if (!PROJECT_FILE_RE.test(k)) throw bad(`unexpected file ${k.slice(0, 40)}`);
+    if (typeof p.files[k] !== 'string') throw bad(`bad data for ${k}`);
+    try { fromBase64(p.files[k]); } catch { throw bad(`bad data for ${k}`); }
+  }
+  return { format: PROJECT_FORMAT, formatVersion: p.formatVersion, appVersion: String(p.appVersion ?? ''), exported: String(p.exported ?? ''), project: p.project, projectGr3: p.projectGr3 ?? null, files: p.files };
+}
+let importingProject = false;
+/** Replace the project in the host store with an export's, then load it the way init() does. */
+export async function applyProjectExport(p: ProjectExport): Promise<void> {
+  importingProject = true; clearTimeout(saveTimer);
+  try {
+    const have = (await host.storeList()).map((k) => k.key).filter((k) => PROJECT_FILE_RE.test(k));
+    for (const [key, b64] of Object.entries(p.files)) await host.storeSet(key, fromBase64(b64));
+    await host.storeSet('project.json', JSON.stringify(p.project));
+    if (p.projectGr3) await host.storeSet(GR3_PROJECT, JSON.stringify(p.projectGr3));
+    else await host.storeDel(GR3_PROJECT).catch(() => undefined);
+    for (const key of have) if (!(key in p.files)) await host.storeDel(key).catch(() => undefined);
+    // The old work is dropped before the new is read; the kept firmware of the new camera is reopened by restoreProject.
+    familyLoading = false; ++familyGen;
+    set({ info: undefined, raw: undefined, fwName: undefined, copyInfo: {}, copySel: [] });
+    await restoreProject(p.project, p.projectGr3);
+    saveFailing = false;
+  } finally { importingProject = false; }
+}
+/** The header-menu action: save the project as one downloaded file. */
+export async function exportProject(): Promise<void> {
+  if (!host.available || state.busy) return;
+  set({ busy: t('projectWorking') });
+  try {
+    const p = await buildProjectExport();
+    const d = new Date(), pad = (n: number): string => String(n).padStart(2, '0');
+    const name = `grmod-project-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.grmod.json`;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(p)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    toast(t('projectExported', { n: Object.keys(p.files).length + 1 + (p.projectGr3 ? 1 : 0) }), 'ok');
+  } catch (e) { fail(e); } finally { set({ busy: undefined }); }
+}
+/** The header-menu action: validate a chosen file, confirm the replacement, then import it. Bad input toasts and changes nothing. */
+export async function importProject(file: File): Promise<void> {
+  if (!host.available || state.busy) return;
+  let p: ProjectExport;
+  try {
+    if (file.size > 400_000_000) throw bad('too large');
+    p = parseProjectExport(await file.text());
+  } catch (e) {
+    console.warn('project file rejected', e);
+    toast(e instanceof ProjectFileError && e.code === 'project-too-new' ? t('projectTooNew') : t('projectBad'), 'error');
+    return;
+  }
+  if (!(await ask(t('projectImportTitle'), [t('projectImportLine', { v: p.appVersion || '?', n: Object.keys(p.files).length })], t('projectImport'), t('projectImportWarn')))) return;
+  set({ busy: t('projectWorking') });
+  try { await applyProjectExport(p); toast(t('projectImported'), 'ok'); }
+  catch (e) { fail(e); }
+  finally { set({ busy: undefined }); }
 }
