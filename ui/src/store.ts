@@ -55,6 +55,8 @@ export const TOUR_IDS: readonly TourId[] = ['overview', 'ic', 'ratio', 'wall', '
 export interface TourState { id: TourId; steps: number[]; index: number; replay: boolean }
 /** `reset`: the firmware written is the official one; the dialog asks in red whether the camera's settings were reset first. */
 export interface Confirm { title: string; warn?: string; reset?: boolean; lines: string[]; ok: string; resolve: (v: boolean) => void }
+/** A firmware file being inspected: `error` is `needs-open` (no official firmware to compare with), `unreadable` (not a file the engine can read) or `size`. */
+export interface InspectView { name: string; size: number; busy: boolean; summary?: FirmwareSummary; error?: 'needs-open' | 'unreadable' | 'size' }
 export interface State {
   ready: boolean; page: Page;
   fwName?: string; fwBusy: boolean; info?: FirmwareInfo; raw?: Uint8Array;
@@ -95,6 +97,8 @@ export interface State {
   /** Why the download dialog is open, when it says so: a 1.12 bridge firmware file is open. */
   onlineReason?: 'bridge-loaded';
   tour?: TourState; toursSeen: TourId[];
+  /** QoL wave B: the "Inspect a firmware file" dialog (open while set). */
+  inspectView?: InspectView;
 }
 
 const SLOT_IDS: readonly SlotId[] = GR3X_FILM_IDS;
@@ -205,6 +209,33 @@ export function undoDelete(): void {
   if (d.model !== state.model) { d.commit(); return; }
   d.restore();
   scheduleSave();
+}
+
+// ------------------------------------------------------------------ QoL wave B: inspect any firmware file
+/**
+ * @decision DEC-QOLB-INSPECT-001
+ * @title Inspect compares with the open official firmware, so it needs one open
+ * @status accepted
+ * @rationale engine.inspect (core app/engine.ts) diffs a file against the official firmware the
+ *   engine has open and reports kind / verified / features; the summary carries no model or version
+ *   of its own. The dialog therefore names the open firmware (family and version) as the reference
+ *   and asks for one when none is open, instead of guessing a model from the bytes.
+ */
+let inspectGen = 0;
+export function closeInspect(): void { inspectGen++; set({ inspectView: undefined }); }
+export async function inspectFile(file: File): Promise<void> {
+  const gen = ++inspectGen;
+  const view = { name: file.name, size: file.size };
+  if (!state.info) { set({ inspectView: { ...view, busy: false, error: 'needs-open' } }); return; }
+  if (file.size < 1_000_000 || file.size > 200_000_000) { set({ inspectView: { ...view, busy: false, error: 'size' } }); return; }
+  set({ inspectView: { ...view, busy: true } });
+  try {
+    const summary = await engine.inspect(new Uint8Array(await file.arrayBuffer()));
+    if (gen === inspectGen) set({ inspectView: { ...view, busy: false, summary } });
+  } catch (e) {
+    console.warn('inspect', e);
+    if (gen === inspectGen) set({ inspectView: { ...view, busy: false, error: 'unreadable' } });
+  }
 }
 
 // ------------------------------------------------------------------ camera families

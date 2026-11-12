@@ -8,7 +8,7 @@ import { host, HostError } from './host';
 import type { FirmwareRelease } from './host';
 import { t } from './i18n';
 import type { Key } from './i18n';
-import { adoptFirmware, askForOfficial, fmtSize, loadFirmwareFile, setModel, setOnlineOpen, toast, useStore } from './store';
+import { adoptFirmware, askForOfficial, fmtSize, inspectFile, loadFirmwareFile, setModel, setOnlineOpen, toast, useStore } from './store';
 
 export const MODELS: readonly CameraModel[] = ['GR3', 'GR3_HDF', 'GR3X', 'GR3X_HDF', 'HDF', 'STANDARD', 'MONO'];
 export const modelLabel = (m: CameraModel): string => t(('model' + m) as Key);
@@ -19,6 +19,7 @@ export function FirmwareRow() {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const file = useRef<HTMLInputElement>(null);
+  const inspect = useRef<HTMLInputElement>(null);
   const close = (): void => setOpen(false);
   useDismiss(open, wrap, close);
   return (
@@ -31,9 +32,11 @@ export function FirmwareRow() {
         <div className="pop up" role="menu">
           <button type="button" role="menuitem" className="pop-item" onClick={() => { close(); file.current?.click(); }}><span className="pop-ico">{Ico.folder}</span><span>{t('fwPick')}</span></button>
           <button type="button" role="menuitem" className="pop-item" onClick={() => { close(); setOnlineOpen(true); }}><span className="pop-ico">{Ico.download}</span><span>{t('fwOnline')}</span></button>
+          <button type="button" role="menuitem" className="pop-item" onClick={() => { close(); inspect.current?.click(); }}><span className="pop-ico">{Ico.info}</span><span>{t('inspectFw')}</span></button>
         </div>
       )}
       <input ref={file} type="file" accept=".bin" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void loadFirmwareFile(f); }} />
+      <input ref={inspect} type="file" accept=".bin" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void inspectFile(f); }} />
     </div>
   );
 }

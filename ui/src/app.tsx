@@ -7,6 +7,7 @@ import { LANG_LABEL, t } from './i18n';
 import type { Key } from './i18n';
 import { CopiesPage } from './copies';
 import { BridgeBanner, FirmwareOnline, FirmwareRow, MODELS, modelLabel } from './firmware';
+import { InspectDialog } from './inspect';
 import { CropEditor, ImageControlPage, RatioPage, WallpaperPage } from './pages';
 import { Tour, replayTour, restartTours } from './tour';
 import { UpdatePill, UpdateWatcher, checkForUpdate, openWhatsNew } from './updates';
@@ -143,6 +144,7 @@ export function App() {
       </main>
       <CropEditor />
       <FirmwareOnline />
+      <InspectDialog />
       <UpdateWatcher />
       <ConfirmDialog />
       <Tour />

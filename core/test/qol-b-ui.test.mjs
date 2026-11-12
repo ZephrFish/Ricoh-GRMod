@@ -107,3 +107,32 @@ describe('undo for deletes', () => {
     expect(store.getState().extras).toEqual([]);
   });
 });
+
+const file = (name, size, bytes = [1]) => ({ name, size, arrayBuffer: async () => new Uint8Array(bytes).buffer });
+
+describe('inspect any firmware file', () => {
+  it('asks for an open official firmware first, without calling the engine', async () => {
+    await store.inspectFile(file('x.bin', 20_000_000));
+    expect(store.getState().inspectView).toMatchObject({ name: 'x.bin', busy: false, error: 'needs-open' });
+    expect(mocks.engine.inspect).not.toHaveBeenCalled();
+  });
+  it('shows the summary the engine returns, and closes', async () => {
+    await store.adoptFirmware('fwdc243b.bin', '1.60', new Uint8Array([1]));
+    const summary = { kind: 'modified', verified: true, changedBytes: 12, slots: [], ratios: [], softFocus: [], adjSoftFocus: true, dateStamp: false, monoUnlock: false, hlgPhoto: false, extraSlots: [] };
+    mocks.engine.inspect.mockResolvedValue(summary);
+    await store.inspectFile(file('mod.bin', 20_000_000));
+    expect(mocks.engine.inspect).toHaveBeenCalledTimes(1);
+    expect(store.getState().inspectView).toMatchObject({ busy: false, summary });
+    store.closeInspect();
+    expect(store.getState().inspectView).toBeUndefined();
+  });
+  it('reports an unreadable file and a file of the wrong size as errors', async () => {
+    await store.adoptFirmware('fwdc243b.bin', '1.60', new Uint8Array([1]));
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.engine.inspect.mockRejectedValue(new Error('bad'));
+    await store.inspectFile(file('junk.bin', 20_000_000));
+    expect(store.getState().inspectView).toMatchObject({ busy: false, error: 'unreadable' });
+    await store.inspectFile(file('tiny.bin', 10));
+    expect(store.getState().inspectView).toMatchObject({ error: 'size' });
+  });
+});
