@@ -103,6 +103,17 @@ describe('app UI language', () => {
     await store.init();
     expect(store.getState().uiLang).toBe('auto');
   });
+  it('the camera menu language starts on English; a saved one is kept, an unknown one falls back to English', async () => {
+    expect(store.getState().lang).toBe('en');
+    await store.init();
+    expect(store.getState().lang).toBe('en');
+    mocks.files.set('project.json', enc(JSON.stringify({ v: 1, model: 'HDF', lang: 'zh-CN' })));
+    vi.resetModules(); let s2 = await import('../../ui/src/store'); await s2.init();
+    expect(s2.getState().lang).toBe('zh-CN');
+    mocks.files.set('project.json', enc(JSON.stringify({ v: 1, model: 'HDF', lang: 'xx' })));
+    vi.resetModules(); s2 = await import('../../ui/src/store'); await s2.init();
+    expect(s2.getState().lang).toBe('en');
+  });
 });
 
 describe('project export and import', () => {

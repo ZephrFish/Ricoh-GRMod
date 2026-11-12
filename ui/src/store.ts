@@ -119,8 +119,13 @@ export const shownSlots = (s: State = state): FirmwareInfo['slots'] => (s.info ?
 const availableSlots = (s: State = state): SlotId[] => s.info ? shownSlots(s).map(slot => slot.id) : (isGr3(s.model) ? [...GR3X_FILM_IDS] : ['CY', 'CG']);
 const emptySlot = (): SlotState => ({ names: {}, icon: { mode: 'keep', text: '', style: 'film' } });
 const emptySlots = (): Record<SlotId, SlotState> => Object.fromEntries(SLOT_IDS.map(id => [id, emptySlot()])) as Record<SlotId, SlotState>;
+/**
+ * The camera menu language a new project starts on (and a saved project with an unknown one falls
+ * back to). English, not the upstream zh-CN, for this fork; a project that already saved a language keeps it.
+ */
+const DEFAULT_CAMERA_LANG: LangCode = 'en';
 let state: State = {
-  ready: false, page: 'ic', fwBusy: false, model: 'HDF', lang: 'zh-CN',
+  ready: false, page: 'ic', fwBusy: false, model: 'HDF', lang: DEFAULT_CAMERA_LANG,
   slots: emptySlots(), extras: [], lookOrder: [], lookHidden: [], lookOrder3: [], lookHidden3: [], wall: [], ratios: [], ratioBackdrop: 'photo', brightAuto: false, additiveHue: false, keepWhite: false, soft: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, directFlash: false, hdr: false, exposurePreview: false, adjSlots: 5, filmCount: 0, previewMode: 'photo', photoRev: 0, activeSlot: 'CY', library: [], compareWith: 'orig', volumes: [],
   copySource: 'card', parked: [], backups: [], copySel: [], copyInfo: {}, builds: [], showAll: false, toasts: [], onlineOpen: false, toursSeen: [], uiLang: 'auto',
 };
@@ -509,7 +514,7 @@ async function restoreProject(doc: FamilyDoc, gr3Doc: FamilyDoc | null): Promise
   const fam = familyOf(model), work = familyDocs[fam];
   set({ ...parseFamily(work), model,
     page: doc.page === 'wall' || doc.page === 'copies' || doc.page === 'ratio' || doc.page === 'ic' ? doc.page : doc.page === 'script' ? 'wall' : 'ic',
-    lang: (LANGS as readonly string[]).includes(doc.lang) ? doc.lang : 'zh-CN', fwName: doc.fwName, showAll: !!doc.showAll,
+    lang: (LANGS as readonly string[]).includes(doc.lang) ? doc.lang : DEFAULT_CAMERA_LANG, fwName: doc.fwName, showAll: !!doc.showAll,
     previewMode: doc.previewMode === 'swatch' ? 'swatch' : 'photo', ratioBackdrop: doc.ratioBackdrop === 'gray' ? 'gray' : 'photo',
     compareWith: typeof doc.compareWith === 'string' && doc.compareWith ? doc.compareWith : 'orig',
     uiLang: applyUiLang(doc.uiLang),
