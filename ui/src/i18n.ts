@@ -158,6 +158,7 @@ const zh = {
   inspectSlots: '槽位', inspectRatios: '新增长宽比', inspectExtras: '新增影像控制槽位', inspectPictures: '关机画面', inspectLayout: '菜单顺序', inspectLayoutValue: '已调整顺序，隐藏 {n} 个',
   inspectKindOfficial: '官方原版', inspectKindModified: '修改版', inspectKindBridge: '1.12 桥接固件', inspectKindUnknown: '无法识别',
   exportConfirmTitle: '导出固件', exportConfirmOk: '导出',
+  shortcutsMenu: '键盘快捷键', shortcutsHint: '{m}+E 导出到文件夹 · {m}+Z 撤销删除 · 影像控制页 ← → 切换槽位 · 长宽比页 ↑ ↓ 切换比例', exportFolderKey: '导出到文件夹（{m}+E）',
 };
 const en: typeof zh = {
   app: 'GR Mod',
@@ -319,6 +320,7 @@ const en: typeof zh = {
   inspectSlots: 'Slots', inspectRatios: 'Added aspect ratios', inspectExtras: 'Added Image Control slots', inspectPictures: 'Power-off images', inspectLayout: 'Menu order', inspectLayoutValue: 'reordered, {n} hidden',
   inspectKindOfficial: 'Official, unmodified', inspectKindModified: 'Modified', inspectKindBridge: '1.12 bridge firmware', inspectKindUnknown: 'Not recognised',
   exportConfirmTitle: 'Export firmware', exportConfirmOk: 'Export',
+  shortcutsMenu: 'Keyboard shortcuts', shortcutsHint: '{m}+E export to a folder · {m}+Z undo a delete · Left / Right: slot on Image Control · Up / Down: ratio on Aspect ratio', exportFolderKey: 'Export to a folder ({m}+E)',
 };
 export type Key = keyof typeof zh;
 const dict = (navigator.language || 'zh').toLowerCase().startsWith('zh') ? zh : en;

@@ -175,3 +175,70 @@ describe('summary before export', () => {
     expect(mocks.engine.build).not.toHaveBeenCalled();
   });
 });
+
+describe('keyboard shortcuts', () => {
+  const press = (key, extra = {}) => { const e = { key, preventDefault: vi.fn(), ...extra }; return { taken: store.handleShortcut(e), e }; };
+  it('ignores keys typed in an input, a textarea or a contenteditable, and does not undo there', async () => {
+    store.addExtraSlot(); store.removeExtraSlot(store.getState().extras[0].key);
+    for (const target of [{ tagName: 'INPUT' }, { tagName: 'TEXTAREA' }, { tagName: 'DIV', isContentEditable: true }]) {
+      const { taken, e } = press('z', { metaKey: true, target });
+      expect(taken).toBe(false); expect(e.preventDefault).not.toHaveBeenCalled();
+    }
+    expect(store.getState().extras).toEqual([]);
+    expect(store.undoPending()).toBe(true);
+    expect(press('z', { ctrlKey: true, target: { tagName: 'BODY' } }).taken).toBe(true);
+    expect(store.getState().extras).toHaveLength(1);
+  });
+  it('Cmd/Ctrl+Z does nothing when no delete is pending', () => {
+    const { taken, e } = press('z', { metaKey: true });
+    expect(taken).toBe(false); expect(e.preventDefault).not.toHaveBeenCalled();
+  });
+  it('Cmd/Ctrl+E starts the export through the summary; a field or an open dialog blocks it', async () => {
+    await store.adoptFirmware('fwdc243b.bin', '1.60', new Uint8Array([1]));
+    store.addRatio('4:3'); await flush();
+    expect(press('e', { metaKey: true, target: { tagName: 'INPUT' } }).taken).toBe(false);
+    expect(press('e', { ctrlKey: true }).taken).toBe(true);
+    await flush();
+    expect(store.getState().confirm).toBeTruthy();
+    expect(mocks.engine.build).not.toHaveBeenCalled(); // the summary comes first
+    expect(press('e', { ctrlKey: true }).taken).toBe(false); // a dialog is open now
+    store.answerConfirm(false);
+    await flush();
+    expect(mocks.engine.build).not.toHaveBeenCalled();
+  });
+  it('arrows move the active slot on the Image Control page and the active ratio on the Ratio page', async () => {
+    store.addExtraSlot();
+    const x = store.getState().extras[0].key;
+    expect(store.getState().activeSlot).toBe('CY');
+    expect(press('ArrowRight').taken).toBe(true); expect(store.getState().activeSlot).toBe('CG');
+    press('ArrowRight'); expect(store.getState().activeSlot).toBe(x);
+    press('ArrowRight'); expect(store.getState().activeSlot).toBe(x); // clamped at the end
+    press('ArrowLeft'); expect(store.getState().activeSlot).toBe('CG');
+    expect(press('ArrowLeft', { target: { tagName: 'INPUT' } }).taken).toBe(false);
+    expect(press('ArrowDown').taken).toBe(false); // not the ratio page
+    await store.adoptFirmware('fwdc243b.bin', '1.60', new Uint8Array([1]));
+    for (const r of ['4:3', '16:9', '5:4']) store.addRatio(r);
+    await flush();
+    store.setPage('ratio');
+    const ids = store.getState().ratios.map(r => r.id);
+    store.setActiveRatio(ids[0]);
+    press('ArrowDown'); expect(store.getState().activeRatio).toBe(ids[1]);
+    press('ArrowDown'); press('ArrowDown'); expect(store.getState().activeRatio).toBe(ids[2]);
+    press('ArrowUp'); expect(store.getState().activeRatio).toBe(ids[1]);
+    expect(press('ArrowRight').taken).toBe(false);
+  });
+  it('production sequence: delete a ratio, press Undo by key, then export', async () => {
+    await store.adoptFirmware('fwdc243b.bin', '1.60', new Uint8Array([1]));
+    for (const r of ['4:3', '16:9']) store.addRatio(r);
+    await flush();
+    store.removeRatio(store.getState().ratios[0].id);
+    expect(press('z', { metaKey: true }).taken).toBe(true);
+    await flush();
+    expect(store.getState().ratios.map(r => r.ratio)).toEqual(['4:3', '16:9']);
+    expect(press('e', { metaKey: true }).taken).toBe(true);
+    await flush();
+    expect(store.getState().confirm.lines.join('\n')).toContain('4:3');
+    store.answerConfirm(true); await flush(); await flush();
+    expect(mocks.engine.build).toHaveBeenCalledTimes(1);
+  });
+});

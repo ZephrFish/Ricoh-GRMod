@@ -1,6 +1,6 @@
 import { LANGS } from '@grmod/core';
 import type { CameraModel, LangCode } from '@grmod/core';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Busy, ConfirmDialog, Hint, Ico, Select, Toasts, useDismiss } from './components';
 import { host } from './host';
 import { LANG_LABEL, t } from './i18n';
@@ -12,7 +12,7 @@ import { CropEditor, ImageControlPage, RatioPage, WallpaperPage } from './pages'
 import { Tour, replayTour, restartTours } from './tour';
 import { UpdatePill, UpdateWatcher, checkForUpdate, openWhatsNew } from './updates';
 import {
-  askForOfficial, bridgeLoaded, isGr3, backupCopies, extrasOn, copyList, deleteCopies, hasNameErrors, hasRatioErrors, ratioSpecs, revealBackups, writableCopy, writeCopy, menuPictures, outputFirmware, pendingChanges, refreshVolumes, selectVolume, setLang, setModel, setPage, setShowAll, useStore, wallReady,
+  askForOfficial, bridgeLoaded, isGr3, backupCopies, extrasOn, copyList, deleteCopies, hasNameErrors, hasRatioErrors, ratioSpecs, revealBackups, writableCopy, writeCopy, menuPictures, outputFirmware, handleShortcut, modKeyName, toast, pendingChanges, refreshVolumes, selectVolume, setLang, setModel, setPage, setShowAll, useStore, wallReady,
 } from './store';
 
 const gb = (n: number): string => (n >= 1e9 ? `${(n / 1e9).toFixed(n >= 1e10 ? 0 : 1)} GB` : `${Math.max(1, Math.round(n / 1e6))} MB`);
@@ -102,7 +102,7 @@ function OutputBar() {
       </div>
       <span className="grow" />
       {s.page === 'copies' && <CopyActions />}
-      {s.page !== 'copies' && <button className="btn" data-tour="export" disabled={!can && !bridge} title={t('exportFolder')} onClick={() => run('folder')}>{Ico.folder}<span className="out-label">{t('exportFolder')}</span></button>}
+      {s.page !== 'copies' && <button className="btn" data-tour="export" disabled={!can && !bridge} title={t('exportFolderKey', { m: modKeyName() })} onClick={() => run('folder')}>{Ico.folder}<span className="out-label">{t('exportFolder')}</span></button>}
       {s.page !== 'copies' && <button className="btn primary" data-tour="write" disabled={!bridge && (!can || !vol)} onClick={() => run('card')}>{t('writeCard')}</button>}
     </footer>
   );
@@ -119,6 +119,7 @@ function HelpMenu() {
       {open && (
         <div className="menu up" role="menu">
           <button role="menuitem" onClick={() => { setOpen(false); replayTour(); }}>{t('tourReplay')}</button>
+          <button role="menuitem" onClick={() => { setOpen(false); toast(t('shortcutsHint', { m: modKeyName() }), 'info'); }}>{t('shortcutsMenu')}</button>
           <button role="menuitem" onClick={() => { setOpen(false); restartTours(); }}>{t('tourRestart')}</button>
           {host.available && <button role="menuitem" onClick={() => { setOpen(false); void checkForUpdate(false); }}>{t('updCheck')}</button>}
         </div>
@@ -133,6 +134,7 @@ export function App() {
   const menuPicsReady = useStore((s) => !!s.info?.capabilities.menuPictures);
   const fwOpen = useStore((s) => !!s.info);
   const ready = useStore((s) => s.ready);
+  useEffect(() => { const key = (e: KeyboardEvent): void => { handleShortcut(e); }; window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key); }, []);
   if (!host.available) return <div className="nohost">{t('hostMissing')}</div>;
   return (
     <div className="app" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }} onDrop={(e) => e.preventDefault()}>
