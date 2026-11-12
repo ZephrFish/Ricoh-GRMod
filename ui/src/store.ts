@@ -83,6 +83,8 @@ export interface State {
   previewMode: PreviewMode; photoRev: number; activeSlot: SlotKey;
   /** QoL wave C. Preset library entries of both cameras (loaded on first use, see loadLibrary). */
   library: LibraryEntry[];
+  /** QoL wave C. What the left side of the photo preview shows: `orig` (the photo as it is, the default) or another slot's key. View state, saved with previewMode. */
+  compareWith: string;
   /** The library dialog: which slot it works on and whether it saves that slot's preset or applies an entry to it. */
   libraryPicker?: { slot: SlotKey; mode: 'save' | 'apply' };
   /** Added Image Control slots, in the camera's order (none by default). */
@@ -113,7 +115,7 @@ const emptySlot = (): SlotState => ({ names: {}, icon: { mode: 'keep', text: '',
 const emptySlots = (): Record<SlotId, SlotState> => Object.fromEntries(SLOT_IDS.map(id => [id, emptySlot()])) as Record<SlotId, SlotState>;
 let state: State = {
   ready: false, page: 'ic', fwBusy: false, model: 'HDF', lang: 'zh-CN',
-  slots: emptySlots(), extras: [], lookOrder: [], lookHidden: [], lookOrder3: [], lookHidden3: [], wall: [], ratios: [], ratioBackdrop: 'photo', brightAuto: false, additiveHue: false, keepWhite: false, soft: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, directFlash: false, hdr: false, exposurePreview: false, adjSlots: 5, filmCount: 0, previewMode: 'photo', photoRev: 0, activeSlot: 'CY', library: [], volumes: [],
+  slots: emptySlots(), extras: [], lookOrder: [], lookHidden: [], lookOrder3: [], lookHidden3: [], wall: [], ratios: [], ratioBackdrop: 'photo', brightAuto: false, additiveHue: false, keepWhite: false, soft: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, directFlash: false, hdr: false, exposurePreview: false, adjSlots: 5, filmCount: 0, previewMode: 'photo', photoRev: 0, activeSlot: 'CY', library: [], compareWith: 'orig', volumes: [],
   copySource: 'card', parked: [], backups: [], copySel: [], copyInfo: {}, builds: [], showAll: false, toasts: [], onlineOpen: false, toursSeen: [],
 };
 const listeners = new Set<() => void>();
@@ -352,6 +354,7 @@ async function saveProject(): Promise<void> {
     ...(familyDocs.gr4 ?? {}),
     v: 1, page: s.page, model: s.model, lang: s.lang, fwName: s.fwName, showAll: s.showAll, previewMode: s.previewMode, ratioBackdrop: s.ratioBackdrop,
     tours: s.toursSeen, toursV: 2,
+    compareWith: s.compareWith,
   };
   try {
     await host.storeSet('project.json', JSON.stringify(doc));
@@ -379,6 +382,7 @@ export async function init(): Promise<void> {
         page: doc.page === 'wall' || doc.page === 'copies' || doc.page === 'ratio' || doc.page === 'ic' ? doc.page : doc.page === 'script' ? 'wall' : 'ic',
         lang: (LANGS as readonly string[]).includes(doc.lang) ? doc.lang : 'zh-CN', fwName: doc.fwName, showAll: !!doc.showAll,
         previewMode: doc.previewMode === 'swatch' ? 'swatch' : 'photo', ratioBackdrop: doc.ratioBackdrop === 'gray' ? 'gray' : 'photo',
+        compareWith: typeof doc.compareWith === 'string' && doc.compareWith ? doc.compareWith : 'orig',
         // GR Mod 0.8 changed the power-off page: its tour (which now says where the pictures are chosen) shows once more
         toursSeen: TOUR_IDS.filter((id) => Array.isArray(doc.tours) && doc.tours.includes(id) && (id !== 'wall' || doc.toursV >= 2)) });
       // The kept file of the camera that was open (a 0.8.x data folder: its one file moves to its camera's place).
@@ -705,6 +709,27 @@ export async function deleteLibraryEntry(entryId: string): Promise<void> {
   await host.storeDel(libSrcKey(entryId)).catch(() => undefined);
   await host.storeDel(libFitKey(entryId)).catch(() => undefined);
 }
+
+// ------------------------------------------------------------------ QoL wave C: compare two slots
+/**
+ * @decision DEC-QOL-COMPARE-001
+ * @title The left side of the photo preview can be another slot's look; the choice is saved view state
+ * @status accepted
+ * @rationale The preview split showed the photo before and after one slot, so judging two looks meant
+ *   switching tabs and remembering. `compareWith` is `orig` (the default and the fallback) or a slot
+ *   key. It is saved with previewMode because that is saved too. It is a key, not a copy of the look,
+ *   so it follows later edits of that slot; a slot that was removed or lost its preset, or the active
+ *   slot itself, counts as `orig` (compareSlot), never an error. The left image is rendered with the
+ *   same applySlot pipeline as the right one, deferred a tick so choosing does not stall the UI.
+ */
+/** Slots that have a fitted look, in menu order: what the compare choice can offer. */
+export function slotsWithLook(s: State = state): SlotKey[] { return allSlotKeys(s).filter((k) => slotOf(k, s)?.preset?.result); }
+/** The slot whose look is on the left of the preview, or undefined for the original photo. */
+export function compareSlot(s: State = state): SlotKey | undefined {
+  const k = s.compareWith;
+  return k !== 'orig' && k !== s.activeSlot && slotsWithLook(s).includes(k) ? k : undefined;
+}
+export function setCompareWith(compareWith: string): void { set({ compareWith }); scheduleSave(); }
 
 // ------------------------------------------------------------------ added slots
 /** Every slot key: the two Cinema slots, then the added ones. */

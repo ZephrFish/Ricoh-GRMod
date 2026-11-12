@@ -14,6 +14,7 @@ import {
   addRatio, addWallFiles, askForOfficial, bridgeLoaded, loadFirmwareFile, loadIconImage, loadPresetFile, loadPreviewFile, moveWall, nameProblem, openCrop, outputFirmware, previewPhoto, removePreset, removeWall,
   maxRatios, ratioName, ratioProblem, removeRatio, setActiveRatio, setActiveSlot, setCrop, setIcon, setName, setPreviewMode, setRatio, setRatioBackdrop, useStore, wallBitmap,
   setSoft, setAdditiveHue, setKeepWhite,
+  compareSlot, setCompareWith, slotsWithLook,
   setDateStamp,
   setMonoUnlock,
   setDirectFlash, setAdjSlots, adjSlotsOf, setHdr, setExposurePreview, setBrightAuto,
@@ -53,7 +54,7 @@ function Swatches({ params }: { params?: color.SlotParams }) {
 }
 
 /** The sample photograph with the original on the left of a draggable divider and the preset on the right. */
-function PhotoCompare({ params }: { params?: color.SlotParams }) {
+function PhotoCompare({ params, label, left }: { params?: color.SlotParams; label: string; left?: { params: color.SlotParams; label: string } }) {
   const photo = usePhoto();
   const gr3x = useStore(s => s.info?.family === 'gr3x');
   // (primitive selections: the store hook needs a stable value)
@@ -72,7 +73,17 @@ function PhotoCompare({ params }: { params?: color.SlotParams }) {
     halateRgba(out.data, out.width, out.height, halo.preview as 1 | 2 | 3, light, haloColour, gr3x ? 'classic' : 'scatter');
     return out;
   }, [base, haloLevel, light, haloColour, gr3x]);
-  return <Compare photo={photo} after={after} label={t('preset')} />;
+  // QoL wave C: the left side is another slot's look. Rendered a tick after the choice so the picker closes at once; until then the photo shows.
+  const [leftImg, setLeftImg] = useState<ImageData | null>(null);
+  const leftParams = left?.params;
+  useEffect(() => {
+    setLeftImg(null);
+    if (!photo || !leftParams) return;
+    const h = setTimeout(() => setLeftImg(applySlot(leftParams, photo, gr3x)), 0);
+    return () => clearTimeout(h);
+  }, [photo, leftParams, gr3x]);
+  const ready = left && leftImg ? leftImg : null;
+  return <Compare photo={photo} after={after} label={label} before={ready} beforeLabel={ready && left ? left.label : undefined} />;
 }
 
 function usePhoto(): ImageData | null {
@@ -80,8 +91,8 @@ function usePhoto(): ImageData | null {
   return useMemo(() => previewPhoto(), [rev]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-/** `photo` on the left of a draggable divider, `after` (labelled `label`) on the right. */
-function Compare({ photo, after, label }: { photo: ImageData | null; after: ImageData | null; label: string }) {
+/** `photo` on the left of a draggable divider, `after` (labelled `label`) on the right; `before` (labelled `beforeLabel`) replaces the photo on the left when given. */
+function Compare({ photo, after, label, before, beforeLabel }: { photo: ImageData | null; after: ImageData | null; label: string; before?: ImageData | null; beforeLabel?: string }) {
   const beforeRef = useRef<HTMLCanvasElement>(null);
   const afterRef = useRef<HTMLCanvasElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -90,8 +101,9 @@ function Compare({ photo, after, label }: { photo: ImageData | null; after: Imag
   useEffect(() => {
     const c = beforeRef.current;
     if (!c || !photo) return;
-    c.width = photo.width; c.height = photo.height; c.getContext('2d')!.putImageData(photo, 0, 0);
-  }, [photo]);
+    const img = before ?? photo;
+    c.width = img.width; c.height = img.height; c.getContext('2d')!.putImageData(img, 0, 0);
+  }, [photo, before]);
   useEffect(() => {
     const c = afterRef.current;
     if (!c || !after) return;
@@ -117,7 +129,7 @@ function Compare({ photo, after, label }: { photo: ImageData | null; after: Imag
       <canvas ref={beforeRef} className="compare-img" style={after ? { clipPath: `inset(0 ${(100 - pos * 100).toFixed(2)}% 0 0)` } : undefined} />
       {after && (
         <>
-          <span className="compare-tag l" style={{ opacity: pos < 0.16 ? 0 : 1 }}>{t('original')}</span>
+          <span className="compare-tag l" style={{ opacity: pos < 0.16 ? 0 : 1 }}>{beforeLabel ?? t('original')}</span>
           <span className="compare-tag r" style={{ opacity: pos > 0.84 ? 0 : 1 }}>{label}</span>
           <div
             className="compare-line" style={{ left: pct }} role="slider" tabIndex={0} aria-label={t('compare')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pos * 100)}
@@ -149,9 +161,14 @@ function PreviewPane({ below, belowH = 0 }: { below?: ReactNode; belowH?: number
   const extras = useStore((s) => s.extras);
   const extraLabels = useStore((s) => s.extras.map((x) => extraName(x, s)).join('\u0000'));
   const lang = useStore((s) => s.lang);
+  const withLook = useStore((s) => slotsWithLook(s).join('\u0000'));
+  const compareKey = useStore((s) => compareSlot(s));
+  const leftParams = useStore((s) => { const k = compareSlot(s); return k ? slotOf(k, s)?.preset?.result?.params : undefined; });
   // GR III / IIIx: every slot is an added film (named as in the camera's menu, else its default name).
   const tabs = gr3x ? slotOptions.map((x) => ({ value: x.id, label: slots[x.id].names[lang] || x.names[lang]?.text || x.defaultName }))
     : [{ value: 'CY', label: t('slotCY') }, { value: 'CG', label: t('slotCG') }, ...extras.map((x, i) => ({ value: x.key, label: extraLabels.split('\u0000')[i] }))];
+  const labelOf = (k: string): string => tabs.find((x) => x.value === k)?.label ?? k;
+  const compareOptions = [{ value: 'orig', label: t('original') }, ...withLook.split('\u0000').filter((k) => k && k !== active).map((k) => ({ value: k, label: labelOf(k) }))];
   const tabsRef = useRef<HTMLDivElement>(null);
   useEffect(() => { tabsRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [active]);
   // With many added slots in a narrow window the tabs do not all fit: arrows step through them.
@@ -178,10 +195,11 @@ function PreviewPane({ below, belowH = 0 }: { below?: ReactNode; belowH?: number
         {overflow && <button className="btn ghost icon-only seg-arrow" title={t('nextSlot')} aria-label={t('nextSlot')} disabled={at === tabs.length - 1} onClick={() => step(1)}>{Ico.right}</button>}
         </>}
         <span className="grow" />
+        {mode === 'photo' && compareOptions.length > 1 && <div className="compare-with"><Select variant="box" value={compareKey ?? 'orig'} onChange={setCompareWith} options={compareOptions} label={t('compareWith')} lead={<span className="small muted compare-with-lead">{t('compareWith')}</span>} /></div>}
         <Segmented tour="ic-mode" value={mode} onChange={setPreviewMode} options={[{ value: 'photo', label: t('previewPhoto') }, { value: 'swatch', label: t('previewSwatch') }]} />
       </div>
       <div className="pane-body" style={{ '--below': below ? `${belowH + 10}px` : '0px' } as React.CSSProperties}>
-        <div className="pane-fit" data-tour="ic-preview" data-tour-fit="">{mode === 'photo' ? <PhotoCompare params={params} /> : <Swatches params={params} />}</div>
+        <div className="pane-fit" data-tour="ic-preview" data-tour-fit="">{mode === 'photo' ? <PhotoCompare params={params} label={compareKey ? labelOf(active) : t('preset')} left={compareKey && leftParams ? { params: leftParams, label: labelOf(compareKey) } : undefined} /> : <Swatches params={params} />}</div>
         {below && <div className="pane-below">{below}</div>}
       </div>
     </DropZone>

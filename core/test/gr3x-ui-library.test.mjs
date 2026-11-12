@@ -37,7 +37,7 @@ beforeEach(async () => {
   mocks.host.storeSet.mockImplementation(async (key, value) => { files.set(key, typeof value === 'string' ? new TextEncoder().encode(value) : value); });
   mocks.host.storeDel.mockImplementation(async (key) => { files.delete(key); });
   mocks.host.storeGet.mockImplementation(async (key) => files.get(key) ?? null);
-  mocks.host.volumes.mockResolvedValue([]);
+  mocks.host.volumes.mockResolvedValue([]); mocks.host.sidecar.mockResolvedValue(null);
   mocks.engine.reset.mockResolvedValue(true);
   mocks.engine.convert.mockImplementation(async (_kind, text) => fitted('Look ' + text.length));
   mocks.engine.open.mockResolvedValue(gr4());
@@ -126,5 +126,38 @@ describe('preset library', () => {
     files.set('library.json', new TextEncoder().encode('{not json'));
     await store.loadLibrary();
     expect(store.getState().library).toEqual([]);
+  });
+});
+
+describe('compare two slots', () => {
+  it('defaults to the original and offers only other slots that have a fitted look', async () => {
+    expect(store.getState().compareWith).toBe('orig');
+    expect(store.compareSlot()).toBeUndefined();
+    expect(store.slotsWithLook()).toEqual(['CY']);
+    await store.loadPresetFile('CG', cube('cool.cube', 'LUT_3D_SIZE 2 cool'));
+    expect(store.slotsWithLook()).toEqual(['CY', 'CG']);
+  });
+  it('shows another slot on the left, and falls back to the original for the active slot, a removed preset or a slot without one', async () => {
+    await store.loadPresetFile('CG', cube('cool.cube', 'LUT_3D_SIZE 2 cool'));
+    store.setActiveSlot('CG');
+    store.setCompareWith('CY');
+    expect(store.compareSlot()).toBe('CY');
+    store.setActiveSlot('CY'); // comparing a slot with itself means nothing
+    expect(store.compareSlot()).toBeUndefined();
+    store.setActiveSlot('CG');
+    store.removePreset('CY');
+    expect(store.compareSlot()).toBeUndefined();
+    expect(store.getState().compareWith).toBe('CY'); // the choice is kept: it applies again once CY has a look
+  });
+  it('is saved with the project like the preview mode, and a restart brings it back', async () => {
+    await store.init(); // saving starts once the project is ready
+    store.setCompareWith('CY');
+    await vi.advanceTimersByTimeAsync(401);
+    expect(JSON.parse(new TextDecoder().decode(files.get('project.json')))).toMatchObject({ previewMode: 'photo', compareWith: 'CY' });
+    vi.resetModules();
+    const again = await import('../../ui/src/store');
+    await again.init();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(again.getState().compareWith).toBe('CY');
   });
 });
