@@ -362,12 +362,17 @@ export type Key = keyof typeof zh;
  *   subscribes to it, so every component (none is memoised) re-renders in the new language without a
  *   reload and without remounting (open dialogs and crop editors keep their state). This is the UI
  *   language, not the camera menu language (`lang` in the store).
+ *   The default is English, not the browser language: a new or older project (no `uiLang` saved) and
+ *   an unknown value start on English; 'auto' (follow the system, English when it is not Chinese) and
+ *   中文 are opt-in from the menu.
  */
 export type UiLangMode = 'auto' | 'zh' | 'en';
-const autoDict = (): typeof zh => ((typeof navigator !== 'undefined' && navigator.language) || 'zh').toLowerCase().startsWith('zh') ? zh : en;
-let dict: typeof zh = autoDict();
-export const normaliseUiLang = (v: unknown): UiLangMode => (v === 'zh' || v === 'en' ? v : 'auto');
-/** Choose the UI language; 'auto' follows the browser as before. */
+const autoDict = (): typeof zh => ((typeof navigator !== 'undefined' && navigator.language) || 'en').toLowerCase().startsWith('zh') ? zh : en;
+let dict: typeof zh = en;
+export const normaliseUiLang = (v: unknown): UiLangMode => (v === 'zh' || v === 'auto' ? v : 'en');
+/** The language t() currently speaks, for code that formats text itself (release notes, credits). */
+export const uiLangCode = (): 'zh' | 'en' => (dict === zh ? 'zh' : 'en');
+/** Choose the UI language; 'auto' follows the browser. */
 export function setUiLang(mode: UiLangMode): void {
   dict = mode === 'zh' ? zh : mode === 'en' ? en : autoDict();
   if (typeof document !== 'undefined' && document.documentElement) document.documentElement.lang = dict === zh ? 'zh' : 'en';

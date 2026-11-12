@@ -98,10 +98,23 @@ describe('app UI language', () => {
     expect(s2.getState().uiLang).toBe('en');
     expect(i2.t('uiLangTitle')).toBe('Interface language');
   });
-  it('an old project without uiLang means auto', async () => {
+  it('the interface starts in English, whatever the system language, and an old project without uiLang stays English', async () => {
+    vi.stubGlobal('navigator', { language: 'zh-CN' });
+    vi.resetModules(); let s2 = await import('../../ui/src/store'); let i2 = await import('../../ui/src/i18n');
+    expect(s2.getState().uiLang).toBe('en');
+    expect(i2.t('projectExport')).toBe('Export project…');
     mocks.files.set('project.json', enc(JSON.stringify({ v: 1, model: 'HDF', lang: 'en' })));
-    await store.init();
-    expect(store.getState().uiLang).toBe('auto');
+    await s2.init();
+    expect(s2.getState().uiLang).toBe('en');
+    expect(i2.t('projectExport')).toBe('Export project…');
+    mocks.files.set('project.json', enc(JSON.stringify({ v: 1, model: 'HDF', uiLang: 'xx' })));
+    vi.resetModules(); s2 = await import('../../ui/src/store'); i2 = await import('../../ui/src/i18n'); await s2.init();
+    expect(s2.getState().uiLang).toBe('en');
+    // 'auto' stays available and follows the system
+    s2.setUiLanguage('auto');
+    expect(i2.t('projectExport')).toBe('导出项目…');
+    expect(i2.uiLangCode()).toBe('zh');
+    vi.unstubAllGlobals(); vi.stubGlobal('document', { hidden: true });
   });
   it('the camera menu language starts on English; a saved one is kept, an unknown one falls back to English', async () => {
     expect(store.getState().lang).toBe('en');
