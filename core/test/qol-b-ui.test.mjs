@@ -136,3 +136,42 @@ describe('inspect any firmware file', () => {
     expect(store.getState().inspectView).toMatchObject({ error: 'size' });
   });
 });
+
+describe('summary before export', () => {
+  const start = async () => {
+    await store.adoptFirmware('fwdc243b.bin', '1.60', new Uint8Array([1]));
+    store.addRatio('4:3'); store.addRatio('16:9');
+    store.setSoft(true);
+    await flush();
+  };
+  it('lists what the build contains, and Cancel builds nothing and writes nothing', async () => {
+    await start();
+    const pending = store.outputFirmware({ kind: 'folder' });
+    await flush();
+    const c = store.getState().confirm;
+    expect(c).toBeTruthy();
+    expect(c.lines.join('\n')).toContain('4:3');
+    expect(c.lines.join('\n')).toContain('16:9');
+    expect(c.lines.length).toBeGreaterThanOrEqual(2); // the ratios and the soft-focus switch
+    store.answerConfirm(false); await pending;
+    expect(mocks.engine.build).not.toHaveBeenCalled();
+    expect(mocks.host.pickDirectory).not.toHaveBeenCalled();
+    expect(mocks.host.write).not.toHaveBeenCalled();
+  });
+  it('builds and writes once the summary is confirmed', async () => {
+    await start();
+    const pending = store.outputFirmware({ kind: 'folder' });
+    await flush();
+    store.answerConfirm(true); await pending;
+    expect(mocks.engine.build).toHaveBeenCalledTimes(1);
+    expect(mocks.host.write).toHaveBeenCalledTimes(1);
+  });
+  it('does not ask for the factory firmware copy (that keeps its own reset confirm)', async () => {
+    await store.adoptFirmware('fwdc243b.bin', '1.60', new Uint8Array([1]));
+    const pending = store.outputFirmware({ kind: 'folder' }, true);
+    await flush();
+    expect(store.getState().confirm).toMatchObject({ reset: true });
+    store.answerConfirm(false); await pending;
+    expect(mocks.engine.build).not.toHaveBeenCalled();
+  });
+});

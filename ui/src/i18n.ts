@@ -157,6 +157,7 @@ const zh = {
   inspectNeedsOpen: '请先打开一个官方固件作为对照，再查看其他固件文件。', inspectUnreadable: '无法读取这个文件：它不是 GR Mod 能识别的固件。', inspectSize: '文件大小不像固件（应为约 1 MB 到 200 MB）。', inspectYes: '是', inspectNo: '否', inspectBusy: '正在读取…',
   inspectSlots: '槽位', inspectRatios: '新增长宽比', inspectExtras: '新增影像控制槽位', inspectPictures: '关机画面', inspectLayout: '菜单顺序', inspectLayoutValue: '已调整顺序，隐藏 {n} 个',
   inspectKindOfficial: '官方原版', inspectKindModified: '修改版', inspectKindBridge: '1.12 桥接固件', inspectKindUnknown: '无法识别',
+  exportConfirmTitle: '导出固件', exportConfirmOk: '导出',
 };
 const en: typeof zh = {
   app: 'GR Mod',
@@ -317,6 +318,7 @@ const en: typeof zh = {
   inspectNeedsOpen: 'Open an official firmware first as the reference, then inspect other firmware files.', inspectUnreadable: 'This file cannot be read: GR Mod does not recognise it as a firmware.', inspectSize: 'The file size does not look like a firmware (about 1 MB to 200 MB).', inspectYes: 'Yes', inspectNo: 'No', inspectBusy: 'Reading…',
   inspectSlots: 'Slots', inspectRatios: 'Added aspect ratios', inspectExtras: 'Added Image Control slots', inspectPictures: 'Power-off images', inspectLayout: 'Menu order', inspectLayoutValue: 'reordered, {n} hidden',
   inspectKindOfficial: 'Official, unmodified', inspectKindModified: 'Modified', inspectKindBridge: '1.12 bridge firmware', inspectKindUnknown: 'Not recognised',
+  exportConfirmTitle: 'Export firmware', exportConfirmOk: 'Export',
 };
 export type Key = keyof typeof zh;
 const dict = (navigator.language || 'zh').toLowerCase().startsWith('zh') ? zh : en;
