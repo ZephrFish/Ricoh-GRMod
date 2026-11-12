@@ -174,6 +174,39 @@ function fail(e: unknown): void {
   toast(`${t('error')}${code ? ` · ${code}` : ''}${msg && msg !== code ? ` · ${msg}` : ''}`.slice(0, 220), 'error');
 }
 
+// ------------------------------------------------------------------ QoL wave B: undo for deletes
+/**
+ * @decision DEC-QOLB-UNDO-001
+ * @title One last-deleted record; host files are deleted only when the undo window closes
+ * @status accepted
+ * @rationale Removing an added slot, a ratio or a picture used to be final at once. The delete now
+ *   leaves one record (a new delete replaces it) and a toast with an Undo button. Everything the
+ *   item needs to come back is already in memory (preset text, icon, blob, preview), so the only
+ *   thing deferred is the removal of its host store files (`preset-<key>`, `wall-<id>`): `commit`
+ *   runs when the toast's window ends, or when another delete replaces the record. Deleting the files at once and re-writing them on undo would work too, but a
+ *   crash in between would then lose the preset for good; an orphaned file after a crash only costs a few kB.
+ */
+interface Deleted { model: CameraModel; restore: () => void; commit: () => void; timer: ReturnType<typeof setTimeout> }
+let lastDeleted: Deleted | undefined;
+const UNDO_MS = 12000;
+/** Whether a delete can still be taken back. */
+export const undoPending = (): boolean => !!lastDeleted;
+function flushDeleted(): void { const d = lastDeleted; lastDeleted = undefined; if (d) { clearTimeout(d.timer); d.commit(); } }
+function recordDeleted(text: string, restore: () => void, commit: () => void): void {
+  flushDeleted();
+  const d: Deleted = { model: state.model, restore, commit, timer: setTimeout(() => { if (lastDeleted === d) flushDeleted(); }, UNDO_MS) };
+  lastDeleted = d;
+  toast(text, 'info', { label: t('undo'), run: () => undoDelete() });
+}
+/** Take the last delete back (the toast's button and Cmd/Ctrl+Z). */
+export function undoDelete(): void {
+  const d = lastDeleted; if (!d) return;
+  lastDeleted = undefined; clearTimeout(d.timer);
+  if (d.model !== state.model) { d.commit(); return; }
+  d.restore();
+  scheduleSave();
+}
+
 // ------------------------------------------------------------------ camera families
 /**
  * GR IV and GR III / IIIx keep their own work: Image Control slots or films with their presets,
@@ -809,16 +842,24 @@ export function addExtraSlot(): void {
   void renderIcon(key);
   scheduleSave();
 }
-export function removeExtraSlot(key: string): void {
+export function removeExtraSlot(key: string, undoable = true): void {
+  const was = state, index = was.extras.findIndex((x) => x.key === key), item = was.extras[index];
+  const orderAt = lookOrderNow(was).indexOf(key), hidden = was.lookHidden.includes(key), active = was.activeSlot === key;
   set((s) => ({ extras: s.extras.filter((x) => x.key !== key), activeSlot: s.activeSlot === key ? 'CY' : s.activeSlot, lookOrder: normalizeLookOrder(s.lookOrder, s.extras.filter((x) => x.key !== key)), lookHidden: s.lookHidden.filter((k) => k !== key) }));
-  if (host.available) void host.storeDel(presetKey(key)).catch(() => undefined);
+  const del = (): void => { if (host.available) void host.storeDel(presetKey(key)).catch(() => undefined); };
   scheduleSave();
+  if (!undoable || !item) { del(); return; }
+  recordDeleted(t('undoExtra'), () => set((s) => {
+    const extras = s.extras.slice(); extras.splice(Math.min(index, extras.length), 0, item);
+    const order = normalizeLookOrder(s.lookOrder, extras).filter((k) => k !== key); order.splice(orderAt < 0 ? order.length : Math.min(orderAt, order.length), 0, key);
+    return { extras, lookOrder: order, lookHidden: hidden ? [...s.lookHidden, key] : s.lookHidden, ...(active ? { activeSlot: key } : {}) };
+  }), del);
 }
 /** Set how many slots are added: the last ones are taken away, new empty ones appended. */
 export function setExtraCount(n: number): void {
   const want = Math.max(0, Math.min(MAX_EXTRA_SLOTS, Math.round(n)));
   while (state.extras.length < want) addExtraSlot();
-  while (state.extras.length > want) removeExtraSlot(state.extras[state.extras.length - 1].key);
+  while (state.extras.length > want) removeExtraSlot(state.extras[state.extras.length - 1].key, false);
 }
 export function setExtraName(key: string, name: string): void {
   set((s) => ({ extras: s.extras.map((x) => (x.key === key ? { ...x, name } : x)) }));
@@ -923,10 +964,13 @@ export async function addWallFiles(files: File[]): Promise<void> {
   scheduleSave();
 }
 export function removeWall(id: string): void {
+  const index = state.wall.findIndex((w) => w.id === id), item = state.wall[index];
   set((s) => ({ wall: s.wall.filter((w) => w.id !== id) }));
   wallBitmaps.get(id)?.close(); wallBitmaps.delete(id);
-  if (host.available) void host.storeDel('wall-' + id).catch(() => undefined);
   scheduleSave();
+  const del = (): void => { if (host.available) void host.storeDel('wall-' + id).catch(() => undefined); };
+  if (!item) { del(); return; }
+  recordDeleted(t('undoWall'), () => set((s) => { const wall = s.wall.slice(); wall.splice(Math.min(index, wall.length), 0, item); return { wall }; }), del);
 }
 export function moveWall(id: string, toIndex: number): void {
   set((s) => {
@@ -1124,8 +1168,14 @@ export function setRatio(id: string, patch: { ratio?: string; name?: string }): 
   if (patch.ratio !== undefined) ratiosChanged(); else scheduleSave();
 }
 export function removeRatio(id: string): void {
+  const index = state.ratios.findIndex((r) => r.id === id), item = state.ratios[index], active = state.activeRatio === id;
   set((s) => { const ratios = s.ratios.filter((r) => r.id !== id); return { ratios, activeRatio: s.activeRatio === id ? ratios[0]?.id : s.activeRatio }; });
   ratiosChanged(true);
+  if (!item) return;
+  recordDeleted(t('undoRatio'), () => {
+    set((s) => { const ratios = s.ratios.slice(); ratios.splice(Math.min(index, ratios.length), 0, item); return { ratios, ...(active ? { activeRatio: id } : {}) }; });
+    ratiosChanged(true);
+  }, () => undefined);
 }
 /** GR III / IIIx: how many films (1..maxFilms); the active slot stays among them. */
 export function setFilmCount(n: number): void {
