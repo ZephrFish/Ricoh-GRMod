@@ -151,6 +151,17 @@ const zh = {
   icViews: '影像控制页面', icViewSlots: '影像控制', icViewOrder: '菜单顺序', lookOrderShown: '{n} 个显示', lookOrderMoved: '{name} 移到第 {n} 位', lookOrderDrag: '拖动调整顺序',
   tIcViewsT: '槽位与菜单顺序', tIcViewsB: '“影像控制”设置各个槽位；“菜单顺序”调整相机影像控制菜单里 look 的顺序，也可以隐藏不用的 look。',
   tIcSoftT: '附加功能', tIcSoftB: '柔焦：打开后，可将“柔焦”效果增添到 ADJ 快捷菜单，有关、弱、中、强四档，效果无法实时预览，可与 HDF 滤镜同时启用；相机固件 1.20 上也可以在“拍摄菜单 › 影像处理设置 › 柔焦”里设定。\n时间戳：在照片右下角打印日期（竖拍时也是看照片时的右下角；菜单里的“跟随相机方向”关掉后，按横向位置打印）。刷入后默认关闭，在“拍摄辅助 › 拍摄时间戳”里打开，可选两种样式。\n黑白风格：解锁 GR IV Monochrome 机型的 6 个黑白风格；相机固件 1.20 上还有“中途曝光效果”。\nHLG 照片：将“HDR色调”改造为机内直出 BT.2100 HLG HDR 照片（Rec.2020 + CICP），不能与 HDR 增益图同时使用。\n直闪模式：当闪光灯以固定功率闪光时，启用直闪模式以让相机按照对焦距离与输入的闪光灯 GN 值进行曝光。\n曝光预览开关（固件 1.20）：在“拍摄菜单 › 曝光设置 › 曝光预览”或 ADJ 里选择取景是否随曝光设置变亮变暗（开 / 直闪模式时关闭 / 始终关闭）。',
+  // QoL wave A: save warning, error hints, project export / import, app language
+  saveFailed: '项目没有保存成功，关闭程序后改动可能丢失。请检查磁盘空间和权限',
+  hintFirmware: '固件文件不对、已损坏或不受支持，请使用官方原始固件', hintUnsupportedHere: '这台相机的固件不支持该功能',
+  hintConflict: 'HLG 照片模式不能与 HDR 增益图同时开启，请关掉其中一个', hintFwFull: '固件里放不下这些改动，请减少关机画面或胶片数量',
+  hintTooMany: '添加的比例或图片超过上限，请减少一些', hintCardFull: '存储卡或磁盘已满，请腾出空间后重试',
+  hintRemoved: '存储卡或磁盘已断开或未就绪，请重新插入后重试', hintNotFound: '找不到文件，它可能已被移动，或存储卡已拔出',
+  hintDenied: '没有权限访问该位置，请换一个文件夹，或检查存储卡是否写保护', hintOffline: '连不上 GR Mod 程序，请关闭窗口后重新打开',
+  projectMenu: '项目与语言', projectExport: '导出项目…', projectImport: '导入项目…', projectWorking: '正在处理项目…',
+  projectExported: '项目已导出：{n} 个文件', projectImported: '项目已导入', projectBad: '这不是有效的 GR Mod 项目文件', projectTooNew: '这个项目文件来自更新的 GR Mod，请先更新',
+  projectImportTitle: '导入项目', projectImportLine: '文件来自 GR Mod {v}，含 {n} 个附属文件', projectImportWarn: '当前项目（影像控制、比例、关机画面和设置）将被替换。官方固件不受影响',
+  uiLangTitle: '界面语言', uiLangAuto: '跟随系统', uiLangZh: '中文', uiLangEn: 'English',
 };
 const en: typeof zh = {
   app: 'GR Mod',
@@ -305,9 +316,38 @@ const en: typeof zh = {
   icViews: 'Image Control views', icViewSlots: 'Image Control', icViewOrder: 'Menu order', lookOrderShown: '{n} shown', lookOrderMoved: '{name} moved to position {n}', lookOrderDrag: 'Drag to reorder',
   tIcViewsT: 'Slots and menu order', tIcViewsB: '"Image Control" sets up the slots; "Menu order" arranges the looks of the camera\'s Image Control menu and hides the ones you do not use.',
   tIcSoftT: 'Additions', tIcSoftB: 'Soft focus: adds "Soft Focus" to the ADJ lever, with off, low, medium and high. The effect cannot be seen in live view; it can be used together with the HDF filter. On camera firmware 1.20 it is also under Shooting › Image Process Settings › Soft Focus.\nDate imprint: prints the date in the bottom right corner of the photo (as it is viewed, also when shot upright; with "Follow Orientation" off in its menu, as stored). Off after flashing; turn it on under Shooting Assist › Date Imprint, two styles.\nB&W looks: unlocks the 6 black-and-white looks of the GR IV Monochrome, and on camera firmware 1.20 its Solarized Effect as well.\nHLG photo: turns "HDR Tone" into in-camera BT.2100 HLG HDR capture (Rec.2020 + CICP); it cannot be combined with the HDR gain map.\nDirect Flash: when the flash fires at a fixed power, Direct Flash sets the exposure from the focus distance and the flash\'s guide number you enter.\nExposure preview switch (firmware 1.20): choose under Shooting › Exposure Settings › Exposure Preview or on the ADJ lever whether the live view gets brighter and darker with the exposure set (On / Off in Direct Flash / Always Off).',
+  // QoL wave A: save warning, error hints, project export / import, app language
+  saveFailed: 'The project could not be saved, so recent changes may be lost on exit. Check disk space and permissions',
+  hintFirmware: 'The firmware file is wrong, damaged or unsupported. Use the original official firmware', hintUnsupportedHere: 'This camera\'s firmware does not support that feature',
+  hintConflict: 'HLG photo mode and the HDR gain map cannot both be on. Turn one of them off', hintFwFull: 'The firmware has no room for all these changes. Use fewer power-off pictures or films',
+  hintTooMany: 'Too many added ratios or pictures. Remove some', hintCardFull: 'The card or disk is full. Free some space and try again',
+  hintRemoved: 'The card or disk was removed or is not ready. Reinsert it and try again', hintNotFound: 'File not found. It may have been moved, or the card was removed',
+  hintDenied: 'Permission denied. Pick another folder, or check that the card is not write-protected', hintOffline: 'Cannot reach the GR Mod program. Close this window and open it again',
+  projectMenu: 'Project and language', projectExport: 'Export project…', projectImport: 'Import project…', projectWorking: 'Working on the project…',
+  projectExported: 'Project exported: {n} files', projectImported: 'Project imported', projectBad: 'This is not a valid GR Mod project file', projectTooNew: 'This project file comes from a newer GR Mod. Update first',
+  projectImportTitle: 'Import project', projectImportLine: 'File from GR Mod {v}, with {n} attached files', projectImportWarn: 'The current project (Image Control, ratios, power-off pictures and settings) will be replaced. The official firmware is not touched',
+  uiLangTitle: 'Interface language', uiLangAuto: 'Follow system', uiLangZh: '中文', uiLangEn: 'English',
 };
 export type Key = keyof typeof zh;
-const dict = (navigator.language || 'zh').toLowerCase().startsWith('zh') ? zh : en;
+/**
+ * @decision DEC-QOL-LANG-001
+ * @title App UI language is a mutable dictionary plus a store field, switched live
+ * @status accepted
+ * @rationale The dictionary used to be fixed at module load from navigator.language. `dict` is now
+ *   reassigned by setUiLang(); the store mirrors the mode in `uiLang` and the root component
+ *   subscribes to it, so every component (none is memoised) re-renders in the new language without a
+ *   reload and without remounting (open dialogs and crop editors keep their state). This is the UI
+ *   language, not the camera menu language (`lang` in the store).
+ */
+export type UiLangMode = 'auto' | 'zh' | 'en';
+const autoDict = (): typeof zh => ((typeof navigator !== 'undefined' && navigator.language) || 'zh').toLowerCase().startsWith('zh') ? zh : en;
+let dict: typeof zh = autoDict();
+export const normaliseUiLang = (v: unknown): UiLangMode => (v === 'zh' || v === 'en' ? v : 'auto');
+/** Choose the UI language; 'auto' follows the browser as before. */
+export function setUiLang(mode: UiLangMode): void {
+  dict = mode === 'zh' ? zh : mode === 'en' ? en : autoDict();
+  if (typeof document !== 'undefined' && document.documentElement) document.documentElement.lang = dict === zh ? 'zh' : 'en';
+}
 export function t(key: Key, vars?: Record<string, string | number>): string {
   let s: string = dict[key] ?? key;
   if (vars) for (const k of Object.keys(vars)) s = s.split(`{${k}}`).join(String(vars[k]));

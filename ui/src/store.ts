@@ -4,8 +4,8 @@ import type { CameraModel, ClarityChange, ExtraSlotSpec, FirmwareInfo, FirmwareS
 import { engine, EngineError } from './engine';
 import { host, HostError, sha256Hex } from './host';
 import type { ParkedEntry, Volume } from './host';
-import { t } from './i18n';
-import type { Key } from './i18n';
+import { normaliseUiLang, setUiLang, t } from './i18n';
+import type { Key, UiLangMode } from './i18n';
 import { cropToRgb, defaultCrop, ensureIconFont, imageIcon, loadBitmap, textIcon, workingCopy } from './pixels';
 import type { Crop } from './pixels';
 import { decodePreview } from './preview';
@@ -95,6 +95,8 @@ export interface State {
   /** Why the download dialog is open, when it says so: a 1.12 bridge firmware file is open. */
   onlineReason?: 'bridge-loaded';
   tour?: TourState; toursSeen: TourId[];
+  /** The app's own interface language (not the camera menu language `lang`); persisted in project.json as `uiLang`. */
+  uiLang: UiLangMode;
 }
 
 const SLOT_IDS: readonly SlotId[] = GR3X_FILM_IDS;
@@ -110,7 +112,7 @@ const emptySlots = (): Record<SlotId, SlotState> => Object.fromEntries(SLOT_IDS.
 let state: State = {
   ready: false, page: 'ic', fwBusy: false, model: 'HDF', lang: 'zh-CN',
   slots: emptySlots(), extras: [], lookOrder: [], lookHidden: [], lookOrder3: [], lookHidden3: [], wall: [], ratios: [], ratioBackdrop: 'photo', brightAuto: false, additiveHue: false, keepWhite: false, soft: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, directFlash: false, hdr: false, exposurePreview: false, adjSlots: 5, filmCount: 0, previewMode: 'photo', photoRev: 0, activeSlot: 'CY', volumes: [],
-  copySource: 'card', parked: [], backups: [], copySel: [], copyInfo: {}, builds: [], showAll: false, toasts: [], onlineOpen: false, toursSeen: [],
+  copySource: 'card', parked: [], backups: [], copySel: [], copyInfo: {}, builds: [], showAll: false, toasts: [], onlineOpen: false, toursSeen: [], uiLang: 'auto',
 };
 const listeners = new Set<() => void>();
 function set(patch: Partial<State> | ((s: State) => Partial<State>)): void {
@@ -167,10 +169,13 @@ function askOfficial(lines: string[], warn?: string): Promise<boolean> {
   return ask(t('resetConfirmTitle'), lines, t('resetConfirmOk'), warn, true);
 }
 export function answerConfirm(v: boolean): void { const c = state.confirm; set({ confirm: undefined }); c?.resolve(v); }
-function fail(e: unknown): void {
+/** Exported for the tests. A code with a plain-language hint (errorHint) shows the hint and the short code; others show code and message. */
+export function fail(e: unknown): void {
   const code = e instanceof HostError || e instanceof EngineError ? e.code : '';
   const msg = e instanceof Error ? e.message : String(e);
   console.error(e);
+  const hint = code ? errorHint(code, msg) : undefined;
+  if (hint) { toast(`${t('error')} · ${t(hint)} (${code})`.slice(0, 220), 'error'); return; }
   toast(`${t('error')}${code ? ` · ${code}` : ''}${msg && msg !== code ? ` · ${msg}` : ''}`.slice(0, 220), 'error');
 }
 
@@ -337,7 +342,7 @@ function enterFamily(fam: Family): void {
 // ------------------------------------------------------------------ persistence
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 function scheduleSave(): void {
-  if (!host.available || !state.ready) return;
+  if (!host.available || !state.ready || importingProject) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => { void saveProject(); }, 400);
 }
@@ -347,12 +352,43 @@ async function saveProject(): Promise<void> {
   const doc = {
     ...(familyDocs.gr4 ?? {}),
     v: 1, page: s.page, model: s.model, lang: s.lang, fwName: s.fwName, showAll: s.showAll, previewMode: s.previewMode, ratioBackdrop: s.ratioBackdrop,
-    tours: s.toursSeen, toursV: 2,
+    tours: s.toursSeen, toursV: 2, uiLang: s.uiLang,
   };
   try {
     await host.storeSet('project.json', JSON.stringify(doc));
     if (familyDocs.gr3) await host.storeSet(GR3_PROJECT, JSON.stringify({ v: 1, ...familyDocs.gr3 }));
-  } catch (e) { console.warn('save failed', e); }
+    saveFailing = false;
+  } catch (e) {
+    console.warn('save failed', e);
+    // One toast per failure streak: saves are debounced and a full disk would otherwise toast on every edit.
+    if (!saveFailing) { saveFailing = true; toast(t('saveFailed'), 'error'); }
+  }
+}
+/** True from the first failed save until the next successful one. */
+let saveFailing = false;
+/**
+ * The project documents (project.json as `doc`, project-gr3.json as `gr3Doc` or null) become the
+ * state, then the open camera's kept firmware, presets and pictures are read. Shared by init() and
+ * by importing a project, so that old project files keep working through one path.
+ */
+async function restoreProject(doc: FamilyDoc, gr3Doc: FamilyDoc | null): Promise<void> {
+  familyDocs.gr4 = null; familyDocs.gr3 = null; gr3Legacy = false;
+  const model: CameraModel = ['GR3', 'GR3_HDF', 'GR3X', 'GR3X_HDF', 'HDF', 'STANDARD', 'MONO'].includes(doc.model) ? doc.model : 'HDF';
+  if (gr3Doc && gr3Doc.v === 1) { familyDocs.gr4 = doc; familyDocs.gr3 = gr3Doc; }
+  else if (familyOf(model) === 'gr3') { familyDocs.gr3 = doc; gr3Legacy = true; } // a GR III project of the test builds
+  else familyDocs.gr4 = doc;
+  const fam = familyOf(model), work = familyDocs[fam];
+  set({ ...parseFamily(work), model,
+    page: doc.page === 'wall' || doc.page === 'copies' || doc.page === 'ratio' || doc.page === 'ic' ? doc.page : doc.page === 'script' ? 'wall' : 'ic',
+    lang: (LANGS as readonly string[]).includes(doc.lang) ? doc.lang : 'zh-CN', fwName: doc.fwName, showAll: !!doc.showAll,
+    previewMode: doc.previewMode === 'swatch' ? 'swatch' : 'photo', ratioBackdrop: doc.ratioBackdrop === 'gray' ? 'gray' : 'photo',
+    uiLang: applyUiLang(doc.uiLang),
+    // GR Mod 0.8 changed the power-off page: its tour (which now says where the pictures are chosen) shows once more
+    toursSeen: TOUR_IDS.filter((id) => Array.isArray(doc.tours) && doc.tours.includes(id) && (id !== 'wall' || doc.toursV >= 2)) });
+  // The kept file of the camera that was open (a 0.8.x data folder: its one file moves to its camera's place).
+  const fwRaw = await keptFirmware(fwGroupOf(model), doc.fwName);
+  if (fwRaw) await openFirmware(fwRaw, LEGACY_FW_GROUP_NAME[fwGroupOf(model)], false);
+  await loadFamilyFiles(work, fam, familyGen);
 }
 export async function init(): Promise<void> {
   if (!host.available) { set({ ready: true }); return; }
@@ -364,23 +400,8 @@ export async function init(): Promise<void> {
     const raw = await host.storeGet('project.json');
     const doc = raw ? JSON.parse(new TextDecoder().decode(raw)) : null;
     if (doc && doc.v === 1) {
-      const model: CameraModel = ['GR3', 'GR3_HDF', 'GR3X', 'GR3X_HDF', 'HDF', 'STANDARD', 'MONO'].includes(doc.model) ? doc.model : 'HDF';
       const gr3Raw = await host.storeGet(GR3_PROJECT).catch(() => null);
-      const gr3Doc = gr3Raw ? JSON.parse(new TextDecoder().decode(gr3Raw)) : null;
-      if (gr3Doc && gr3Doc.v === 1) { familyDocs.gr4 = doc; familyDocs.gr3 = gr3Doc; }
-      else if (familyOf(model) === 'gr3') { familyDocs.gr3 = doc; gr3Legacy = true; } // a GR III project of the test builds
-      else familyDocs.gr4 = doc;
-      const fam = familyOf(model), work = familyDocs[fam];
-      set({ ...parseFamily(work), model,
-        page: doc.page === 'wall' || doc.page === 'copies' || doc.page === 'ratio' || doc.page === 'ic' ? doc.page : doc.page === 'script' ? 'wall' : 'ic',
-        lang: (LANGS as readonly string[]).includes(doc.lang) ? doc.lang : 'zh-CN', fwName: doc.fwName, showAll: !!doc.showAll,
-        previewMode: doc.previewMode === 'swatch' ? 'swatch' : 'photo', ratioBackdrop: doc.ratioBackdrop === 'gray' ? 'gray' : 'photo',
-        // GR Mod 0.8 changed the power-off page: its tour (which now says where the pictures are chosen) shows once more
-        toursSeen: TOUR_IDS.filter((id) => Array.isArray(doc.tours) && doc.tours.includes(id) && (id !== 'wall' || doc.toursV >= 2)) });
-      // The kept file of the camera that was open (a 0.8.x data folder: its one file moves to its camera's place).
-      const fwRaw = await keptFirmware(fwGroupOf(model), doc.fwName);
-      if (fwRaw) await openFirmware(fwRaw, LEGACY_FW_GROUP_NAME[fwGroupOf(model)], false);
-      await loadFamilyFiles(work, fam, familyGen);
+      await restoreProject(doc, gr3Raw ? JSON.parse(new TextDecoder().decode(gr3Raw)) : null);
     } else {
       const fwRaw = await keptFirmware(fwGroupOf(state.model));
       if (fwRaw) await openFirmware(fwRaw, LEGACY_FW_GROUP_NAME[fwGroupOf(state.model)], false);
@@ -490,7 +511,7 @@ async function openFirmware(raw: Uint8Array, name: string, persist: boolean): Pr
   } catch (e) {
     set({ fwBusy: false, info: undefined, raw: undefined, fwName: undefined });
     scheduleSave();
-    if (e instanceof EngineError && (e.code === 'unsupported-firmware' || e.code.startsWith('bad-') || e.code === 'too-short')) toast(t('badFirmware'), 'error');
+    if (e instanceof EngineError && isBadFirmwareCode(e.code)) toast(t('badFirmware'), 'error');
     else fail(e);
     return false;
   }
@@ -1593,4 +1614,173 @@ export async function writeCopy(): Promise<void> {
   } catch (e) { set({ busy: undefined }); fail(e); }
   await refreshCopies();
   void refreshVolumes();
+}
+
+// ================================================================== QoL wave A
+// Plain-language error hints, project export / import, and the app's own UI language. Kept in one
+// section (and one block of i18n keys) so that it merges cleanly beside other work on this file.
+
+// ------------------------------------------------------------------ plain-language error hints
+/**
+ * @decision DEC-QOL-HINT-001
+ * @title Known error codes get a plain-language hint; the short code stays for bug reports
+ * @status accepted
+ * @rationale fail() used to toast `Error · code · message`, which means nothing to most users. The
+ *   codes below are the user-actionable ones thrown by the engine (core FirmwareError / JpegError)
+ *   and the host (shell/internal/server/errors.go, plus the client-side `offline` / `no-host`). A host
+ *   `io` error carries only the OS text, so card-full and card-removed are told apart by that text.
+ *   Unknown codes keep the old `code · message` format.
+ */
+/** Codes meaning "this is not a firmware file GR Mod can open" (also used by openFirmware's own toast). */
+const FIRMWARE_CODES = ['unsupported-firmware', 'too-short', 'unexpected-layout', 'bad-checksum', 'bad-footer', 'bad-stream', 'bad-stream-length', 'bad-decoded-length', 'bad-models'];
+export const isBadFirmwareCode = (code: string): boolean => code === 'unsupported-firmware' || code.startsWith('bad-') || code === 'too-short';
+const ERROR_HINTS: Record<string, Key> = {
+  ...Object.fromEntries(FIRMWARE_CODES.map((c) => [c, 'hintFirmware' as Key])),
+  'gr3x-unsupported': 'hintUnsupportedHere', 'bad-hlg': 'hintConflict', 'no-space': 'hintFwFull',
+  'too-many-ratios': 'hintTooMany', 'too-many-pictures': 'hintTooMany',
+  'not-found': 'hintNotFound', forbidden: 'hintDenied', 'too-large': 'errTooBig', network: 'fwNetError', checksum: 'fwChecksum',
+  offline: 'hintOffline', 'no-host': 'hintOffline',
+};
+/** The hint for an error code (and message, for the host's catch-all `io`), or undefined for a code without one. */
+export function errorHint(code: string, message = ''): Key | undefined {
+  if (code === 'io') {
+    if (/no space left|not enough space|disk (is )?full|enospc|quota/i.test(message)) return 'hintCardFull';
+    if (/not ready|no such device|enodev|input\/output error|i\/o error|removed|unplugged|no longer available/i.test(message)) return 'hintRemoved';
+    return undefined;
+  }
+  return Object.prototype.hasOwnProperty.call(ERROR_HINTS, code) ? ERROR_HINTS[code] : undefined;
+}
+
+// ------------------------------------------------------------------ app UI language
+/** Sets the dictionary and returns the normalised mode (unknown or missing values mean 'auto'). */
+function applyUiLang(v: unknown): UiLangMode { const m = normaliseUiLang(v); setUiLang(m); return m; }
+/** Switch the interface language now; every subscribed component re-renders and the choice is saved in project.json. */
+export function setUiLanguage(m: UiLangMode): void { set({ uiLang: applyUiLang(m) }); scheduleSave(); }
+
+// ------------------------------------------------------------------ project export / import
+/**
+ * @decision DEC-QOL-PROJECT-001
+ * @title A project file is one JSON document holding both family docs and every file they point at
+ * @status accepted
+ * @rationale The project is spread over the host store: project.json (GR IV doc plus app settings),
+ *   project-gr3.json, one preset file per slot (`preset-*`, `gr3-preset-*`), the power-off pictures
+ *   (`wall-*`) and the preview photo. Exporting only the two docs would restore names and order but
+ *   lose every preset and picture, so the export lists the store and takes those prefixes. All files
+ *   are base64 (presets are text, pictures binary; one encoding keeps the reader simple). The official
+ *   firmware (`firmware-*.bin`) and build history are left out: the first is Ricoh's and large, the
+ *   second belongs to this computer. Import writes new files first, the docs next and removes stale
+ *   project files last, so a failure part-way never leaves the docs pointing at files that are gone.
+ */
+export const PROJECT_FORMAT = 'grmod-project';
+export const PROJECT_FORMAT_VERSION = 1;
+const PROJECT_FILE_RE = /^(preset-|gr3-preset-|wall-)[a-z0-9._-]{1,56}$|^preview\.jpg$/;
+const PROJECT_MAX_FILES = 600;
+export interface ProjectExport {
+  format: typeof PROJECT_FORMAT; formatVersion: number; appVersion: string; exported: string;
+  project: FamilyDoc; projectGr3: FamilyDoc | null; files: Record<string, string>;
+}
+/** Thrown for a file that is not a (supported) project export; `code` is `bad-project` or `project-too-new`. */
+export class ProjectFileError extends Error {
+  code: string;
+  constructor(code: string, message: string) { super(message); this.code = code; }
+}
+const bad = (m: string): ProjectFileError => new ProjectFileError('bad-project', m);
+function toBase64(b: Uint8Array): string {
+  let s = '';
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function fromBase64(s: string): Uint8Array {
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+/** The project documents as they would be saved now (the open family's from the live state). */
+function projectDocs(): { doc: FamilyDoc; gr3: FamilyDoc | null } {
+  const s = state;
+  familyDocs[familyOf(s.model)] = currentFamilyDoc();
+  const doc = { ...(familyDocs.gr4 ?? {}), v: 1, page: s.page, model: s.model, lang: s.lang, fwName: s.fwName, showAll: s.showAll, previewMode: s.previewMode, ratioBackdrop: s.ratioBackdrop, tours: s.toursSeen, toursV: 2, uiLang: s.uiLang };
+  return { doc, gr3: familyDocs.gr3 ? { v: 1, ...familyDocs.gr3 } : null };
+}
+/** Everything needed to restore the work, read from the host store and the live state. */
+export async function buildProjectExport(): Promise<ProjectExport> {
+  const { doc, gr3 } = projectDocs();
+  const files: Record<string, string> = {};
+  for (const { key } of await host.storeList()) {
+    if (!PROJECT_FILE_RE.test(key)) continue;
+    const bytes = await host.storeGet(key);
+    if (bytes) files[key] = toBase64(bytes);
+  }
+  return { format: PROJECT_FORMAT, formatVersion: PROJECT_FORMAT_VERSION, appVersion: host.info?.version ?? '', exported: new Date().toISOString(), project: doc, projectGr3: gr3, files };
+}
+/** Checks the format, version and shape of an export; throws ProjectFileError, returns the export otherwise. */
+export function parseProjectExport(text: string): ProjectExport {
+  let p: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  try { p = JSON.parse(text); } catch { throw bad('not JSON'); }
+  if (!p || typeof p !== 'object' || p.format !== PROJECT_FORMAT) throw bad('not a GR Mod project');
+  if (!Number.isInteger(p.formatVersion) || p.formatVersion < 1) throw bad('no format version');
+  if (p.formatVersion > PROJECT_FORMAT_VERSION) throw new ProjectFileError('project-too-new', `format ${p.formatVersion}`);
+  if (!p.project || typeof p.project !== 'object' || p.project.v !== 1) throw bad('no project document');
+  if (p.projectGr3 != null && (typeof p.projectGr3 !== 'object' || p.projectGr3.v !== 1)) throw bad('bad GR III document');
+  if (!p.files || typeof p.files !== 'object' || Array.isArray(p.files)) throw bad('no files');
+  const keys = Object.keys(p.files);
+  if (keys.length > PROJECT_MAX_FILES) throw bad('too many files');
+  for (const k of keys) {
+    if (!PROJECT_FILE_RE.test(k)) throw bad(`unexpected file ${k.slice(0, 40)}`);
+    if (typeof p.files[k] !== 'string') throw bad(`bad data for ${k}`);
+    try { fromBase64(p.files[k]); } catch { throw bad(`bad data for ${k}`); }
+  }
+  return { format: PROJECT_FORMAT, formatVersion: p.formatVersion, appVersion: String(p.appVersion ?? ''), exported: String(p.exported ?? ''), project: p.project, projectGr3: p.projectGr3 ?? null, files: p.files };
+}
+let importingProject = false;
+/** Replace the project in the host store with an export's, then load it the way init() does. */
+export async function applyProjectExport(p: ProjectExport): Promise<void> {
+  importingProject = true; clearTimeout(saveTimer);
+  try {
+    const have = (await host.storeList()).map((k) => k.key).filter((k) => PROJECT_FILE_RE.test(k));
+    for (const [key, b64] of Object.entries(p.files)) await host.storeSet(key, fromBase64(b64));
+    await host.storeSet('project.json', JSON.stringify(p.project));
+    if (p.projectGr3) await host.storeSet(GR3_PROJECT, JSON.stringify(p.projectGr3));
+    else await host.storeDel(GR3_PROJECT).catch(() => undefined);
+    for (const key of have) if (!(key in p.files)) await host.storeDel(key).catch(() => undefined);
+    // The old work is dropped before the new is read; the kept firmware of the new camera is reopened by restoreProject.
+    familyLoading = false; ++familyGen;
+    set({ info: undefined, raw: undefined, fwName: undefined, copyInfo: {}, copySel: [] });
+    await restoreProject(p.project, p.projectGr3);
+    saveFailing = false;
+  } finally { importingProject = false; }
+}
+/** The header-menu action: save the project as one downloaded file. */
+export async function exportProject(): Promise<void> {
+  if (!host.available || state.busy) return;
+  set({ busy: t('projectWorking') });
+  try {
+    const p = await buildProjectExport();
+    const d = new Date(), pad = (n: number): string => String(n).padStart(2, '0');
+    const name = `grmod-project-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.grmod.json`;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(p)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    toast(t('projectExported', { n: Object.keys(p.files).length + 1 + (p.projectGr3 ? 1 : 0) }), 'ok');
+  } catch (e) { fail(e); } finally { set({ busy: undefined }); }
+}
+/** The header-menu action: validate a chosen file, confirm the replacement, then import it. Bad input toasts and changes nothing. */
+export async function importProject(file: File): Promise<void> {
+  if (!host.available || state.busy) return;
+  let p: ProjectExport;
+  try {
+    if (file.size > 400_000_000) throw bad('too large');
+    p = parseProjectExport(await file.text());
+  } catch (e) {
+    console.warn('project file rejected', e);
+    toast(e instanceof ProjectFileError && e.code === 'project-too-new' ? t('projectTooNew') : t('projectBad'), 'error');
+    return;
+  }
+  if (!(await ask(t('projectImportTitle'), [t('projectImportLine', { v: p.appVersion || '?', n: Object.keys(p.files).length })], t('projectImport'), t('projectImportWarn')))) return;
+  set({ busy: t('projectWorking') });
+  try { await applyProjectExport(p); toast(t('projectImported'), 'ok'); }
+  catch (e) { fail(e); }
+  finally { set({ busy: undefined }); }
 }

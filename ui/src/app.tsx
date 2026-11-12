@@ -4,14 +4,14 @@ import { useRef, useState } from 'react';
 import { Busy, ConfirmDialog, Hint, Ico, Select, Toasts, useDismiss } from './components';
 import { host } from './host';
 import { LANG_LABEL, t } from './i18n';
-import type { Key } from './i18n';
+import type { Key, UiLangMode } from './i18n';
 import { CopiesPage } from './copies';
 import { BridgeBanner, FirmwareOnline, FirmwareRow, MODELS, modelLabel } from './firmware';
 import { CropEditor, ImageControlPage, RatioPage, WallpaperPage } from './pages';
 import { Tour, replayTour, restartTours } from './tour';
 import { UpdatePill, UpdateWatcher, checkForUpdate, openWhatsNew } from './updates';
 import {
-  askForOfficial, bridgeLoaded, isGr3, backupCopies, extrasOn, copyList, deleteCopies, hasNameErrors, hasRatioErrors, ratioSpecs, revealBackups, writableCopy, writeCopy, menuPictures, outputFirmware, pendingChanges, refreshVolumes, selectVolume, setLang, setModel, setPage, setShowAll, useStore, wallReady,
+  askForOfficial, bridgeLoaded, exportProject, importProject, setUiLanguage, isGr3, backupCopies, extrasOn, copyList, deleteCopies, hasNameErrors, hasRatioErrors, ratioSpecs, revealBackups, writableCopy, writeCopy, menuPictures, outputFirmware, pendingChanges, refreshVolumes, selectVolume, setLang, setModel, setPage, setShowAll, useStore, wallReady,
 } from './store';
 
 const gb = (n: number): string => (n >= 1e9 ? `${(n / 1e9).toFixed(n >= 1e10 ? 0 : 1)} GB` : `${Math.max(1, Math.round(n / 1e6))} MB`);
@@ -46,6 +46,7 @@ function Sidebar() {
         <button className="about-link" data-tour="version" title={t('wnTitle')} onClick={() => openWhatsNew()}>v{host.info?.version || ''}</button>
         <UpdatePill />
         <span className="grow" />
+        <ProjectMenu />
         <HelpMenu />
       </div>
     </aside>
@@ -126,12 +127,38 @@ function HelpMenu() {
   );
 }
 
+/** Project export / import and the interface language (not the camera menu language, which is the Language select above). */
+function ProjectMenu() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const uiLang = useStore((s) => s.uiLang);
+  const picker = useRef<HTMLInputElement>(null);
+  useDismiss(open, ref, () => setOpen(false));
+  const langs: { v: UiLangMode; label: Key }[] = [{ v: 'auto', label: 'uiLangAuto' }, { v: 'zh', label: 'uiLangZh' }, { v: 'en', label: 'uiLangEn' }];
+  return (
+    <div className="menu-wrap" ref={ref}>
+      <button className="help-btn" data-tour="project-menu" title={t('projectMenu')} aria-label={t('projectMenu')} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{Ico.more}</button>
+      <input ref={picker} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importProject(f); }} />
+      {open && (
+        <div className="menu up" role="menu">
+          {host.available && <button role="menuitem" onClick={() => { setOpen(false); void exportProject(); }}>{t('projectExport')}</button>}
+          {host.available && <button role="menuitem" onClick={() => { setOpen(false); picker.current?.click(); }}>{t('projectImport')}</button>}
+          <div className="menu-title" role="presentation">{t('uiLangTitle')}</div>
+          {langs.map((l) => <button key={l.v} role="menuitemradio" aria-checked={uiLang === l.v} onClick={() => { setOpen(false); setUiLanguage(l.v); }}>{uiLang === l.v ? '\u2713 ' : '\u2003'}{t(l.label)}</button>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function App() {
   const page = useStore((s) => s.page);
   const gr3 = useStore((s) => isGr3(s.model));
   const menuPicsReady = useStore((s) => !!s.info?.capabilities.menuPictures);
   const fwOpen = useStore((s) => !!s.info);
   const ready = useStore((s) => s.ready);
+  // Subscribed so that a language switch re-renders the whole tree (t() reads the current dictionary).
+  useStore((s) => s.uiLang);
   if (!host.available) return <div className="nohost">{t('hostMissing')}</div>;
   return (
     <div className="app" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }} onDrop={(e) => e.preventDefault()}>
