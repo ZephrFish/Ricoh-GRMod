@@ -2,6 +2,7 @@ import { LANGS } from '@grmod/core';
 import type { CameraModel, LangCode } from '@grmod/core';
 import { useEffect, useRef, useState } from 'react';
 import { Busy, ConfirmDialog, Hint, Ico, Select, Toasts, useDismiss } from './components';
+import { LibraryDialog } from './library';
 import { host } from './host';
 import { LANG_LABEL, t } from './i18n';
 import type { Key, UiLangMode } from './i18n';
@@ -175,6 +176,7 @@ export function App() {
       <FirmwareOnline />
       <InspectDialog />
       <UpdateWatcher />
+      <LibraryDialog />
       <ConfirmDialog />
       <Tour />
       <Busy />

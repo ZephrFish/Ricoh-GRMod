@@ -170,6 +170,10 @@ const zh = {
   inspectKindOfficial: '官方原版', inspectKindModified: '修改版', inspectKindBridge: '1.12 桥接固件', inspectKindUnknown: '无法识别',
   exportConfirmTitle: '导出固件', exportConfirmOk: '导出',
   shortcutsMenu: '键盘快捷键', shortcutsHint: '{m}+E 导出到文件夹 · {m}+Z 撤销删除 · 影像控制页 ← → 切换槽位 · 长宽比页 ↑ ↓ 切换比例', exportFolderKey: '导出到文件夹（{m}+E）',
+  // QoL wave C
+  libSave: '存入预设库', libApply: '从预设库应用', libTitleSave: '存入预设库', libTitleApply: '预设库', libName: '名称', libSaveBtn: '保存', libEmpty: '预设库里还没有适用于这台相机的预设。先在某个槽位载入预设，再点“存入预设库”。', libNoPreset: '先载入并转换好预设，才能存入预设库。',
+  libSaved: '已存入预设库：{name}', libApplied: '已应用预设：{name}', libSaveFailed: '预设库写入失败', libWrongFamily: '这个预设属于另一类相机，不能用在当前相机上', libMissing: '预设库里找不到这个预设的文件', libDeleteTitle: '从预设库删除这个预设？', libDelete: '从预设库删除', libFamilyGr4: 'GR IV', libFamilyGr3: 'GR III / IIIx',
+  compareWith: '对比对象',
 };
 const en: typeof zh = {
   app: 'GR Mod',
@@ -343,6 +347,10 @@ const en: typeof zh = {
   inspectKindOfficial: 'Official, unmodified', inspectKindModified: 'Modified', inspectKindBridge: '1.12 bridge firmware', inspectKindUnknown: 'Not recognised',
   exportConfirmTitle: 'Export firmware', exportConfirmOk: 'Export',
   shortcutsMenu: 'Keyboard shortcuts', shortcutsHint: '{m}+E export to a folder · {m}+Z undo a delete · Left / Right: slot on Image Control · Up / Down: ratio on Aspect ratio', exportFolderKey: 'Export to a folder ({m}+E)',
+  // QoL wave C
+  libSave: 'Save to library', libApply: 'Apply from library', libTitleSave: 'Save to library', libTitleApply: 'Preset library', libName: 'Name', libSaveBtn: 'Save', libEmpty: 'The library has no presets for this camera yet. Load a preset on a slot, then choose "Save to library".', libNoPreset: 'Load a preset and let it convert before saving it to the library.',
+  libSaved: 'Saved to the library: {name}', libApplied: 'Applied: {name}', libSaveFailed: 'Could not write the preset library', libWrongFamily: 'This preset belongs to another camera family and cannot be used on this camera', libMissing: 'The library has no file for this preset', libDeleteTitle: 'Delete this preset from the library?', libDelete: 'Delete from library', libFamilyGr4: 'GR IV', libFamilyGr3: 'GR III / IIIx',
+  compareWith: 'Compare with',
 };
 export type Key = keyof typeof zh;
 /**

@@ -555,3 +555,15 @@ html.look-grabbing, html.look-grabbing * { cursor: grabbing !important; }
 .dialog.inspect { width: 520px; max-height: calc(100% - 48px); overflow: auto; }
 .dialog.inspect.drop-over { outline: 2px dashed var(--line); }
 .inspect-slot { display: flex; align-items: center; gap: 8px; }
+/* QoL wave C: preset library */
+.lib-buttons { margin-top: 6px; }
+.lib-dialog { width: 460px; }
+.lib-save { display: grid; gap: 6px; }
+.lib-save .dialog-actions { margin-top: 10px; }
+.lib-list { margin: 0 0 14px; padding: 0; list-style: none; display: grid; gap: 4px; max-height: 320px; overflow: auto; }
+.lib-list li { display: flex; align-items: center; gap: 4px; }
+.lib-pick { flex: 1; min-width: 0; display: grid; gap: 1px; text-align: left; padding: 6px 10px; border: 0; border-radius: 6px; background: var(--chip); color: inherit; font: inherit; cursor: pointer; }
+.lib-pick:hover, .lib-pick:focus-visible { background: var(--hover); }
+.lib-name { font-size: 13.5px; }
+.compare-with { min-width: 0; max-width: 220px; }
+.compare-with-lead { margin-right: 6px; white-space: nowrap; }
