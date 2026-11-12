@@ -4,6 +4,7 @@ import type { SlotId } from '@grmod/core';
 import type { ReactNode } from 'react';
 import { DropZone, FileButton, Ico, IconCanvas, Menu, Prop, RatioIcon, RgbCanvas, Segmented, Select, Switch } from './components';
 import { FirmwareHero } from './firmware';
+import { LibraryButtons } from './library';
 import { t } from './i18n';
 import type { Key } from './i18n';
 import type { Crop } from './pixels';
@@ -233,6 +234,7 @@ function SlotCard({ id }: { id: SlotId }) {
                 )}
               </div>
             )}
+            <LibraryButtons k={id} />
           </Prop>
           <Prop label={t('icon')} tour={first ? 'ic-icon' : undefined}>
             <div className="chips">
@@ -598,6 +600,7 @@ function ExtraSlotCard({ x, index }: { x: ExtraSlot; index: number }) {
                 )}
               </div>
             )}
+            <LibraryButtons k={k} />
           </Prop>
           <Prop label={t('icon')}>
             <div className="chips">

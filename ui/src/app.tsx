@@ -2,6 +2,7 @@ import { LANGS } from '@grmod/core';
 import type { CameraModel, LangCode } from '@grmod/core';
 import { useRef, useState } from 'react';
 import { Busy, ConfirmDialog, Hint, Ico, Select, Toasts, useDismiss } from './components';
+import { LibraryDialog } from './library';
 import { host } from './host';
 import { LANG_LABEL, t } from './i18n';
 import type { Key } from './i18n';
@@ -144,6 +145,7 @@ export function App() {
       <CropEditor />
       <FirmwareOnline />
       <UpdateWatcher />
+      <LibraryDialog />
       <ConfirmDialog />
       <Tour />
       <Busy />
