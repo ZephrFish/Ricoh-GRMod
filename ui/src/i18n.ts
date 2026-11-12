@@ -162,6 +162,14 @@ const zh = {
   projectExported: '项目已导出：{n} 个文件', projectImported: '项目已导入', projectBad: '这不是有效的 GR Mod 项目文件', projectTooNew: '这个项目文件来自更新的 GR Mod，请先更新',
   projectImportTitle: '导入项目', projectImportLine: '文件来自 GR Mod {v}，含 {n} 个附属文件', projectImportWarn: '当前项目（影像控制、比例、关机画面和设置）将被替换。官方固件不受影响',
   uiLangTitle: '界面语言', uiLangAuto: '跟随系统', uiLangZh: '中文', uiLangEn: 'English',
+  // QoL wave B
+  undo: '撤销', undoExtra: '已删除新增槽位', undoWall: '已移除关机画面', undoRatio: '已移除长宽比',
+  inspectFw: '查看固件文件…', inspectTitle: '查看固件文件', inspectDrop: '拖入或选择任意 .bin 固件', inspectAgain: '换一个文件', inspectRef: '对照的官方固件', inspectKind: '类型', inspectVerified: '校验', inspectChanged: '改动字节', inspectFeatures: '功能', inspectNone: '无',
+  inspectNeedsOpen: '请先打开一个官方固件作为对照，再查看其他固件文件。', inspectUnreadable: '无法读取这个文件：它不是 GR Mod 能识别的固件。', inspectSize: '文件大小不像固件（应为约 1 MB 到 200 MB）。', inspectYes: '是', inspectNo: '否', inspectBusy: '正在读取…',
+  inspectSlots: '槽位', inspectRatios: '新增长宽比', inspectExtras: '新增影像控制槽位', inspectPictures: '关机画面', inspectLayout: '菜单顺序', inspectLayoutValue: '已调整顺序，隐藏 {n} 个',
+  inspectKindOfficial: '官方原版', inspectKindModified: '修改版', inspectKindBridge: '1.12 桥接固件', inspectKindUnknown: '无法识别',
+  exportConfirmTitle: '导出固件', exportConfirmOk: '导出',
+  shortcutsMenu: '键盘快捷键', shortcutsHint: '{m}+E 导出到文件夹 · {m}+Z 撤销删除 · 影像控制页 ← → 切换槽位 · 长宽比页 ↑ ↓ 切换比例', exportFolderKey: '导出到文件夹（{m}+E）',
 };
 const en: typeof zh = {
   app: 'GR Mod',
@@ -327,6 +335,14 @@ const en: typeof zh = {
   projectExported: 'Project exported: {n} files', projectImported: 'Project imported', projectBad: 'This is not a valid GR Mod project file', projectTooNew: 'This project file comes from a newer GR Mod. Update first',
   projectImportTitle: 'Import project', projectImportLine: 'File from GR Mod {v}, with {n} attached files', projectImportWarn: 'The current project (Image Control, ratios, power-off pictures and settings) will be replaced. The official firmware is not touched',
   uiLangTitle: 'Interface language', uiLangAuto: 'Follow system', uiLangZh: '中文', uiLangEn: 'English',
+  // QoL wave B
+  undo: 'Undo', undoExtra: 'Added slot removed', undoWall: 'Power-off image removed', undoRatio: 'Aspect ratio removed',
+  inspectFw: 'Inspect a firmware file…', inspectTitle: 'Inspect a firmware file', inspectDrop: 'Drop or choose any firmware .bin', inspectAgain: 'Choose another file', inspectRef: 'Compared with the open firmware', inspectKind: 'Type', inspectVerified: 'Verified', inspectChanged: 'Changed bytes', inspectFeatures: 'Features', inspectNone: 'none',
+  inspectNeedsOpen: 'Open an official firmware first as the reference, then inspect other firmware files.', inspectUnreadable: 'This file cannot be read: GR Mod does not recognise it as a firmware.', inspectSize: 'The file size does not look like a firmware (about 1 MB to 200 MB).', inspectYes: 'Yes', inspectNo: 'No', inspectBusy: 'Reading…',
+  inspectSlots: 'Slots', inspectRatios: 'Added aspect ratios', inspectExtras: 'Added Image Control slots', inspectPictures: 'Power-off images', inspectLayout: 'Menu order', inspectLayoutValue: 'reordered, {n} hidden',
+  inspectKindOfficial: 'Official, unmodified', inspectKindModified: 'Modified', inspectKindBridge: '1.12 bridge firmware', inspectKindUnknown: 'Not recognised',
+  exportConfirmTitle: 'Export firmware', exportConfirmOk: 'Export',
+  shortcutsMenu: 'Keyboard shortcuts', shortcutsHint: '{m}+E export to a folder · {m}+Z undo a delete · Left / Right: slot on Image Control · Up / Down: ratio on Aspect ratio', exportFolderKey: 'Export to a folder ({m}+E)',
 };
 export type Key = keyof typeof zh;
 /**

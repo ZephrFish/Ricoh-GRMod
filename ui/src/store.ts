@@ -55,6 +55,8 @@ export const TOUR_IDS: readonly TourId[] = ['overview', 'ic', 'ratio', 'wall', '
 export interface TourState { id: TourId; steps: number[]; index: number; replay: boolean }
 /** `reset`: the firmware written is the official one; the dialog asks in red whether the camera's settings were reset first. */
 export interface Confirm { title: string; warn?: string; reset?: boolean; lines: string[]; ok: string; resolve: (v: boolean) => void }
+/** A firmware file being inspected: `error` is `needs-open` (no official firmware to compare with), `unreadable` (not a file the engine can read) or `size`. */
+export interface InspectView { name: string; size: number; busy: boolean; summary?: FirmwareSummary; error?: 'needs-open' | 'unreadable' | 'size' }
 export interface State {
   ready: boolean; page: Page;
   fwName?: string; fwBusy: boolean; info?: FirmwareInfo; raw?: Uint8Array;
@@ -97,6 +99,8 @@ export interface State {
   tour?: TourState; toursSeen: TourId[];
   /** The app's own interface language (not the camera menu language `lang`); persisted in project.json as `uiLang`. */
   uiLang: UiLangMode;
+  /** QoL wave B: the "Inspect a firmware file" dialog (open while set). */
+  inspectView?: InspectView;
 }
 
 const SLOT_IDS: readonly SlotId[] = GR3X_FILM_IDS;
@@ -178,6 +182,124 @@ export function fail(e: unknown): void {
   if (hint) { toast(`${t('error')} · ${t(hint)} (${code})`.slice(0, 220), 'error'); return; }
   toast(`${t('error')}${code ? ` · ${code}` : ''}${msg && msg !== code ? ` · ${msg}` : ''}`.slice(0, 220), 'error');
 }
+
+// ------------------------------------------------------------------ QoL wave B: undo for deletes
+/**
+ * @decision DEC-QOLB-UNDO-001
+ * @title One last-deleted record; host files are deleted only when the undo window closes
+ * @status accepted
+ * @rationale Removing an added slot, a ratio or a picture used to be final at once. The delete now
+ *   leaves one record (a new delete replaces it) and a toast with an Undo button. Everything the
+ *   item needs to come back is already in memory (preset text, icon, blob, preview), so the only
+ *   thing deferred is the removal of its host store files (`preset-<key>`, `wall-<id>`): `commit`
+ *   runs when the toast's window ends, or when another delete replaces the record. Deleting the files at once and re-writing them on undo would work too, but a
+ *   crash in between would then lose the preset for good; an orphaned file after a crash only costs a few kB.
+ */
+interface Deleted { model: CameraModel; restore: () => void; commit: () => void; timer: ReturnType<typeof setTimeout> }
+let lastDeleted: Deleted | undefined;
+const UNDO_MS = 12000;
+/** Whether a delete can still be taken back. */
+export const undoPending = (): boolean => !!lastDeleted;
+function flushDeleted(): void { const d = lastDeleted; lastDeleted = undefined; if (d) { clearTimeout(d.timer); d.commit(); } }
+function recordDeleted(text: string, restore: () => void, commit: () => void): void {
+  flushDeleted();
+  const d: Deleted = { model: state.model, restore, commit, timer: setTimeout(() => { if (lastDeleted === d) flushDeleted(); }, UNDO_MS) };
+  lastDeleted = d;
+  toast(text, 'info', { label: t('undo'), run: () => undoDelete() });
+}
+/** Take the last delete back (the toast's button and Cmd/Ctrl+Z). */
+export function undoDelete(): void {
+  const d = lastDeleted; if (!d) return;
+  lastDeleted = undefined; clearTimeout(d.timer);
+  if (d.model !== state.model) { d.commit(); return; }
+  d.restore();
+  scheduleSave();
+}
+
+// ------------------------------------------------------------------ QoL wave B: inspect any firmware file
+/**
+ * @decision DEC-QOLB-INSPECT-001
+ * @title Inspect compares with the open official firmware, so it needs one open
+ * @status accepted
+ * @rationale engine.inspect (core app/engine.ts) diffs a file against the official firmware the
+ *   engine has open and reports kind / verified / features; the summary carries no model or version
+ *   of its own. The dialog therefore names the open firmware (family and version) as the reference
+ *   and asks for one when none is open, instead of guessing a model from the bytes.
+ */
+let inspectGen = 0;
+export function closeInspect(): void { inspectGen++; set({ inspectView: undefined }); }
+export async function inspectFile(file: File): Promise<void> {
+  const gen = ++inspectGen;
+  const view = { name: file.name, size: file.size };
+  if (!state.info) { set({ inspectView: { ...view, busy: false, error: 'needs-open' } }); return; }
+  if (file.size < 1_000_000 || file.size > 200_000_000) { set({ inspectView: { ...view, busy: false, error: 'size' } }); return; }
+  set({ inspectView: { ...view, busy: true } });
+  try {
+    const summary = await engine.inspect(new Uint8Array(await file.arrayBuffer()));
+    if (gen === inspectGen) set({ inspectView: { ...view, busy: false, summary } });
+  } catch (e) {
+    console.warn('inspect', e);
+    if (gen === inspectGen) set({ inspectView: { ...view, busy: false, error: 'unreadable' } });
+  }
+}
+
+// ------------------------------------------------------------------ QoL wave B: keyboard shortcuts
+/**
+ * @decision DEC-QOLB-KEYS-001
+ * @title One global handler in the store; it yields to anything that already owns the key
+ * @status accepted
+ * @rationale Cmd/Ctrl+E (export to a folder, through the build summary), Cmd/Ctrl+Z (undo the last
+ *   delete, only while one is pending) and the arrow keys (Left/Right through the Image Control
+ *   slots, whose tabs are horizontal; Up/Down through the ratios, a vertical list). The handler is a
+ *   plain function of the key event so it can be tested without a DOM, and app.tsx only installs it
+ *   on window. It does nothing while the focus is in a field (the browser's own text undo and
+ *   caret keys win), while a dialog, the crop editor, the guided tour or a busy overlay is up,
+ *   with Alt held, or when a widget already handled the key (`defaultPrevented`: the tab lists,
+ *   the compare slider, select menus). Escape is never touched: the dialogs keep their own handlers.
+ */
+export interface ShortcutKey {
+  key: string; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean; defaultPrevented?: boolean;
+  target?: unknown; preventDefault?: () => void;
+}
+const typing = (target: unknown): boolean => {
+  const el = target as { tagName?: string; isContentEditable?: boolean; closest?: (sel: string) => unknown } | null;
+  if (!el) return false;
+  return /^(INPUT|TEXTAREA|SELECT)$/i.test(el.tagName ?? '') || !!el.isContentEditable || !!el.closest?.('[contenteditable="true"],[role="listbox"],[role="menu"],[role="slider"]');
+};
+/** The slot keys the Image Control page shows as tabs, in order. */
+export function slotTabKeys(s: State = state): SlotKey[] {
+  return s.info?.family === 'gr3x' ? shownSlots(s).map((x) => x.id) : ['CY', 'CG', ...s.extras.map((x) => x.key)];
+}
+/** Whether something modal is up (a dialog of the store, the crop editor, the tour, the busy overlay, or any open dialog element). */
+const modalUp = (s: State): boolean =>
+  !!(s.confirm || s.inspectView || s.cropId || s.onlineOpen || s.tour || s.busy)
+  || (typeof document !== 'undefined' && typeof document.querySelector === 'function' && !!document.querySelector('[role="dialog"],[role="alertdialog"]'));
+/** Handle a key press; returns whether it was taken. */
+export function handleShortcut(e: ShortcutKey): boolean {
+  if (e.defaultPrevented || e.altKey || typing(e.target) || modalUp(state)) return false;
+  const take = (): true => { e.preventDefault?.(); return true; };
+  const mod = !!(e.metaKey || e.ctrlKey), key = e.key.toLowerCase();
+  if (mod && !e.shiftKey && key === 'z') { if (!undoPending()) return false; undoDelete(); return take(); }
+  if (mod && !e.shiftKey && key === 'e') {
+    if (state.page === 'copies' || !state.info) return false;
+    if (bridgeLoaded()) askForOfficial(); else void outputFirmware({ kind: 'folder' });
+    return take();
+  }
+  if (mod || e.shiftKey) return false;
+  if (state.page === 'ic' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    const keys = slotTabKeys(); const at = Math.max(0, keys.indexOf(state.activeSlot));
+    const next = keys[Math.max(0, Math.min(keys.length - 1, at + (e.key === 'ArrowRight' ? 1 : -1)))];
+    if (next === undefined) return false;
+    setActiveSlot(next); return take();
+  }
+  if (state.page === 'ratio' && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && state.ratios.length) {
+    const ids = state.ratios.map((r) => r.id); const at = Math.max(0, ids.indexOf(state.activeRatio ?? ''));
+    setActiveRatio(ids[Math.max(0, Math.min(ids.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)))]); return take();
+  }
+  return false;
+}
+/** The modifier key's name for hints: Cmd on a Mac, Ctrl elsewhere. */
+export const modKeyName = (): string => (typeof navigator !== 'undefined' && /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent || '') ? 'Cmd' : 'Ctrl');
 
 // ------------------------------------------------------------------ camera families
 /**
@@ -830,16 +952,24 @@ export function addExtraSlot(): void {
   void renderIcon(key);
   scheduleSave();
 }
-export function removeExtraSlot(key: string): void {
+export function removeExtraSlot(key: string, undoable = true): void {
+  const was = state, index = was.extras.findIndex((x) => x.key === key), item = was.extras[index];
+  const orderAt = lookOrderNow(was).indexOf(key), hidden = was.lookHidden.includes(key), active = was.activeSlot === key;
   set((s) => ({ extras: s.extras.filter((x) => x.key !== key), activeSlot: s.activeSlot === key ? 'CY' : s.activeSlot, lookOrder: normalizeLookOrder(s.lookOrder, s.extras.filter((x) => x.key !== key)), lookHidden: s.lookHidden.filter((k) => k !== key) }));
-  if (host.available) void host.storeDel(presetKey(key)).catch(() => undefined);
+  const del = (): void => { if (host.available) void host.storeDel(presetKey(key)).catch(() => undefined); };
   scheduleSave();
+  if (!undoable || !item) { del(); return; }
+  recordDeleted(t('undoExtra'), () => set((s) => {
+    const extras = s.extras.slice(); extras.splice(Math.min(index, extras.length), 0, item);
+    const order = normalizeLookOrder(s.lookOrder, extras).filter((k) => k !== key); order.splice(orderAt < 0 ? order.length : Math.min(orderAt, order.length), 0, key);
+    return { extras, lookOrder: order, lookHidden: hidden ? [...s.lookHidden, key] : s.lookHidden, ...(active ? { activeSlot: key } : {}) };
+  }), del);
 }
 /** Set how many slots are added: the last ones are taken away, new empty ones appended. */
 export function setExtraCount(n: number): void {
   const want = Math.max(0, Math.min(MAX_EXTRA_SLOTS, Math.round(n)));
   while (state.extras.length < want) addExtraSlot();
-  while (state.extras.length > want) removeExtraSlot(state.extras[state.extras.length - 1].key);
+  while (state.extras.length > want) removeExtraSlot(state.extras[state.extras.length - 1].key, false);
 }
 export function setExtraName(key: string, name: string): void {
   set((s) => ({ extras: s.extras.map((x) => (x.key === key ? { ...x, name } : x)) }));
@@ -944,10 +1074,13 @@ export async function addWallFiles(files: File[]): Promise<void> {
   scheduleSave();
 }
 export function removeWall(id: string): void {
+  const index = state.wall.findIndex((w) => w.id === id), item = state.wall[index];
   set((s) => ({ wall: s.wall.filter((w) => w.id !== id) }));
   wallBitmaps.get(id)?.close(); wallBitmaps.delete(id);
-  if (host.available) void host.storeDel('wall-' + id).catch(() => undefined);
   scheduleSave();
+  const del = (): void => { if (host.available) void host.storeDel('wall-' + id).catch(() => undefined); };
+  if (!item) { del(); return; }
+  recordDeleted(t('undoWall'), () => set((s) => { const wall = s.wall.slice(); wall.splice(Math.min(index, wall.length), 0, item); return { wall }; }), del);
 }
 export function moveWall(id: string, toIndex: number): void {
   set((s) => {
@@ -1145,8 +1278,14 @@ export function setRatio(id: string, patch: { ratio?: string; name?: string }): 
   if (patch.ratio !== undefined) ratiosChanged(); else scheduleSave();
 }
 export function removeRatio(id: string): void {
+  const index = state.ratios.findIndex((r) => r.id === id), item = state.ratios[index], active = state.activeRatio === id;
   set((s) => { const ratios = s.ratios.filter((r) => r.id !== id); return { ratios, activeRatio: s.activeRatio === id ? ratios[0]?.id : s.activeRatio }; });
   ratiosChanged(true);
+  if (!item) return;
+  recordDeleted(t('undoRatio'), () => {
+    set((s) => { const ratios = s.ratios.slice(); ratios.splice(Math.min(index, ratios.length), 0, item); return { ratios, ...(active ? { activeRatio: id } : {}) }; });
+    ratiosChanged(true);
+  }, () => undefined);
 }
 /** GR III / IIIx: how many films (1..maxFilms); the active slot stays among them. */
 export function setFilmCount(n: number): void {
@@ -1378,7 +1517,10 @@ export async function outputFirmware(dest: Dest, stock = false): Promise<void> {
   const fresh = newFirmwareWarning(sourceInfo);
   // The cannot-go-back warning is a paragraph (the dialog's lines are cut to one line each).
   if (stock && !(await askOfficial([t('copyOfficial')], fresh && dest.kind === 'card' ? fresh : undefined))) return;
-  if (dest.kind === 'card' && !stock) {
+  // @decision DEC-QOLB-SUMMARY-001: the summary of what the build contains is asked before every
+  // modified build, to the card and to a folder alike (it used to be the card only). Cancel returns
+  // before the destination is chosen and before engine.build runs.
+  if (!stock) {
     const lines = changes.map((c) => `${state.info?.family === 'gr3x' ? (state.slots[c.id].names[state.lang] || state.info.slots.find(s => s.id === c.id)?.defaultName || c.id) : t(('slot' + c.id) as Key)}  ·  ${c.labels.join(' / ')}`);
     if (ratios.length) lines.push(t('ratioLine', { n: ratios.length, l: ratios.map((r) => r.name).join(' / ') }));
     if (soft) lines.push(sourceInfo.features.softFocus === 'clarity' ? t('softLine', { l: softText(GR3X_SOFT_FOCUS) }) : t(sourceInfo.features.exposurePreview ? 'softAdjMenuLine' : 'softAdjLine'));
@@ -1395,7 +1537,7 @@ export async function outputFirmware(dest: Dest, stock = false): Promise<void> {
     if (extras.length) lines.push(t('extraLine', { n: extras.length, l: extras.map((x) => (x.halation ? `${x.name} (${t('halation')})` : x.name)).join(' / ') }));
     if (lookLayout) lines.push(t('lookOrderLine', { n: lookLayout.hidden.length }));
     if (pictures.length) lines.push(t('wallMenuLine', { n: pictures.length, l: pictures.map((p) => p.name).join(' / ') }));
-    if (!(await ask(t('confirmTitle'), lines, t('confirmOk'), fresh ?? undefined))) return;
+    if (!(await ask(dest.kind === 'card' ? t('confirmTitle') : t('exportConfirmTitle'), lines, dest.kind === 'card' ? t('confirmOk') : t('exportConfirmOk'), fresh ?? undefined))) return;
   }
   const target = await destination(dest);
   if (!target || state.info !== sourceInfo || state.raw !== sourceRaw || state.model !== sourceModel || state.fwBusy) return;
