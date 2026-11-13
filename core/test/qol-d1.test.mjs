@@ -216,3 +216,37 @@ describe('New project', () => {
   });
 });
 
+describe('compare two firmware files', () => {
+  const sum = (over = {}) => ({ kind: 'modified', verified: true, changedBytes: 12, sha256: 'x', slots: [{ id: 'CY', names: { en: 'Yellow' }, icon: new Uint8Array(0), colorChanged: false, iconChanged: false, nameChanged: false }],
+    ratios: [], softFocus: [], adjSoftFocus: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, extraSlots: [], ...over });
+  const file = (name) => ({ name, size: 20_000_000, arrayBuffer: async () => new Uint8Array([1]).buffer });
+  it('shows both summaries and marks only the rows that differ', async () => {
+    await store.adoptFirmware('fwdc243b.bin', '1.60', new Uint8Array([1]));
+    const a = sum(), b = sum({ kind: 'official', changedBytes: 0, ratios: [{ name: 'Wide', ratio: '16:9', sizes: [[1, 1]] }], dateStamp: true, slots: [{ id: 'CY', names: { en: 'Yellow' }, icon: new Uint8Array(0), colorChanged: true, iconChanged: false, nameChanged: false }] });
+    mocks.engine.inspect.mockResolvedValueOnce(a).mockResolvedValueOnce(b);
+    await store.inspectFile(file('a.bin'));
+    await store.inspectCompare(file('b.bin'));
+    const v = store.getState().inspectView;
+    expect(v.other).toMatchObject({ name: 'b.bin', busy: false, summary: b });
+    const { compareRows } = await import('../../ui/src/compare');
+    const rows = compareRows(v.summary, v.other.summary, store.getState().lang);
+    const diff = rows.filter((r) => r.differs).map((r) => r.label);
+    expect(diff).toEqual(expect.arrayContaining(['Type', 'Added aspect ratios', 'Slots · Yellow']));
+    expect(rows.find((r) => r.label === 'Verified')).toMatchObject({ differs: false });
+    expect(rows.find((r) => r.label === 'Added aspect ratios')).toMatchObject({ a: 'none', b: 'Wide (16:9)' });
+    expect(rows.filter((r) => !r.differs).length).toBeGreaterThan(5);
+    // single-file view returns when the compare is closed or a new first file is chosen
+    store.closeCompare(); expect(store.getState().inspectView.other).toBeUndefined();
+    await store.inspectCompare(file('b.bin'));
+    mocks.engine.inspect.mockResolvedValueOnce(a);
+    await store.inspectFile(file('c.bin'));
+    expect(store.getState().inspectView.other).toBeUndefined();
+  });
+  it('reports an unreadable second file without losing the first', async () => {
+    await store.adoptFirmware('fwdc243b.bin', '1.60', new Uint8Array([1]));
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.engine.inspect.mockResolvedValueOnce(sum()).mockRejectedValueOnce(new Error('bad'));
+    await store.inspectFile(file('a.bin')); await store.inspectCompare(file('junk.bin'));
+    expect(store.getState().inspectView).toMatchObject({ summary: expect.anything(), other: { error: 'unreadable', busy: false } });
+  });
+});

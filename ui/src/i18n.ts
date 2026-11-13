@@ -182,6 +182,7 @@ const zh = {
   snapshotSlots: '槽位 {n}', snapshotExtras: '新增槽位 {n}', snapshotRatios: '比例 {n}', snapshotPictures: '关机画面 {n}',
   snapshotReason_import: '导入前', snapshotReason_new: '新建项目前', snapshotReason_build: '生成固件后', snapshotReason_restore: '恢复前',
   projectNew: '新建项目…', newProjectTitle: '新建项目', newProjectLine: '当前相机的影像控制、新增槽位、比例、关机画面和开关将被清空', newProjectWarn: '清空前会自动备份，可在“恢复较早的版本”中找回。官方固件、预设库、界面语言和另一类相机的项目不受影响', newProjectOk: '新建', newProjectDone: '已新建项目',
+  cmpFileBtn: '与另一个文件对比…', cmpFileAnother: '换一个对比文件…', cmpFileBack: '只看单个文件', cmpFileWith: '对比文件',
 };
 const en: typeof zh = {
   app: 'GR Mod',
@@ -367,6 +368,7 @@ const en: typeof zh = {
   snapshotSlots: 'Slots: {n}', snapshotExtras: 'Added slots: {n}', snapshotRatios: 'Ratios: {n}', snapshotPictures: 'Pictures: {n}',
   snapshotReason_import: 'Before an import', snapshotReason_new: 'Before a new project', snapshotReason_build: 'After a build', snapshotReason_restore: 'Before a restore',
   projectNew: 'New project…', newProjectTitle: 'New project', newProjectLine: 'The open camera\'s Image Control, added slots, ratios, power-off pictures and switches are cleared', newProjectWarn: 'A backup is kept first (Restore an earlier version). The official firmware, the preset library, the interface language and the other camera family\'s project are not touched', newProjectOk: 'Start new', newProjectDone: 'New project started',
+  cmpFileBtn: 'Compare with another file…', cmpFileAnother: 'Compare with a different file…', cmpFileBack: 'Single file', cmpFileWith: 'Compared with',
 };
 export type Key = keyof typeof zh;
 /**

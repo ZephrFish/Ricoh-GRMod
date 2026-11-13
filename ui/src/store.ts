@@ -56,7 +56,9 @@ export interface TourState { id: TourId; steps: number[]; index: number; replay:
 /** `reset`: the firmware written is the official one; the dialog asks in red whether the camera's settings were reset first. */
 export interface Confirm { title: string; warn?: string; reset?: boolean; lines: string[]; ok: string; resolve: (v: boolean) => void }
 /** A firmware file being inspected: `error` is `needs-open` (no official firmware to compare with), `unreadable` (not a file the engine can read) or `size`. */
-export interface InspectView { name: string; size: number; busy: boolean; summary?: FirmwareSummary; error?: 'needs-open' | 'unreadable' | 'size' }
+export interface InspectView { name: string; size: number; busy: boolean; summary?: FirmwareSummary; error?: 'needs-open' | 'unreadable' | 'size';
+  /** QoL D1: a second file compared with the first (absent in plain single-file inspect). */
+  other?: { name: string; size: number; busy: boolean; summary?: FirmwareSummary; error?: 'unreadable' | 'size' } }
 export interface State {
   ready: boolean; page: Page;
   fwName?: string; fwBusy: boolean; info?: FirmwareInfo; raw?: Uint8Array;
@@ -2292,3 +2294,24 @@ export async function newProject(): Promise<void> {
   finally { set({ busy: undefined }); }
 }
 
+// ------------------------------------------------------------------ compare two firmware files
+/**
+ * @decision DEC-QOLD1-COMPARE-001
+ * @title The second file is inspected the same way, against the same open official firmware
+ * @status accepted
+ * @rationale engine.inspect reports each file relative to the open official firmware, so two
+ *   summaries are comparable row by row without a second reference. The comparison itself (compare.ts)
+ *   is a pure function of the two summaries; the dialog only lays it out. Single-file inspect is
+ *   unchanged: `other` is simply absent until a second file is chosen, and choosing a new first file clears it.
+ */
+export async function inspectCompare(file: File): Promise<void> {
+  const v = state.inspectView; if (!v?.summary) return;
+  const gen = inspectGen;
+  const side = { name: file.name, size: file.size };
+  if (file.size < 1_000_000 || file.size > 200_000_000) { set({ inspectView: { ...v, other: { ...side, busy: false, error: 'size' } } }); return; }
+  set({ inspectView: { ...v, other: { ...side, busy: true } } });
+  const put = (other: NonNullable<InspectView['other']>): void => { if (gen === inspectGen && state.inspectView) set({ inspectView: { ...state.inspectView, other } }); };
+  try { put({ ...side, busy: false, summary: await engine.inspect(new Uint8Array(await file.arrayBuffer())) }); }
+  catch (e) { console.warn('inspect compare', e); put({ ...side, busy: false, error: 'unreadable' }); }
+}
+export function closeCompare(): void { const v = state.inspectView; if (v?.other) set({ inspectView: { ...v, other: undefined } }); }
