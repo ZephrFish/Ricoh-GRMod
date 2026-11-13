@@ -179,3 +179,40 @@ describe('project snapshots', () => {
   });
 });
 
+describe('New project', () => {
+  it('resets only the open family, keeps the library, the other family and the interface language, and snapshots first', async () => {
+    // gr4 doc with 2 ratios and uiLang zh, gr3 doc with 2 ratios, GR III open
+    const doc = (extra = {}) => ({ v: 1, ratios: [{ id: 'r1', ratio: '4:3', name: '' }, { id: 'r2', ratio: '16:9', name: '' }], ...extra });
+    await store.applyProjectExport({ format: 'grmod-project', formatVersion: 1, appVersion: '1', exported: '', files: {}, project: doc({ model: 'GR3X_HDF', uiLang: 'zh', lang: 'ja', tours: ['overview'], toursV: 2 }), projectGr3: doc() });
+    expect(store.getState().ratios).toHaveLength(2);
+    mem.set('library.json', '{"v":1,"entries":[]}'); mem.set('lib-a', 'x');
+    mem.set('gr3-preset-cy', '<xmp/>'); mem.set('preset-cy', '<other-family/>'); mem.set('preview.jpg', 'photo');
+    const before = mem.get('project.json');
+    store.setSoft(true);
+    await confirmed(store.newProject());
+    const s = store.getState();
+    expect(s.ratios).toEqual([]); expect(s.soft).toBe(false); expect(s.extras).toEqual([]);
+    expect(s.uiLang).toBe('zh'); expect(s.lang).toBe('ja'); expect(s.model).toBe('GR3X_HDF'); expect(s.toursSeen).toEqual(['overview']);
+    expect(snapIndex().map((e) => e.reason)).toEqual(['new']);
+    expect(snapIndex()[0]).toMatchObject({ ratios: 2 });
+    // files: this family's preset gone, everything else kept
+    expect(stored()).not.toContain('gr3-preset-cy');
+    for (const k of ['library.json', 'lib-a', 'preset-cy', 'preview.jpg']) expect(stored()).toContain(k);
+    // docs: the other family's work is untouched, this one is empty
+    const gr4 = JSON.parse(mem.get('project.json')), gr3 = JSON.parse(mem.get('project-gr3.json'));
+    expect(gr4.ratios).toHaveLength(2); expect(gr4.uiLang).toBe('zh');
+    expect(gr3.ratios).toEqual([]); expect(gr3.soft).toBe(false);
+    expect(before).toBeTruthy();
+    // the snapshot brings the old work back
+    await store.openSnapshots(); await flush();
+    await confirmed(store.restoreSnapshot(snapIndex()[0].id));
+    expect(store.getState().ratios).toHaveLength(2); expect(store.getState().soft).toBe(true);
+  });
+  it('Cancel changes nothing and snapshots nothing', async () => {
+    store.setSoft(true);
+    await confirmed(store.newProject(), false);
+    expect(store.getState().soft).toBe(true);
+    expect(snapIndex()).toEqual([]);
+  });
+});
+

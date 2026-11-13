@@ -2255,3 +2255,40 @@ export function snapshotSummary(e: Pick<SnapshotEntry, 'model' | 'slots' | 'extr
   return [e.model, t('snapshotSlots', { n: e.slots }), t('snapshotExtras', { n: e.extras }), t('snapshotRatios', { n: e.ratios }), ...(e.pictures ? [t('snapshotPictures', { n: e.pictures })] : [])].join(' · ');
 }
 
+// ------------------------------------------------------------------ New project
+/**
+ * @decision DEC-QOLD1-NEW-001
+ * @title New project resets the open camera family's work only, after a snapshot
+ * @status accepted
+ * @rationale Slots, added slots, look order, ratios, power-off pictures and the switches live in
+ *   one FamilyDoc per family (GR IV; GR III / IIIx). The reset is enterFamily() on an empty doc
+ *   (the same path as switching camera), so emptySlots() and parseFamily() define "fresh". Kept:
+ *   the open official firmware, the preset library (`lib-*`), the other family's doc, and the
+ *   app settings (uiLang, camera language, model, tours seen, preview choices). The new doc is saved
+ *   before this family's files (`preset-*` or `gr3-preset-*`, and the `wall-*` pictures its doc
+ *   named) are deleted, so a crash never leaves a doc pointing at missing files. The preview
+ *   photo is a setting, not work, and stays.
+ */
+export async function newProject(): Promise<void> {
+  if (!host.available || state.busy) return;
+  if (!(await ask(t('newProjectTitle'), [t('newProjectLine')], t('newProjectOk'), t('newProjectWarn')))) return;
+  set({ busy: t('projectWorking') });
+  try {
+    await takeSnapshot('new');
+    flushDeleted();
+    const fam = familyOf(state.model);
+    const doc = currentFamilyDoc();
+    const wallIds = (Array.isArray(doc.wall) ? doc.wall : []).map((w: { id: string }) => String(w.id));
+    familyDocs[fam] = null; familyLoading = false; ++familyGen;
+    enterFamily(fam);
+    set({ compareWith: 'orig' });
+    clearTimeout(saveTimer);
+    await saveProject();
+    const prefix = fam === 'gr3' ? 'gr3-preset-' : 'preset-';
+    const stale = (await host.storeList()).map((k) => k.key).filter((k) => (k.startsWith(prefix) && PROJECT_FILE_RE.test(k)) || (k.startsWith('wall-') && wallIds.includes(k.slice(5))));
+    for (const k of stale) await host.storeDel(k).catch(() => undefined);
+    toast(t('newProjectDone'), 'ok');
+  } catch (e) { fail(e); }
+  finally { set({ busy: undefined }); }
+}
+

@@ -14,7 +14,7 @@ import { CropEditor, ImageControlPage, RatioPage, WallpaperPage } from './pages'
 import { Tour, replayTour, restartTours } from './tour';
 import { UpdatePill, UpdateWatcher, checkForUpdate, openWhatsNew } from './updates';
 import {
-  askForOfficial, bridgeLoaded, isGr3, backupCopies, extrasOn, copyList, deleteCopies, hasNameErrors, hasRatioErrors, ratioSpecs, revealBackups, writableCopy, writeCopy, menuPictures, outputFirmware, handleShortcut, modKeyName, toast, pendingChanges, refreshVolumes, selectVolume, setLang, setModel, setPage, setShowAll, useStore, wallReady, exportProject, importProject, setUiLanguage, openSnapshots,
+  askForOfficial, bridgeLoaded, isGr3, backupCopies, extrasOn, copyList, deleteCopies, hasNameErrors, hasRatioErrors, ratioSpecs, revealBackups, writableCopy, writeCopy, menuPictures, outputFirmware, handleShortcut, modKeyName, toast, pendingChanges, refreshVolumes, selectVolume, setLang, setModel, setPage, setShowAll, useStore, wallReady, exportProject, importProject, setUiLanguage, newProject, openSnapshots,
 } from './store';
 
 const gb = (n: number): string => (n >= 1e9 ? `${(n / 1e9).toFixed(n >= 1e10 ? 0 : 1)} GB` : `${Math.max(1, Math.round(n / 1e6))} MB`);
@@ -148,6 +148,7 @@ function ProjectMenu() {
           {host.available && <button role="menuitem" onClick={() => { setOpen(false); void exportProject(); }}>{t('projectExport')}</button>}
           {host.available && <button role="menuitem" onClick={() => { setOpen(false); picker.current?.click(); }}>{t('projectImport')}</button>}
           {host.available && <button role="menuitem" onClick={() => { setOpen(false); void openSnapshots(); }}>{t('projectRestore')}</button>}
+          {host.available && <button role="menuitem" onClick={() => { setOpen(false); void newProject(); }}>{t('projectNew')}</button>}
           <div className="menu-title" role="presentation">{t('uiLangTitle')}</div>
           {langs.map((l) => <button key={l.v} role="menuitemradio" aria-checked={uiLang === l.v} onClick={() => { setOpen(false); setUiLanguage(l.v); }}>{uiLang === l.v ? '\u2713 ' : '\u2003'}{t(l.label)}</button>)}
         </div>
