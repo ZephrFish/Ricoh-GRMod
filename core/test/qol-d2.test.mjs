@@ -182,3 +182,51 @@ describe('batch preset import', () => {
     expect(store.batchTargets()).toEqual([]);
   });
 });
+
+describe('library rename and search', () => {
+  const index = () => JSON.parse(new TextDecoder().decode(files.get('library.json')));
+  beforeEach(async () => {
+    await store.loadPresetFile('CY', file('warm.cube', 'LUT_3D_SIZE 2 warm'));
+    await store.saveToLibrary('CY', 'Warm');
+    await store.loadPresetFile('CY', file('Cool-Tone.cube', 'LUT_3D_SIZE 2 cool'));
+    await store.saveToLibrary('CY', 'Cool');
+  });
+  it('renames an entry, persists it to library.json and keeps id, date and files', async () => {
+    const before = index().entries.find((e) => e.name === 'Warm');
+    expect(await store.renameLibraryEntry(before.id, '  Golden hour ')).toBe('ok');
+    const after = index().entries.find((e) => e.id === before.id);
+    expect(after).toMatchObject({ name: 'Golden hour', date: before.date, fileName: 'warm.cube' });
+    expect(store.getState().library.find((e) => e.id === before.id).name).toBe('Golden hour');
+    expect(files.has('library-' + before.id)).toBe(true);
+    expect(await store.renameLibraryEntry(before.id, 'Golden hour')).toBe('ok'); // unchanged: no clash with itself
+  });
+  it('rejects a duplicate name in the same family, a blank name and an unknown id, writing nothing', async () => {
+    const warm = index().entries.find((e) => e.name === 'Warm');
+    const raw = files.get('library.json');
+    expect(await store.renameLibraryEntry(warm.id, 'Cool')).toBe('exists');
+    expect(await store.renameLibraryEntry(warm.id, '   ')).toBe('empty');
+    expect(await store.renameLibraryEntry('nope', 'X')).toBe('missing');
+    expect(files.get('library.json')).toBe(raw);
+    expect(store.getState().library.map((e) => e.name).sort()).toEqual(['Cool', 'Warm']);
+  });
+  it('a name used by the other camera family is allowed', async () => {
+    const warm = index().entries.find((e) => e.name === 'Warm');
+    files.set('library.json', new TextEncoder().encode(JSON.stringify({ v: 1, entries: [...index().entries, { id: 'g3', name: 'Mine', kind: 'cube', family: 'gr3', fileName: 'm.cube', date: 1 }] })));
+    vi.resetModules();
+    const again = await import('../../ui/src/store');
+    await again.loadLibrary();
+    expect(await again.renameLibraryEntry(warm.id, 'Mine')).toBe('ok');
+  });
+  it('search matches name and file name case-insensitively; sort is newest first or by name', () => {
+    const e = (id, name, fileName, date) => ({ id, name, kind: 'cube', family: 'gr4', fileName, date });
+    const list = [e('a', 'Warm', 'one.cube', 1), e('b', 'cool', 'Film-TONE.cube', 3), e('c', 'Amber', 'two.xmp', 2)];
+    expect(store.searchLibrary(list, ' WARM ').map((x) => x.id)).toEqual(['a']);
+    expect(store.searchLibrary(list, 'tone').map((x) => x.id)).toEqual(['b']);
+    expect(store.searchLibrary(list, '.xmp').map((x) => x.id)).toEqual(['c']);
+    expect(store.searchLibrary(list, 'zzz')).toEqual([]);
+    expect(store.searchLibrary(list, '  ')).toHaveLength(3);
+    expect(store.sortLibrary(list, 'new').map((x) => x.id)).toEqual(['b', 'c', 'a']);
+    expect(store.sortLibrary(list, 'name').map((x) => x.id)).toEqual(['c', 'b', 'a']);
+    expect(store.LIBRARY_SEARCH_MIN).toBe(5);
+  });
+});

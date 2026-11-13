@@ -2262,3 +2262,44 @@ export async function loadPresetFiles(files: File[], from?: SlotKey): Promise<vo
   if (failed.length) parts.push(t('batchFailed', { n: failed.length, names: failed.slice(0, 3).join(', ') + (failed.length > 3 ? ` +${failed.length - 3}` : '') }));
   toast(parts.join(' · '), failed.length ? 'error' : 'ok');
 }
+
+// ------------------------------------------------------------------ library rename, search and sort
+/**
+ * @decision DEC-QOL-LIBRARY-002
+ * @title Renaming only edits the index; search and sort are pure views over the entries
+ * @status accepted
+ * @rationale An entry's files are keyed by its id (DEC-QOL-LIBRARY-001), so renaming rewrites only
+ *   library.json (one write: nothing can be left half done) and keeps the id, date and files. Names
+ *   stay unique per family, as saving enforces (same trimmed, 60-character, exact comparison): a
+ *   clash is refused with 'exists' and nothing is written. Search matches the name or the file name,
+ *   case-insensitive, on the trimmed query; sort is newest first (the default, so a fresh save is at
+ *   the top) or by name (locale-aware, case-insensitive). Both are functions of the list so the
+ *   dialog holds only the query and the sort choice, and they are tested without the dialog. The box
+ *   shows only above LIBRARY_SEARCH_MIN entries, where scanning by eye stops being easy.
+ */
+export const LIBRARY_SEARCH_MIN = 5;
+export type LibrarySort = 'new' | 'name';
+export type RenameResult = 'ok' | 'empty' | 'exists' | 'missing' | 'failed';
+/** Rename an entry. 'empty' for a blank name, 'exists' when another entry of its family has it, 'missing' for an unknown id, 'failed' when the index could not be written. */
+export async function renameLibraryEntry(entryId: string, name: string): Promise<RenameResult> {
+  const clean = name.trim().slice(0, 60);
+  const e = state.library.find((x) => x.id === entryId);
+  if (!e) return 'missing';
+  if (!clean) return 'empty';
+  if (clean === e.name) return 'ok';
+  if (state.library.some((x) => x.id !== entryId && x.family === e.family && x.name === clean)) return 'exists';
+  const entries = state.library.map((x) => (x.id === entryId ? { ...x, name: clean } : x));
+  if (!(await writeLibraryIndex(entries))) { toast(t('libSaveFailed'), 'error'); return 'failed'; }
+  set({ library: entries });
+  return 'ok';
+}
+/** The entries whose name or file name contains the query (case-insensitive); all of them for a blank query. */
+export function searchLibrary(entries: readonly LibraryEntry[], query: string): LibraryEntry[] {
+  const q = query.trim().toLowerCase();
+  return q ? entries.filter((e) => e.name.toLowerCase().includes(q) || e.fileName.toLowerCase().includes(q)) : entries.slice();
+}
+/** Newest first (ties keep their order), or by name. */
+export function sortLibrary(entries: readonly LibraryEntry[], by: LibrarySort): LibraryEntry[] {
+  const out = entries.slice();
+  return by === 'name' ? out.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || b.date - a.date) : out.sort((a, b) => b.date - a.date);
+}
