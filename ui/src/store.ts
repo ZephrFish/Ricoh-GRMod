@@ -135,8 +135,21 @@ function set(patch: Partial<State> | ((s: State) => Partial<State>)): void {
   listeners.forEach((l) => l());
 }
 export const getState = (): State => state;
+/**
+ * @decision DEC-UI-STORE-001
+ * @title useStore refuses an unstable selector outside production builds
+ * @status accepted
+ * @rationale useSyncExternalStore compares successive snapshots with Object.is; a selector that builds a new array or object per call (filter, map, sort, a literal)
+ *   never settles and React throws error #185, which blanked the whole app once (libraryFor in LibraryDialog). Select stable fields and derive with useMemo. In dev and
+ *   test, calling the selector twice on the same state and comparing makes that mistake fail loudly at its source. The same snapshot is the server snapshot, so renderToString works.
+ */
 export function useStore<T>(sel: (s: State) => T): T {
-  return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, () => sel(state));
+  const snap = (): T => {
+    const a = sel(state);
+    if (!import.meta.env.PROD && !Object.is(a, sel(state))) throw new Error('useStore: the selector returns a new array/object on every call, so the snapshot never settles (React error #185). Select stable fields and derive the value with useMemo.');
+    return a;
+  };
+  return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, snap, snap);
 }
 function setSlot(id: SlotId, patch: Partial<SlotState> | ((s: SlotState) => Partial<SlotState>)): void {
   set((s) => ({ slots: { ...s.slots, [id]: { ...s.slots[id], ...(typeof patch === 'function' ? patch(s.slots[id]) : patch) } } }));
@@ -790,7 +803,7 @@ export function loadLibrary(): Promise<void> {
   return libraryLoad;
 }
 /** The entries a slot may use: those of the open camera family, newest first. */
-export function libraryFor(s: State = state): LibraryEntry[] {
+export function libraryFor(s: Pick<State, 'library' | 'model'> = state): LibraryEntry[] {
   const fam = familyOf(s.model);
   return s.library.filter((e) => e.family === fam).sort((a, b) => b.date - a.date);
 }

@@ -1,6 +1,6 @@
 // QoL wave C: the preset library in the interface: two buttons on a slot's preset row and one dialog.
 // The logic (files, compatibility, reuse of a stored fit) is in store.ts, "preset library".
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Ico } from './components';
 import { t } from './i18n';
 import { host } from './host';
@@ -25,7 +25,9 @@ export function LibraryButtons({ k }: { k: SlotKey }) {
 /** The dialog behind both buttons: a name field in save mode, the entries of this camera family (with a delete each) in apply mode. */
 export function LibraryDialog() {
   const picker = useStore((s) => s.libraryPicker);
-  const entries = useStore((s) => libraryFor(s));
+  // Stable fields only: libraryFor filters and sorts into a fresh array, which as a selector never settles (React error #185).
+  const library = useStore((s) => s.library); const model = useStore((s) => s.model);
+  const entries = useMemo(() => libraryFor({ library, model }), [library, model]);
   const [name, setName] = useState('');
   useEffect(() => {
     if (!picker) return;

@@ -21,7 +21,7 @@ interface UpdState { open: boolean; phase: Phase; info?: UpdateInfo; received: n
 let st: UpdState = { open: false, phase: 'idle', received: 0, total: 0, auto: true };
 const subs = new Set<() => void>();
 function put(patch: Partial<UpdState>): void { st = { ...st, ...patch }; subs.forEach((f) => f()); }
-function useUpd(): UpdState { return useSyncExternalStore((f) => { subs.add(f); return () => subs.delete(f); }, () => st); }
+function useUpd(): UpdState { return useSyncExternalStore((f) => { subs.add(f); return () => subs.delete(f); }, () => st, () => st); }
 
 async function loadSettings(): Promise<boolean> {
   try {
@@ -198,7 +198,7 @@ interface WnState { open: boolean; from?: string; loading: boolean; error: boole
 let wn: WnState = { open: false, loading: false, error: false, releases: [] };
 const wnSubs = new Set<() => void>();
 function wnPut(patch: Partial<WnState>): void { wn = { ...wn, ...patch }; wnSubs.forEach((f) => f()); }
-function useWn(): WnState { return useSyncExternalStore((f) => { wnSubs.add(f); return () => wnSubs.delete(f); }, () => wn); }
+function useWn(): WnState { return useSyncExternalStore((f) => { wnSubs.add(f); return () => wnSubs.delete(f); }, () => wn, () => wn); }
 
 async function loadNotes(): Promise<void> {
   wnPut({ loading: true, error: false });
@@ -324,7 +324,7 @@ function pick(m: Record<string, string> | undefined): string {
 }
 
 function Credits() {
-  const c = useSyncExternalStore((f) => { creditSubs.add(f); return () => creditSubs.delete(f); }, () => credits);
+  const c = useSyncExternalStore((f) => { creditSubs.add(f); return () => creditSubs.delete(f); }, () => credits, () => credits);
   useEffect(() => { void loadCredits(); }, []);
   if (!c) return null;
   const sep = lang() === 'zh' ? '；' : '; ';
