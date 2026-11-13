@@ -278,9 +278,10 @@ export function ConfirmDialog() {
   const c = useStore((s) => s.confirm);
   useEffect(() => {
     if (!c) return;
-    const key = (e: KeyboardEvent): void => { if (e.key === 'Escape') answerConfirm(false); };
-    window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
+    // Capture phase and stopped: a confirmation sits on top of the dialog that asked (the library's delete), so one Escape closes only it.
+    const key = (e: KeyboardEvent): void => { if (e.key === 'Escape') { e.stopPropagation(); answerConfirm(false); } };
+    window.addEventListener('keydown', key, true);
+    return () => window.removeEventListener('keydown', key, true);
   }, [c]);
   if (!c) return null;
   return (

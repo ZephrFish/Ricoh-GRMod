@@ -169,10 +169,11 @@ function setWall(id: string, patch: Partial<WallItem>): void {
 
 // ------------------------------------------------------------------ toasts / confirm
 let toastSeq = 0;
-export function toast(text: string, kind: Toast['kind'] = 'info', action?: Toast['action']): void {
+export function toast(text: string, kind: Toast['kind'] = 'info', action?: Toast['action']): number {
   const id = ++toastSeq;
   set((s) => ({ toasts: [...s.toasts.slice(-2), { id, text, kind, action }] }));
   setTimeout(() => dismissToast(id), kind === 'error' ? 9000 : action ? 12000 : 4500);
+  return id;
 }
 export function dismissToast(id: number): void { set((s) => ({ toasts: s.toasts.filter((x) => x.id !== id) })); }
 function ask(title: string, lines: string[], ok: string, warn?: string, reset = false): Promise<boolean> {
@@ -219,24 +220,31 @@ export function fail(e: unknown): void {
  *   runs when the toast's window ends, or when another delete replaces the record. Deleting the files at once and re-writing them on undo would work too, but a
  *   crash in between would then lose the preset for good; an orphaned file after a crash only costs a few kB.
  */
-interface Deleted { model: CameraModel; restore: () => void; commit: () => void; timer: ReturnType<typeof setTimeout> }
+interface Deleted { family: Family; restore: () => boolean; commit: () => void; timer: ReturnType<typeof setTimeout>; toastId: number }
 let lastDeleted: Deleted | undefined;
 const UNDO_MS = 12000;
 /** Whether a delete can still be taken back. */
 export const undoPending = (): boolean => !!lastDeleted;
-function flushDeleted(): void { const d = lastDeleted; lastDeleted = undefined; if (d) { clearTimeout(d.timer); d.commit(); } }
-function recordDeleted(text: string, restore: () => void, commit: () => void): void {
+/** Close the undo window: the deferred file delete runs and the record's own toast goes. */
+function flushDeleted(): void { const d = lastDeleted; lastDeleted = undefined; if (d) { clearTimeout(d.timer); dismissToast(d.toastId); d.commit(); } }
+/**
+ * `restore` puts the item back and returns false (changing nothing) when it cannot: the list is full again
+ * (delete one, add one, undo would exceed the cap). The toast's button is bound to this record, not to
+ * "whatever is pending now": a superseded toast is dismissed with its record, and a press that still gets through says so.
+ */
+function recordDeleted(text: string, restore: () => boolean, commit: () => void): void {
   flushDeleted();
-  const d: Deleted = { model: state.model, restore, commit, timer: setTimeout(() => { if (lastDeleted === d) flushDeleted(); }, UNDO_MS) };
+  const d: Deleted = { family: familyOf(state.model), restore, commit, timer: setTimeout(() => { if (lastDeleted === d) flushDeleted(); }, UNDO_MS), toastId: 0 };
   lastDeleted = d;
-  toast(text, 'info', { label: t('undo'), run: () => undoDelete() });
+  d.toastId = toast(text, 'info', { label: t('undo'), run: () => { if (lastDeleted === d) undoDelete(); else toast(t('undoGone'), 'info'); } });
 }
 /** Take the last delete back (the toast's button and Cmd/Ctrl+Z). */
 export function undoDelete(): void {
   const d = lastDeleted; if (!d) return;
-  lastDeleted = undefined; clearTimeout(d.timer);
-  if (d.model !== state.model) { d.commit(); return; }
-  d.restore();
+  lastDeleted = undefined; clearTimeout(d.timer); dismissToast(d.toastId);
+  // Compared by camera family, not model: HDF to Standard keeps the same slots, ratios and pictures. Another family has other lists.
+  if (d.family !== familyOf(state.model)) { d.commit(); return; }
+  if (!d.restore()) { d.commit(); toast(t('undoFull'), 'info'); return; }
   scheduleSave();
 }
 
@@ -294,10 +302,10 @@ const typing = (target: unknown): boolean => {
 export function slotTabKeys(s: State = state): SlotKey[] {
   return s.info?.family === 'gr3x' ? shownSlots(s).map((x) => x.id) : ['CY', 'CG', ...s.extras.map((x) => x.key)];
 }
-/** Whether something modal is up (a dialog of the store, the crop editor, the tour, the busy overlay, or any open dialog element). */
+/** Whether something modal is up (a dialog of the store, the crop editor, the tour, the busy overlay, or any open dialog or menu element: focus stays on a menu's toggle, outside the menu). */
 const modalUp = (s: State): boolean =>
   !!(s.confirm || s.inspectView || s.cropId || s.onlineOpen || s.tour || s.busy)
-  || (typeof document !== 'undefined' && typeof document.querySelector === 'function' && !!document.querySelector('[role="dialog"],[role="alertdialog"]'));
+  || (typeof document !== 'undefined' && typeof document.querySelector === 'function' && !!document.querySelector('[role="dialog"],[role="alertdialog"],[role="menu"]'));
 /** Handle a key press; returns whether it was taken. */
 export function handleShortcut(e: ShortcutKey): boolean {
   if (e.defaultPrevented || e.altKey || typing(e.target) || modalUp(state)) return false;
@@ -1139,14 +1147,19 @@ export function removeExtraSlot(key: string, undoable = true): void {
   const was = state, index = was.extras.findIndex((x) => x.key === key), item = was.extras[index];
   const orderAt = lookOrderNow(was).indexOf(key), hidden = was.lookHidden.includes(key), active = was.activeSlot === key;
   set((s) => ({ extras: s.extras.filter((x) => x.key !== key), activeSlot: s.activeSlot === key ? 'CY' : s.activeSlot, lookOrder: normalizeLookOrder(s.lookOrder, s.extras.filter((x) => x.key !== key)), lookHidden: s.lookHidden.filter((k) => k !== key) }));
-  const del = (): void => { if (host.available) void host.storeDel(presetKey(key)).catch(() => undefined); };
+  const file = presetKey(key); // fixed now: the delete may run after a switch to the other family, whose files are named differently
+  const del = (): void => { if (host.available) void host.storeDel(file).catch(() => undefined); };
   scheduleSave();
   if (!undoable || !item) { del(); return; }
-  recordDeleted(t('undoExtra'), () => set((s) => {
-    const extras = s.extras.slice(); extras.splice(Math.min(index, extras.length), 0, item);
-    const order = normalizeLookOrder(s.lookOrder, extras).filter((k) => k !== key); order.splice(orderAt < 0 ? order.length : Math.min(orderAt, order.length), 0, key);
-    return { extras, lookOrder: order, lookHidden: hidden ? [...s.lookHidden, key] : s.lookHidden, ...(active ? { activeSlot: key } : {}) };
-  }), del);
+  recordDeleted(t('undoExtra'), () => {
+    if (state.extras.length >= MAX_EXTRA_SLOTS) return false;
+    set((s) => {
+      const extras = s.extras.slice(); extras.splice(Math.min(index, extras.length), 0, item);
+      const order = normalizeLookOrder(s.lookOrder, extras).filter((k) => k !== key); order.splice(orderAt < 0 ? order.length : Math.min(orderAt, order.length), 0, key);
+      return { extras, lookOrder: order, lookHidden: hidden ? [...s.lookHidden, key] : s.lookHidden, ...(active ? { activeSlot: key } : {}) };
+    });
+    return true;
+  }, del);
 }
 /** Set how many slots are added: the last ones are taken away, new empty ones appended. */
 export function setExtraCount(n: number): void {
@@ -1263,7 +1276,11 @@ export function removeWall(id: string): void {
   scheduleSave();
   const del = (): void => { if (host.available) void host.storeDel('wall-' + id).catch(() => undefined); };
   if (!item) { del(); return; }
-  recordDeleted(t('undoWall'), () => set((s) => { const wall = s.wall.slice(); wall.splice(Math.min(index, wall.length), 0, item); return { wall }; }), del);
+  recordDeleted(t('undoWall'), () => {
+    if (state.wall.length >= wallMax()) return false;
+    set((s) => { const wall = s.wall.slice(); wall.splice(Math.min(index, wall.length), 0, item); return { wall }; });
+    return true;
+  }, del);
 }
 export function moveWall(id: string, toIndex: number): void {
   set((s) => {
@@ -1466,8 +1483,10 @@ export function removeRatio(id: string): void {
   ratiosChanged(true);
   if (!item) return;
   recordDeleted(t('undoRatio'), () => {
+    if (state.ratios.length >= maxRatios()) return false;
     set((s) => { const ratios = s.ratios.slice(); ratios.splice(Math.min(index, ratios.length), 0, item); return { ratios, ...(active ? { activeRatio: id } : {}) }; });
     ratiosChanged(true);
+    return true;
   }, () => undefined);
 }
 /** GR III / IIIx: how many films (1..maxFilms); the active slot stays among them. */
@@ -2025,7 +2044,7 @@ function fromBase64(s: string): Uint8Array {
 function projectDocs(): { doc: FamilyDoc; gr3: FamilyDoc | null } {
   const s = state;
   familyDocs[familyOf(s.model)] = currentFamilyDoc();
-  const doc = { ...(familyDocs.gr4 ?? {}), v: 1, page: s.page, model: s.model, lang: s.lang, fwName: s.fwName, showAll: s.showAll, previewMode: s.previewMode, ratioBackdrop: s.ratioBackdrop, tours: s.toursSeen, toursV: 2, uiLang: s.uiLang };
+  const doc = { ...(familyDocs.gr4 ?? {}), v: 1, page: s.page, model: s.model, lang: s.lang, fwName: s.fwName, showAll: s.showAll, previewMode: s.previewMode, ratioBackdrop: s.ratioBackdrop, tours: s.toursSeen, toursV: 2, uiLang: s.uiLang, compareWith: s.compareWith };
   return { doc, gr3: familyDocs.gr3 ? { v: 1, ...familyDocs.gr3 } : null };
 }
 /** Everything needed to restore the work, read from the host store and the live state. */
@@ -2061,18 +2080,22 @@ export function parseProjectExport(text: string): ProjectExport {
 let importingProject = false;
 /** Replace the project in the host store with an export's, then load it the way init() does. */
 export async function applyProjectExport(p: ProjectExport): Promise<void> {
+  // A pending undo record belongs to the project being replaced: its deferred file delete runs now (before the import writes) and Undo no longer applies.
+  flushDeleted();
   importingProject = true; clearTimeout(saveTimer);
+  // The interface language is a setting of the app, not project content: the import keeps the current one (startup, init(), still restores the saved one).
+  const project = { ...p.project, uiLang: state.uiLang };
   try {
     const have = (await host.storeList()).map((k) => k.key).filter((k) => PROJECT_FILE_RE.test(k));
     for (const [key, b64] of Object.entries(p.files)) await host.storeSet(key, fromBase64(b64));
-    await host.storeSet('project.json', JSON.stringify(p.project));
+    await host.storeSet('project.json', JSON.stringify(project));
     if (p.projectGr3) await host.storeSet(GR3_PROJECT, JSON.stringify(p.projectGr3));
     else await host.storeDel(GR3_PROJECT).catch(() => undefined);
     for (const key of have) if (!(key in p.files)) await host.storeDel(key).catch(() => undefined);
     // The old work is dropped before the new is read; the kept firmware of the new camera is reopened by restoreProject.
     familyLoading = false; ++familyGen;
     set({ info: undefined, raw: undefined, fwName: undefined, copyInfo: {}, copySel: [] });
-    await restoreProject(p.project, p.projectGr3);
+    await restoreProject(project, p.projectGr3);
     saveFailing = false;
   } finally { importingProject = false; }
 }
@@ -2088,7 +2111,8 @@ export async function exportProject(): Promise<void> {
     const a = document.createElement('a');
     a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
-    toast(t('projectExported', { n: Object.keys(p.files).length + 1 + (p.projectGr3 ? 1 : 0) }), 'ok');
+    const n = Object.keys(p.files).length;
+    toast(t(n === 0 ? 'projectExported0' : n === 1 ? 'projectExported1' : 'projectExported', { n }), 'ok');
   } catch (e) { fail(e); } finally { set({ busy: undefined }); }
 }
 /** The header-menu action: validate a chosen file, confirm the replacement, then import it. Bad input toasts and changes nothing. */
@@ -2103,7 +2127,7 @@ export async function importProject(file: File): Promise<void> {
     toast(e instanceof ProjectFileError && e.code === 'project-too-new' ? t('projectTooNew') : t('projectBad'), 'error');
     return;
   }
-  if (!(await ask(t('projectImportTitle'), [t('projectImportLine', { v: p.appVersion || '?', n: Object.keys(p.files).length })], t('projectImport'), t('projectImportWarn')))) return;
+  if (!(await ask(t('projectImportTitle'), [t('projectImportLine', { v: p.appVersion || '?', n: Object.keys(p.files).length })], t('projectImportOk'), t('projectImportWarn')))) return;
   set({ busy: t('projectWorking') });
   try { await applyProjectExport(p); toast(t('projectImported'), 'ok'); }
   catch (e) { fail(e); }

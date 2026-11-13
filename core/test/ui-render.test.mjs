@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   host: {
     available: true, info: { token: 'test', kind: 'test' },
     storeGet: vi.fn(), storeSet: vi.fn(), storeDel: vi.fn(), pickDirectory: vi.fn(), write: vi.fn(),
-    volumes: vi.fn(), sidecar: vi.fn(), join: (...p) => p.join('/'),
+    volumes: vi.fn(), sidecar: vi.fn(), parked: vi.fn(), backups: vi.fn(), storeList: vi.fn(), join: (...p) => p.join('/'),
   },
 }));
 vi.mock('../../ui/src/engine', () => ({ engine: mocks.engine, EngineError: class extends Error {} }));
@@ -37,7 +37,9 @@ beforeEach(async () => {
   mocks.host.storeDel.mockImplementation(async (key) => { files.delete(key); });
   mocks.host.storeGet.mockImplementation(async (key) => files.get(key) ?? null);
   mocks.host.volumes.mockResolvedValue([]); mocks.host.sidecar.mockResolvedValue(null);
+  mocks.host.parked.mockResolvedValue([]); mocks.host.backups.mockResolvedValue({ dir: '', entries: [] }); mocks.host.storeList.mockResolvedValue([]);
   mocks.engine.reset.mockResolvedValue(true);
+  vi.spyOn(console, 'warn').mockImplementation(() => {}); // the preview photo cannot be fetched outside a browser
   mocks.engine.open.mockResolvedValue(gr4());
   vi.stubGlobal('document', { hidden: true, getElementById: () => null });
   store = await import('../../ui/src/store');
