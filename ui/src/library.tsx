@@ -5,19 +5,21 @@ import { Ico } from './components';
 import { t } from './i18n';
 import { host } from './host';
 import {
-  applyFromLibrary, closeLibrary, defaultLibraryName, deleteLibraryEntry, libraryFor, loadLibrary, openLibrary, saveToLibrary, slotOf, useStore,
+  applyFromLibrary, closeLibrary, defaultLibraryName, deleteLibraryEntry, exportSlotCubeFile, libraryFor, loadLibrary, openLibrary, saveToLibrary, slotOf, useStore,
 } from './store';
 import type { SlotKey } from './store';
 
-/** "Save to library" (when the slot has a fitted preset) and "Apply from library" under a slot's preset. Nothing without the host: the library is its files. */
+/** "Save to library" (when the slot has a fitted preset), "Apply from library" and, QoL D2, "Export look as .cube" under a slot's preset. The library buttons need the host (the library is its files); the export does not. */
 export function LibraryButtons({ k }: { k: SlotKey }) {
   const ready = useStore((s) => !!slotOf(k, s)?.preset?.result);
   useEffect(() => { void loadLibrary(); }, []);
-  if (!host.available) return null;
+  // QoL D2: the .cube export needs no host (it is a download), the library does
+  if (!host.available && !ready) return null;
   return (
     <div className="chips lib-buttons">
-      {ready && <button className="btn small" onClick={() => openLibrary(k, 'save')}>{t('libSave')}</button>}
-      <button className="btn small" onClick={() => openLibrary(k, 'apply')}>{t('libApply')}</button>
+      {host.available && ready && <button className="btn small" onClick={() => openLibrary(k, 'save')}>{t('libSave')}</button>}
+      {host.available && <button className="btn small" onClick={() => openLibrary(k, 'apply')}>{t('libApply')}</button>}
+      {ready && <button className="btn small" title={t('exportCubeTip')} onClick={() => exportSlotCubeFile(k)}>{t('exportCube')}</button>}
     </div>
   );
 }

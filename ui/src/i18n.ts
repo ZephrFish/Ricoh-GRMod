@@ -174,6 +174,12 @@ const zh = {
   libSave: '存入预设库', libApply: '从预设库应用', libTitleSave: '存入预设库', libTitleApply: '预设库', libName: '名称', libSaveBtn: '保存', libEmpty: '预设库里还没有适用于这台相机的预设。先在某个槽位载入预设，再点“存入预设库”。', libNoPreset: '先载入并转换好预设，才能存入预设库。',
   libSaved: '已存入预设库：{name}', libApplied: '已应用预设：{name}', libSaveFailed: '预设库写入失败', libWrongFamily: '这个预设属于另一类相机，不能用在当前相机上', libMissing: '预设库里找不到这个预设的文件', libDeleteTitle: '从预设库删除这个预设？', libDelete: '从预设库删除', libFamilyGr4: 'GR IV', libFamilyGr3: 'GR III / IIIx',
   compareWith: '对比对象',
+  // QoL batch D2
+  exportCube: '导出为 .cube', exportCubeTip: '把这个槽位的色彩渲染成标准 33 点 .cube 查找表，可在 Lightroom、Resolve、Photoshop 里预览（不含光晕和颗粒）', exportCubeDone: '已导出 {name}', exportCubeNone: '先载入并转换好预设，才能导出 .cube',
+  extraDuplicate: '复制这个槽位', extraDuplicateFull: '已达上限（最多 {n} 个新增槽位），先删除一个', extraDuplicated: '已复制：{name}', extraDuplicateFailed: '复制槽位失败',
+  batchProgress: '正在导入预设 {i} / {n}', batchAddTitle: '再新增槽位来放剩下的预设？', batchAddLine: '还有 {n} 个预设没有空槽位。', batchAddOk: '新增槽位', batchAddFiles: '{n} 个预设：{names}',
+  batchDone: '已应用 {n} 个预设', batchSkipped: '{n} 个跳过（没有空槽位）', batchFailed: '{n} 个失败：{names}',
+  libRename: '重命名', libRenameExists: '预设库里已有同名预设', libSearch: '按名称或文件名搜索', libSortNew: '最新在前', libSortName: '按名称', libNoMatch: '没有匹配的预设',
 };
 const en: typeof zh = {
   app: 'GR Mod',
@@ -351,6 +357,12 @@ const en: typeof zh = {
   libSave: 'Save to library', libApply: 'Apply from library', libTitleSave: 'Save to library', libTitleApply: 'Preset library', libName: 'Name', libSaveBtn: 'Save', libEmpty: 'The library has no presets for this camera yet. Load a preset on a slot, then choose "Save to library".', libNoPreset: 'Load a preset and let it convert before saving it to the library.',
   libSaved: 'Saved to the library: {name}', libApplied: 'Applied: {name}', libSaveFailed: 'Could not write the preset library', libWrongFamily: 'This preset belongs to another camera family and cannot be used on this camera', libMissing: 'The library has no file for this preset', libDeleteTitle: 'Delete this preset from the library?', libDelete: 'Delete from library', libFamilyGr4: 'GR IV', libFamilyGr3: 'GR III / IIIx',
   compareWith: 'Compare with',
+  // QoL batch D2
+  exportCube: 'Export look as .cube', exportCubeTip: 'Render this slot\'s colour as a standard 33-point .cube LUT to preview in Lightroom, Resolve or Photoshop (no halation or grain)', exportCubeDone: 'Exported {name}', exportCubeNone: 'Load and convert a preset first to export a .cube',
+  extraDuplicate: 'Duplicate this slot', extraDuplicateFull: 'The limit of {n} added slots is reached, remove one first', extraDuplicated: 'Duplicated: {name}', extraDuplicateFailed: 'Could not duplicate the slot',
+  batchProgress: 'Importing preset {i} of {n}', batchAddTitle: 'Add slots for the remaining presets?', batchAddLine: '{n} presets have no empty slot left.', batchAddOk: 'Add slots', batchAddFiles: '{n} presets: {names}',
+  batchDone: '{n} presets applied', batchSkipped: '{n} skipped (no free slot)', batchFailed: '{n} failed: {names}',
+  libRename: 'Rename', libRenameExists: 'The library already has a preset with this name', libSearch: 'Search by name or file name', libSortNew: 'Newest first', libSortName: 'By name', libNoMatch: 'No preset matches',
 };
 export type Key = keyof typeof zh;
 /**

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { FACTORY_LOOK_IDS, card, GR3X_FILM_IDS, GR3X_MAX_CUSTOM_RATIOS, GR3X_T4_CUSTOM, LANGS, MAX_CUSTOM_RATIOS, MAX_EXTRA_SLOTS, SHUTDOWN_MAX_PICTURES, SHUTDOWN_NAME_MAX, validateExtraSlotName, validateGr3xRatioName, validateRatioName, validateShutdownName } from '@grmod/core';
+import { FACTORY_LOOK_IDS, card, color, GR3X_FILM_IDS, GR3X_MAX_CUSTOM_RATIOS, GR3X_T4_CUSTOM, LANGS, MAX_CUSTOM_RATIOS, MAX_EXTRA_SLOTS, SHUTDOWN_MAX_PICTURES, SHUTDOWN_NAME_MAX, validateExtraSlotName, validateGr3xRatioName, validateRatioName, validateShutdownName } from '@grmod/core';
 import type { CameraModel, ClarityChange, ExtraSlotSpec, FirmwareInfo, FirmwareSummary, LangCode, LookLayout, PresetResult, RatioPreview, RatioSpec, ShutdownPictureSpec, SlotId, SlotRequest, SoftFocusRequest, SoftFocusStrength } from '@grmod/core';
 import { engine, EngineError } from './engine';
 import { host, HostError, sha256Hex } from './host';
@@ -2095,4 +2095,46 @@ export async function importProject(file: File): Promise<void> {
   try { await applyProjectExport(p); toast(t('projectImported'), 'ok'); }
   catch (e) { fail(e); }
   finally { set({ busy: undefined }); }
+}
+
+// ================================================================== QoL batch D2
+// ------------------------------------------------------------------ export a slot's look as a .cube
+/**
+ * @decision DEC-QOL-EXPORTCUBE-UI-001
+ * @title "Export look as .cube" renders core's exportSlotCube from the slot's fitted params
+ * @status accepted
+ * @rationale The file is made by core (color/export-cube.ts, DEC-QOL-EXPORTCUBE-001 defines what it
+ *   represents: the slot model applied to a Standard sRGB picture, colour and tone only, no halation
+ *   or grain). The UI side only picks the camera model by family (GR III / IIIx: GR3X_CAMERA, else
+ *   GR IV's), names the file after the slot (what the camera menu shows, made file-name safe) and
+ *   downloads it the way the project export does. It needs a fitted result; a slot without one has
+ *   no button.
+ */
+/** The name a slot has in the camera's menu, for file names: an added slot's name, else the language's name of a built-in one. */
+export function slotLabel(k: SlotKey, s: State = state): string {
+  if (isExtra(k)) { const x = s.extras.find((e) => e.key === k); return x ? extraName(x, s) : k; }
+  const id = k as SlotId, off = s.info?.slots.find((x) => x.id === id);
+  return s.slots[id]?.names[s.lang] || (s.info?.family === 'gr3x' ? off?.defaultName : id === 'CG' ? t('slotCG') : t('slotCY')) || id;
+}
+const fileSafe = (n: string): string => n.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'look';
+function downloadText(name: string, text: string, type: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+/** The .cube text of a slot's fitted look and the name it downloads as; undefined without a fitted result. */
+export function slotCube(k: SlotKey, s: State = state): { name: string; text: string } | undefined {
+  const params = slotOf(k, s)?.preset?.result?.params;
+  if (!params) return undefined;
+  const name = slotLabel(k, s);
+  return { name: fileSafe(name) + '.cube', text: color.exportSlotCube(params, { title: name, camera: s.info?.family === 'gr3x' ? 'gr3x' : 'gr4' }) };
+}
+export function exportSlotCubeFile(k: SlotKey): void {
+  try {
+    const c = slotCube(k);
+    if (!c) { toast(t('exportCubeNone'), 'error'); return; }
+    downloadText(c.name, c.text, 'text/plain');
+    toast(t('exportCubeDone', { name: c.name }), 'ok');
+  } catch (e) { fail(e); }
 }
