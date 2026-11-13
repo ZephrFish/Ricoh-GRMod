@@ -183,6 +183,12 @@ const zh = {
   snapshotReason_import: '导入前', snapshotReason_new: '新建项目前', snapshotReason_build: '生成固件后', snapshotReason_restore: '恢复前',
   projectNew: '新建项目…', newProjectTitle: '新建项目', newProjectLine: '当前相机的影像控制、新增槽位、比例、关机画面和开关将被清空', newProjectWarn: '清空前会自动备份，可在“恢复较早的版本”中找回。官方固件、预设库、界面语言和另一类相机的项目不受影响', newProjectOk: '新建', newProjectDone: '已新建项目',
   cmpFileBtn: '与另一个文件对比…', cmpFileAnother: '换一个对比文件…', cmpFileBack: '只看单个文件', cmpFileWith: '对比文件',
+  // QoL batch D2
+  exportCube: '导出为 .cube', exportCubeTip: '把这个槽位的色彩渲染成标准 33 点 .cube 查找表，可在 Lightroom、Resolve、Photoshop 里预览（不含光晕和颗粒）', exportCubeDone: '已导出 {name}', exportCubeNone: '先载入并转换好预设，才能导出 .cube',
+  extraDuplicate: '复制这个槽位', extraDuplicateFull: '已达上限（最多 {n} 个新增槽位），先删除一个', extraDuplicated: '已复制：{name}', extraDuplicateFailed: '复制槽位失败',
+  batchProgress: '正在导入预设 {i} / {n}', batchAddTitle: '再新增槽位来放剩下的预设？', batchAddLine: '还有 {n} 个预设没有空槽位。', batchAddOk: '新增槽位', batchAddFiles: '{n} 个预设：{names}',
+  batchDone: '已应用 {n} 个预设', batchSkipped: '{n} 个跳过（没有空槽位）', batchFailed: '{n} 个失败：{names}',
+  libRename: '重命名', libRenameExists: '预设库里已有同名预设', libSearch: '按名称或文件名搜索', libSortNew: '最新在前', libSortName: '按名称', libNoMatch: '没有匹配的预设',
 };
 const en: typeof zh = {
   app: 'GR Mod',
@@ -369,6 +375,12 @@ const en: typeof zh = {
   snapshotReason_import: 'Before an import', snapshotReason_new: 'Before a new project', snapshotReason_build: 'After a build', snapshotReason_restore: 'Before a restore',
   projectNew: 'New project…', newProjectTitle: 'New project', newProjectLine: 'The open camera\'s Image Control, added slots, ratios, power-off pictures and switches are cleared', newProjectWarn: 'A backup is kept first (Restore an earlier version). The official firmware, the preset library, the interface language and the other camera family\'s project are not touched', newProjectOk: 'Start new', newProjectDone: 'New project started',
   cmpFileBtn: 'Compare with another file…', cmpFileAnother: 'Compare with a different file…', cmpFileBack: 'Single file', cmpFileWith: 'Compared with',
+  // QoL batch D2
+  exportCube: 'Export look as .cube', exportCubeTip: 'Render this slot\'s colour as a standard 33-point .cube LUT to preview in Lightroom, Resolve or Photoshop (no halation or grain)', exportCubeDone: 'Exported {name}', exportCubeNone: 'Load and convert a preset first to export a .cube',
+  extraDuplicate: 'Duplicate this slot', extraDuplicateFull: 'The limit of {n} added slots is reached, remove one first', extraDuplicated: 'Duplicated: {name}', extraDuplicateFailed: 'Could not duplicate the slot',
+  batchProgress: 'Importing preset {i} of {n}', batchAddTitle: 'Add slots for the remaining presets?', batchAddLine: '{n} presets have no empty slot left.', batchAddOk: 'Add slots', batchAddFiles: '{n} presets: {names}',
+  batchDone: '{n} presets applied', batchSkipped: '{n} skipped (no free slot)', batchFailed: '{n} failed: {names}',
+  libRename: 'Rename', libRenameExists: 'The library already has a preset with this name', libSearch: 'Search by name or file name', libSortNew: 'Newest first', libSortName: 'By name', libNoMatch: 'No preset matches',
 };
 export type Key = keyof typeof zh;
 /**

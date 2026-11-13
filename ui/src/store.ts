@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { FACTORY_LOOK_IDS, card, GR3X_FILM_IDS, GR3X_MAX_CUSTOM_RATIOS, GR3X_T4_CUSTOM, LANGS, MAX_CUSTOM_RATIOS, MAX_EXTRA_SLOTS, SHUTDOWN_MAX_PICTURES, SHUTDOWN_NAME_MAX, validateExtraSlotName, validateGr3xRatioName, validateRatioName, validateShutdownName } from '@grmod/core';
+import { FACTORY_LOOK_IDS, card, color, GR3X_FILM_IDS, GR3X_MAX_CUSTOM_RATIOS, GR3X_T4_CUSTOM, LANGS, MAX_CUSTOM_RATIOS, EXTRA_NAME_MAX, MAX_EXTRA_SLOTS, SHUTDOWN_MAX_PICTURES, SHUTDOWN_NAME_MAX, validateExtraSlotName, validateGr3xRatioName, validateRatioName, validateShutdownName } from '@grmod/core';
 import type { CameraModel, ClarityChange, ExtraSlotSpec, FirmwareInfo, FirmwareSummary, LangCode, LookLayout, PresetResult, RatioPreview, RatioSpec, ShutdownPictureSpec, SlotId, SlotRequest, SoftFocusRequest, SoftFocusStrength } from '@grmod/core';
 import { engine, EngineError } from './engine';
 import { host, HostError, sha256Hex } from './host';
@@ -2354,3 +2354,209 @@ export async function inspectCompare(file: File): Promise<void> {
   catch (e) { console.warn('inspect compare', e); put({ ...side, busy: false, error: 'unreadable' }); }
 }
 export function closeCompare(): void { const v = state.inspectView; if (v?.other) set({ inspectView: { ...v, other: undefined } }); }
+// ================================================================== QoL batch D2
+// ------------------------------------------------------------------ export a slot's look as a .cube
+/**
+ * @decision DEC-QOL-EXPORTCUBE-UI-001
+ * @title "Export look as .cube" renders core's exportSlotCube from the slot's fitted params
+ * @status accepted
+ * @rationale The file is made by core (color/export-cube.ts, DEC-QOL-EXPORTCUBE-001 defines what it
+ *   represents: the slot model applied to a Standard sRGB picture, colour and tone only, no halation
+ *   or grain). The UI side only picks the camera model by family (GR III / IIIx: GR3X_CAMERA, else
+ *   GR IV's), names the file after the slot (what the camera menu shows, made file-name safe) and
+ *   downloads it the way the project export does. It needs a fitted result; a slot without one has
+ *   no button.
+ */
+/** The name a slot has in the camera's menu, for file names: an added slot's name, else the language's name of a built-in one. */
+export function slotLabel(k: SlotKey, s: State = state): string {
+  if (isExtra(k)) { const x = s.extras.find((e) => e.key === k); return x ? extraName(x, s) : k; }
+  const id = k as SlotId, off = s.info?.slots.find((x) => x.id === id);
+  return s.slots[id]?.names[s.lang] || (s.info?.family === 'gr3x' ? off?.defaultName : id === 'CG' ? t('slotCG') : t('slotCY')) || id;
+}
+const fileSafe = (n: string): string => n.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'look';
+function downloadText(name: string, text: string, type: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+/** The .cube text of a slot's fitted look and the name it downloads as; undefined without a fitted result. */
+export function slotCube(k: SlotKey, s: State = state): { name: string; text: string } | undefined {
+  const params = slotOf(k, s)?.preset?.result?.params;
+  if (!params) return undefined;
+  const name = slotLabel(k, s);
+  return { name: fileSafe(name) + '.cube', text: color.exportSlotCube(params, { title: name, camera: s.info?.family === 'gr3x' ? 'gr3x' : 'gr4' }) };
+}
+export function exportSlotCubeFile(k: SlotKey): void {
+  try {
+    const c = slotCube(k);
+    if (!c) { toast(t('exportCubeNone'), 'error'); return; }
+    downloadText(c.name, c.text, 'text/plain');
+    toast(t('exportCubeDone', { name: c.name }), 'ok');
+  } catch (e) { fail(e); }
+}
+
+// ------------------------------------------------------------------ duplicate an added slot
+/**
+ * @decision DEC-QOL-DUPLICATE-001
+ * @title Duplicating an added slot copies its fitted look and file, never re-fits, and sits right after the source
+ * @status accepted
+ * @rationale A user who wants a variant of an added slot (same look, another name or icon) should not
+ *   have to import and fit the file again. The copy takes the source's icon (pixels copied, not shared),
+ *   halation, hidden state and preset (the fitted result is immutable, so it is shared by reference; the
+ *   source file is stored again under the new key, as an imported file is). It is inserted right after
+ *   the source in both `extras` and the menu order. The name is the source's name with a numeric suffix
+ *   (" 2", " 3", ... the first one no added slot has; a number already at the end of the name is kept unless the name without it is another slot's), the base cut so the whole stays within
+ *   EXTRA_NAME_MAX and so passes validateExtraSlotName whenever the source's name did. A source whose
+ *   fit is still running is refitted for the copy instead of copied half done. The limit
+ *   MAX_EXTRA_SLOTS is the same as for adding (the button is disabled with the reason).
+ */
+/** Why an added slot cannot be duplicated now (the limit), or null. */
+export function duplicateExtraProblem(s: State = state): string | null {
+  return s.extras.length >= MAX_EXTRA_SLOTS ? t('extraDuplicateFull', { n: MAX_EXTRA_SLOTS }) : null;
+}
+/** The name for a copy of `name`: a number suffix not used by another added slot, within EXTRA_NAME_MAX. */
+export function duplicateName(name: string, taken: readonly string[]): string {
+  // a trailing number is only a copy's suffix when the name without it is another slot's ("Warm 2" next to "Warm"); "Warm 400" keeps its 400
+  const m = /^(.*\S)\s+\d+$/.exec(name);
+  const base = m && taken.includes(m[1]) ? m[1] : name;
+  for (let n = 2; n < 1000; n++) {
+    const suffix = ' ' + n;
+    const cand = base.slice(0, Math.max(1, EXTRA_NAME_MAX - suffix.length)).trimEnd() + suffix;
+    if (!taken.includes(cand)) return cand;
+  }
+  return base;
+}
+/** Make a copy of an added slot right after it. Returns the new key, or undefined at the limit / for an unknown key. */
+export function duplicateExtraSlot(key: string): string | undefined {
+  const src = state.extras.find((x) => x.key === key);
+  if (!src) return undefined;
+  const full = duplicateExtraProblem();
+  if (full) { toast(full, 'info'); return undefined; }
+  const newKey = 'x-' + Math.random().toString(36).slice(2, 10);
+  const name = duplicateName(extraName(src), state.extras.map((x) => extraName(x)));
+  const p = src.preset;
+  const copy: ExtraSlot = {
+    key: newKey, name,
+    icon: { ...src.icon, ...(src.icon.pixels ? { pixels: new Uint8Array(src.icon.pixels) } : {}) },
+    ...(src.halation ? { halation: { ...src.halation } } : {}),
+    ...(p ? { preset: { ...p } } : {}),
+  };
+  const hidden = state.lookHidden.includes(key);
+  set((s) => {
+    const at = s.extras.findIndex((x) => x.key === key);
+    const extras = s.extras.slice(); extras.splice(at + 1, 0, copy);
+    const order = normalizeLookOrder(s.lookOrder, s.extras); order.splice(order.indexOf(key) + 1, 0, newKey);
+    return { extras, lookOrder: order, lookHidden: hidden ? [...s.lookHidden, newKey] : s.lookHidden, activeSlot: newKey };
+  });
+  if (p && host.available) void host.storeSet(presetKey(newKey), p.text).catch(() => undefined);
+  if (p?.busy) void runPreset(newKey, p.fileName, p.kind, p.text); // the source's conversion is not finished: the copy runs its own
+  if (!copy.icon.pixels) void renderIcon(newKey);
+  scheduleSave();
+  toast(t('extraDuplicated', { name }), 'ok');
+  return newKey;
+}
+
+// ------------------------------------------------------------------ batch preset import
+/**
+ * @decision DEC-QOL-BATCH-001
+ * @title Several preset files at once fill empty slots in order, never overwrite, and ask before adding slots
+ * @status accepted
+ * @rationale Importing a pack of looks meant one drop per slot. With several .xmp / .cube files the
+ *   targets are, in order: the slot the files were dropped on or picked for (the active slot when none
+ *   is given) if it has no usable preset, then every other slot without one in menu order (built-in
+ *   slots, then added slots). A slot "has a preset" when it holds one that did not fail: a failed
+ *   conversion is replaced, a good look never is. Files beyond the free slots are skipped, unless
+ *   the camera is a GR IV (the only family with added slots) and there is room under
+ *   MAX_EXTRA_SLOTS: then, once the free slots are filled, one ask() offers to add that many slots for them (declining skips them).
+ *   Fitting runs one file after another through the ordinary loadPresetFile / runPreset path, so
+ *   options, storage and stale-run guards are identical to a single import; the busy overlay shows
+ *   "i of n". A final toast counts applied, skipped and failed files and names the failed ones. One
+ *   file behaves exactly as before (loadPresetFile on the given slot, replacing what is there).
+ */
+const hasUsablePreset = (k: SlotKey, s: State = state): boolean => { const p = slotOf(k, s)?.preset; return !!p && !p.error; };
+/** The slots a batch of files goes to, in order (see DEC-QOL-BATCH-001): `from` first when it is free, then the other free slots. */
+export function batchTargets(from: SlotKey = state.activeSlot, s: State = state): SlotKey[] {
+  const keys = allSlotKeys(s), free = keys.filter((k) => !hasUsablePreset(k, s));
+  return keys.includes(from) && free.includes(from) ? [from, ...free.filter((k) => k !== from)] : free;
+}
+/** How many more slots could be added for a batch (GR IV only; not on the Monochrome, which builds none). */
+const batchRoom = (s: State = state): number => (s.info && s.info.family !== 'gr3x' && s.model !== 'MONO' ? Math.max(0, MAX_EXTRA_SLOTS - s.extras.length) : 0);
+export async function loadPresetFiles(files: File[], from?: SlotKey): Promise<void> {
+  if (files.length === 0) return;
+  if (files.length === 1) { await loadPresetFile(from ?? state.activeSlot, files[0]); return; }
+  if (state.busy) return;
+  const slots = batchTargets(from);
+  const rest = files.slice(slots.length);
+  const failed: string[] = []; let applied = 0, skipped = rest.length, firstSlot: SlotKey | undefined;
+  const caps = !!state.info?.capabilities.presets;
+  /** Fit `list` into `into` one after another; `done` of `total` files are behind when it starts (for the progress text). */
+  const run = async (into: SlotKey[], list: File[], done: number, total: number): Promise<void> => {
+    firstSlot ??= into[0];
+    set({ busy: t('batchProgress', { i: done + 1, n: total }) });
+    try {
+      for (let i = 0; i < list.length; i++) {
+        set({ busy: t('batchProgress', { i: done + i + 1, n: total }) });
+        try { await loadPresetFile(into[i], list[i]); } catch { /* counted below */ }
+        const p = slotOf(into[i])?.preset;
+        if (p && p.fileName === list[i].name && !p.error && (p.result || !caps)) applied++; else failed.push(list[i].name);
+      }
+    } finally { set({ busy: undefined }); }
+  };
+  const room = Math.min(rest.length, batchRoom());
+  if (slots.length) await run(slots, files.slice(0, slots.length), 0, slots.length + room);
+  // the free slots are used up: offer added slots for the files that are left (GR IV, room under the limit)
+  if (room > 0 && await ask(t('batchAddTitle'), [t('batchAddLine', { n: rest.length }), t('batchAddFiles', { n: room, names: rest.slice(0, room).map((f) => f.name).join(', ') })], t('batchAddOk'))) {
+    const before = new Set(state.extras.map((x) => x.key));
+    for (let i = 0; i < room; i++) addExtraSlot();
+    const added = state.extras.map((x) => x.key).filter((k) => !before.has(k));
+    await run(added, rest.slice(0, added.length), slots.length, slots.length + added.length);
+    skipped = rest.length - added.length;
+  }
+  if (firstSlot) setActiveSlot(firstSlot);
+  const parts = [t('batchDone', { n: applied })];
+  if (skipped) parts.push(t('batchSkipped', { n: skipped }));
+  if (failed.length) parts.push(t('batchFailed', { n: failed.length, names: failed.slice(0, 3).join(', ') + (failed.length > 3 ? ` +${failed.length - 3}` : '') }));
+  toast(parts.join(' · '), failed.length ? 'error' : 'ok');
+}
+
+// ------------------------------------------------------------------ library rename, search and sort
+/**
+ * @decision DEC-QOL-LIBRARY-002
+ * @title Renaming only edits the index; search and sort are pure views over the entries
+ * @status accepted
+ * @rationale An entry's files are keyed by its id (DEC-QOL-LIBRARY-001), so renaming rewrites only
+ *   library.json (one write: nothing can be left half done) and keeps the id, date and files. Names
+ *   stay unique per family, as saving enforces (same trimmed, 60-character, exact comparison): a
+ *   clash is refused with 'exists' and nothing is written. Search matches the name or the file name,
+ *   case-insensitive, on the trimmed query; sort is newest first (the default, so a fresh save is at
+ *   the top) or by name (locale-aware, case-insensitive). Both are functions of the list so the
+ *   dialog holds only the query and the sort choice, and they are tested without the dialog. The box
+ *   shows only above LIBRARY_SEARCH_MIN entries, where scanning by eye stops being easy.
+ */
+export const LIBRARY_SEARCH_MIN = 5;
+export type LibrarySort = 'new' | 'name';
+export type RenameResult = 'ok' | 'empty' | 'exists' | 'missing' | 'failed';
+/** Rename an entry. 'empty' for a blank name, 'exists' when another entry of its family has it, 'missing' for an unknown id, 'failed' when the index could not be written. */
+export async function renameLibraryEntry(entryId: string, name: string): Promise<RenameResult> {
+  const clean = name.trim().slice(0, 60);
+  const e = state.library.find((x) => x.id === entryId);
+  if (!e) return 'missing';
+  if (!clean) return 'empty';
+  if (clean === e.name) return 'ok';
+  if (state.library.some((x) => x.id !== entryId && x.family === e.family && x.name === clean)) return 'exists';
+  const entries = state.library.map((x) => (x.id === entryId ? { ...x, name: clean } : x));
+  if (!(await writeLibraryIndex(entries))) { toast(t('libSaveFailed'), 'error'); return 'failed'; }
+  set({ library: entries });
+  return 'ok';
+}
+/** The entries whose name or file name contains the query (case-insensitive); all of them for a blank query. */
+export function searchLibrary(entries: readonly LibraryEntry[], query: string): LibraryEntry[] {
+  const q = query.trim().toLowerCase();
+  return q ? entries.filter((e) => e.name.toLowerCase().includes(q) || e.fileName.toLowerCase().includes(q)) : entries.slice();
+}
+/** Newest first (ties keep their order), or by name. */
+export function sortLibrary(entries: readonly LibraryEntry[], by: LibrarySort): LibraryEntry[] {
+  const out = entries.slice();
+  return by === 'name' ? out.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || b.date - a.date) : out.sort((a, b) => b.date - a.date);
+}
