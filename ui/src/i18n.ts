@@ -177,6 +177,10 @@ const zh = {
   // QoL batch D1
   preflightGone: '存储卡 {c} 已不在，请重新插入后再试', preflightSpace: '存储卡 {c} 空间不足：需要约 {need}，可用 {free}。请腾出空间后再试',
   hintWriteProtected: '存储卡可能处于写保护状态，请拨开卡侧的锁定开关后重试',
+  snapshotFailed: '无法保存项目的自动备份。本次操作不受影响', snapshotTitle: '恢复较早的版本', snapshotEmpty: '还没有备份。导入项目、新建项目或生成固件时会自动保存。', projectRestore: '恢复较早的版本…',
+  snapshotRestoreBtn: '恢复', snapshotRestoreTitle: '恢复较早的版本', snapshotRestoreOk: '恢复', snapshotRestoreWarn: '当前项目将被替换。恢复前会先备份当前状态，之后可以再恢复回来', snapshotRestored: '已恢复所选版本', snapshotMissing: '这份备份已丢失或无法读取',
+  snapshotSlots: '槽位 {n}', snapshotExtras: '新增槽位 {n}', snapshotRatios: '比例 {n}', snapshotPictures: '关机画面 {n}',
+  snapshotReason_import: '导入前', snapshotReason_new: '新建项目前', snapshotReason_build: '生成固件后', snapshotReason_restore: '恢复前',
 };
 const en: typeof zh = {
   app: 'GR Mod',
@@ -357,6 +361,10 @@ const en: typeof zh = {
   // QoL batch D1
   preflightGone: 'Card {c} is no longer there. Reinsert it and try again', preflightSpace: 'Not enough space on card {c}: about {need} needed, {free} free. Free some space and try again',
   hintWriteProtected: 'The card may be write-protected. Slide its lock switch to unlocked and try again',
+  snapshotFailed: 'Could not keep an automatic backup of the project. Your action is not affected', snapshotTitle: 'Restore an earlier version', snapshotEmpty: 'No backups yet. One is kept when you import a project, start a new one or build a firmware.', projectRestore: 'Restore an earlier version…',
+  snapshotRestoreBtn: 'Restore', snapshotRestoreTitle: 'Restore an earlier version', snapshotRestoreOk: 'Restore', snapshotRestoreWarn: 'The current project will be replaced. It is backed up first, so you can come back to it', snapshotRestored: 'Earlier version restored', snapshotMissing: 'This backup is missing or cannot be read',
+  snapshotSlots: 'Slots: {n}', snapshotExtras: 'Added slots: {n}', snapshotRatios: 'Ratios: {n}', snapshotPictures: 'Pictures: {n}',
+  snapshotReason_import: 'Before an import', snapshotReason_new: 'Before a new project', snapshotReason_build: 'After a build', snapshotReason_restore: 'Before a restore',
 };
 export type Key = keyof typeof zh;
 /**

@@ -101,3 +101,81 @@ describe('card preflight', () => {
   });
 });
 
+describe('project snapshots', () => {
+  it('takes one before an import, and the import then replaces the project', async () => {
+    store.addExtraSlot();
+    const exported = await store.buildProjectExport();
+    store.addExtraSlot();
+    expect(store.getState().extras).toHaveLength(2);
+    const file = { size: 100, text: async () => JSON.stringify(exported) };
+    const p = store.importProject(file);
+    await confirmed(p);
+    const idx = snapIndex();
+    expect(idx).toHaveLength(1);
+    expect(idx[0]).toMatchObject({ reason: 'import', extras: 2 });
+    expect(stored()).toContain(`snapshot-${idx[0].id}.json`);
+    expect(store.getState().extras).toHaveLength(1);
+    // never part of a project export
+    expect(Object.keys((await store.buildProjectExport()).files).some((k) => k.startsWith('snapshot'))).toBe(false);
+  });
+  it('takes one after a successful build, not after a refused one', async () => {
+    await start();
+    await confirmed(store.outputFirmware({ kind: 'folder' }, false), false);
+    expect(snapIndex()).toHaveLength(0);
+    await confirmed(store.outputFirmware({ kind: 'folder' }));
+    expect(snapIndex().map((e) => e.reason)).toEqual(['build']);
+    expect(snapIndex()[0]).toMatchObject({ ratios: 1 });
+  });
+  it('keeps the newest 10 and deletes the files of the rest; an unchanged project is not snapshotted twice', async () => {
+    for (let i = 0; i < 13; i++) { store.setSoft(i % 2 === 0); store.setAdjSlots(5 + (i % 3)); store.setDateStamp(i % 4 < 2); await store.takeSnapshot('build'); }
+    const idx = snapIndex();
+    expect(idx.length).toBe(10);
+    expect(stored().filter((k) => k.startsWith('snapshot-')).sort()).toEqual(idx.map((e) => `snapshot-${e.id}.json`).sort());
+    const n = idx.length; await store.takeSnapshot('build'); await store.takeSnapshot('build');
+    expect(snapIndex().length).toBe(n);
+    expect(stored().every((k) => /^[a-z0-9][a-z0-9._-]{0,63}$/.test(k))).toBe(true);
+  });
+  it('restores through the import path, and snapshots the current state first so the restore can be undone', async () => {
+    store.setSoft(true);
+    await store.takeSnapshot('build');
+    const old = snapIndex()[0];
+    store.setSoft(false); store.addExtraSlot();
+    await store.openSnapshots(); await flush();
+    expect(store.getState().snapshotsView.entries.map((e) => e.id)).toEqual([old.id]);
+    const p = store.restoreSnapshot(old.id);
+    await confirmed(p);
+    expect(store.getState().soft).toBe(true);
+    expect(store.getState().extras).toHaveLength(0);
+    const idx = snapIndex();
+    expect(idx.map((e) => e.reason)).toEqual(['build', 'restore']);
+    // the restore snapshot holds what was open before: soft off, one added slot
+    expect(idx[1]).toMatchObject({ extras: 1 });
+    const back = JSON.parse(mem.get(`snapshot-${idx[1].id}.json`));
+    expect(back.project.soft).toBe(false);
+    // and restoring that one brings the added slot back
+    await store.openSnapshots(); await flush();
+    await confirmed(store.restoreSnapshot(idx[1].id));
+    expect(store.getState().extras).toHaveLength(1);
+  });
+  it('restoring the oldest of a full list works even though the new snapshot prunes it', async () => {
+    for (let i = 0; i < 12; i++) { store.setSoft(i % 2 === 0); store.setAdjSlots(5 + (i % 3)); store.setDateStamp(i % 4 < 2); await store.takeSnapshot('build'); }
+    expect(snapIndex().length).toBe(10);
+    const oldest = snapIndex()[0]; const want = JSON.parse(mem.get(`snapshot-${oldest.id}.json`)).project.soft;
+    store.setSoft(!want); store.addExtraSlot();
+    await store.openSnapshots(); await flush();
+    await confirmed(store.restoreSnapshot(oldest.id));
+    expect(store.getState().soft).toBe(want);
+    expect(stored().includes(`snapshot-${oldest.id}.json`)).toBe(false);
+    expect(snapIndex().length).toBe(10);
+  });
+  it('a failing store does not block the action and warns once', async () => {
+    await start();
+    mocks.host.storeSet.mockRejectedValue(new Error('disk full'));
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await confirmed(store.outputFirmware({ kind: 'folder' }));
+    expect(mocks.host.write).toHaveBeenCalledTimes(1);
+    await store.takeSnapshot('build'); await store.takeSnapshot('build');
+    expect(store.getState().toasts.filter((x) => /automatic backup/.test(x.text))).toHaveLength(1);
+  });
+});
+
