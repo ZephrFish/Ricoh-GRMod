@@ -11,7 +11,7 @@ import type { Crop } from './pixels';
 import { onUiScale, uiScale } from './fit';
 import { applySlot } from './preview';
 import {
-  addRatio, addWallFiles, askForOfficial, bridgeLoaded, loadFirmwareFile, loadIconImage, loadPresetFile, loadPreviewFile, moveWall, nameProblem, openCrop, outputFirmware, previewPhoto, removePreset, removeWall,
+  addRatio, addWallFiles, askForOfficial, bridgeLoaded, loadFirmwareFile, loadIconImage, loadPresetFile, loadPresetFiles, loadPreviewFile, moveWall, nameProblem, openCrop, outputFirmware, previewPhoto, removePreset, removeWall,
   maxRatios, ratioName, ratioProblem, removeRatio, setActiveRatio, setActiveSlot, setCrop, setIcon, setName, setPreviewMode, setRatio, setRatioBackdrop, useStore, wallBitmap,
   setSoft, setAdditiveHue, setKeepWhite,
   compareSlot, setCompareWith, slotsWithLook,
@@ -221,7 +221,7 @@ function SlotCard({ id }: { id: SlotId }) {
   const p = slot.preset;
   const first = id === 'CY'; // the one the tour points at
   return (
-    <DropZone className={`card ${active ? 'on' : ''}`} tour={first ? 'ic-slot' : undefined} accept={isPreset} onFiles={(f) => { void loadPresetFile(id, f[0]); }}>
+    <DropZone className={`card ${active ? 'on' : ''}`} tour={first ? 'ic-slot' : undefined} accept={isPreset} onFiles={(f) => { void loadPresetFiles(f, id); }}>
       <div className="card-in" onPointerDownCapture={() => setActiveSlot(id)} onFocusCapture={() => setActiveSlot(id)}>
         <div className="card-head">
           <IconCanvas pixels={slot.icon.mode !== 'keep' && slot.icon.pixels ? slot.icon.pixels : off.icon} />
@@ -236,7 +236,7 @@ function SlotCard({ id }: { id: SlotId }) {
         </div>
         <div className="props">
           <Prop label={t('preset')} tour={first ? 'ic-preset' : undefined}>
-            {!p && <FileButton className="btn dashed fill" accept=".xmp,.cube" onFiles={(f) => { void loadPresetFile(id, f[0]); }}>{Ico.plus}<span>{t('dropPreset')}</span></FileButton>}
+            {!p && <FileButton className="btn dashed fill" accept=".xmp,.cube" multiple onFiles={(f) => { void loadPresetFiles(f, id); }}>{Ico.plus}<span>{t('dropPreset')}</span></FileButton>}
             {p && (
               <div className="preset">
                 <div className={`file-chip ${p.error ? 'bad' : ''}`}>
@@ -589,7 +589,7 @@ function ExtraSlotCard({ x, index }: { x: ExtraSlot; index: number }) {
   const p = x.preset;
   const k = x.key;
   return (
-    <DropZone className={`card ${active ? 'on' : ''}`} accept={isPreset} onFiles={(f) => { void loadPresetFile(k, f[0]); }}>
+    <DropZone className={`card ${active ? 'on' : ''}`} accept={isPreset} onFiles={(f) => { void loadPresetFiles(f, k); }}>
       <div className="card-in" onPointerDownCapture={() => setActiveSlot(k)} onFocusCapture={() => setActiveSlot(k)}>
         <div className="card-head">
           <IconCanvas pixels={x.icon.pixels ?? tile} />
@@ -605,7 +605,7 @@ function ExtraSlotCard({ x, index }: { x: ExtraSlot; index: number }) {
         </div>
         <div className="props">
           <Prop label={t('preset')}>
-            {!p && <FileButton className="btn dashed fill" accept=".xmp,.cube" onFiles={(f) => { void loadPresetFile(k, f[0]); }}>{Ico.plus}<span>{t('dropPreset')}</span></FileButton>}
+            {!p && <FileButton className="btn dashed fill" accept=".xmp,.cube" multiple onFiles={(f) => { void loadPresetFiles(f, k); }}>{Ico.plus}<span>{t('dropPreset')}</span></FileButton>}
             {p && (
               <div className="preset">
                 <div className={`file-chip ${p.error ? 'bad' : ''}`}>
