@@ -19,7 +19,7 @@ import {
   setMonoUnlock,
   setDirectFlash, setAdjSlots, adjSlotsOf, setHdr, setExposurePreview, setBrightAuto,
   setHlgPhoto,
-  extraName, extraNameProblem, extraProblem, halationOf, removeExtraSlot, setExtraCount, setExtraName, setHalation, slotOf,
+  duplicateExtraProblem, duplicateExtraSlot, extraName, extraNameProblem, extraProblem, halationOf, removeExtraSlot, setExtraCount, setExtraName, setHalation, slotOf,
   filmCountChoosable, removeFilm, setFilmCount,
   hasLookLayout, isGr3, KEEP_VISIBLE, lookHiddenNow, lookMonoOnly, lookName, lookOrderAvailable, lookOrderNow, moveLook, moveLookTo, resetLookLayout, setLookHidden,
   setWallName, wallMax, wallMenuProblem,
@@ -583,6 +583,7 @@ function ExtraSlotCard({ x, index }: { x: ExtraSlot; index: number }) {
   const active = useStore((s) => s.activeSlot === x.key);
   const name = useStore((s) => extraName(x, s));
   const nameBad = useStore((s) => extraNameProblem(x, s));
+  const dupProblem = useStore((s) => duplicateExtraProblem(s));
   const problem = useStore((s) => extraProblem(x, s));
   const tile = useStore((s) => s.info!.tiles[x.icon.style]);
   const p = x.preset;
@@ -599,6 +600,7 @@ function ExtraSlotCard({ x, index }: { x: ExtraSlot; index: number }) {
               <span className={`count ${nameBad ? 'bad' : ''}`}>{nameBad || `${name.length}/${EXTRA_NAME_MAX}`}</span>
             </div>
           </div>
+          <button className="btn ghost icon-only extra-x" title={dupProblem ?? t('extraDuplicate')} aria-label={t('extraDuplicate')} disabled={!!dupProblem} onClick={() => duplicateExtraSlot(k)}>{Ico.copy}</button>
           <button className="btn ghost icon-only extra-x" title={t('extraRemove')} aria-label={t('extraRemove')} onClick={() => removeExtraSlot(k)}>{Ico.x}</button>
         </div>
         <div className="props">

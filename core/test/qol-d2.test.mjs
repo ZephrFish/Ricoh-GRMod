@@ -3,6 +3,7 @@
 // QoL batch D2: .cube export of a slot, duplicate an added slot, batch preset import, library rename and search,
 // on the real UI store with an in-memory host.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as core from '../src/index';
 
 const mocks = vi.hoisted(() => ({
   engine: { open: vi.fn(), reset: vi.fn(), convert: vi.fn(), heartbeat: vi.fn(), ratio: vi.fn() },
@@ -69,5 +70,60 @@ describe('export a slot as a .cube', () => {
     const text = await blob.text();
     expect(text.split('\n').slice(0, 3)).toEqual(['TITLE "Warm 400"', 'LUT_3D_SIZE 33', 'DOMAIN_MIN 0.0 0.0 0.0']);
     expect(text.split('\n').filter((l) => /^[\d.]/.test(l))).toHaveLength(33 ** 3);
+  });
+});
+
+describe('duplicate an added slot', () => {
+  it('copies params, icon, name suffix and the preset file under the new key, right after the source in extras and look order', async () => {
+    store.setExtraCount(2);
+    await vi.advanceTimersByTimeAsync(5);
+    const [a, b] = store.getState().extras.map((x) => x.key);
+    store.setExtraName(a, 'Warm 400');
+    await store.loadPresetFile(a, file('warm.cube', 'LUT_3D_SIZE 2 warm'));
+    store.setIcon(a, { text: '400' });
+    await vi.advanceTimersByTimeAsync(5);
+    const k = store.duplicateExtraSlot(a);
+    expect(k).toBeTruthy();
+    const s = store.getState();
+    expect(s.extras.map((x) => x.key)).toEqual([a, k, b]);
+    const [src, dup] = s.extras;
+    expect(dup.name).toBe('Warm 400 2');
+    expect(core.validateExtraSlotName(dup.name)).toBeNull();
+    expect(dup.name.length).toBeLessThanOrEqual(core.EXTRA_NAME_MAX);
+    expect(dup.preset.result.params).toEqual(src.preset.result.params);
+    expect(dup.preset.fileName).toBe('warm.cube');
+    expect(dup.icon.text).toBe('400');
+    expect(dup.icon.pixels).not.toBe(src.icon.pixels); // copied, not shared
+    expect(new TextDecoder().decode(files.get('preset-' + k))).toBe('LUT_3D_SIZE 2 warm');
+    const order = store.lookOrderNow();
+    expect(order.indexOf(k)).toBe(order.indexOf(a) + 1);
+    expect(s.activeSlot).toBe(k);
+    // a second copy takes the next free number, and a long name is cut to fit
+    store.setExtraName(a, 'ABCDEFGHIJKL');
+    const k2 = store.duplicateExtraSlot(a);
+    expect(store.getState().extras.find((x) => x.key === k2).name).toBe('ABCDEFGHIJ 2');
+    expect(core.validateExtraSlotName(store.getState().extras.find((x) => x.key === k2).name)).toBeNull();
+  });
+  it('is refused at MAX_EXTRA_SLOTS with a reason, and changes nothing', async () => {
+    store.setExtraCount(core.MAX_EXTRA_SLOTS);
+    await vi.advanceTimersByTimeAsync(5);
+    const before = store.getState().extras.map((x) => x.key);
+    expect(store.duplicateExtraProblem()).toMatch(String(core.MAX_EXTRA_SLOTS));
+    expect(store.duplicateExtraSlot(before[0])).toBeUndefined();
+    expect(store.getState().extras.map((x) => x.key)).toEqual(before);
+    expect(store.getState().toasts.at(-1).text).toMatch(String(core.MAX_EXTRA_SLOTS));
+  });
+  it('copying a slot whose fit is still running refits the copy instead of copying a half-done state', async () => {
+    store.addExtraSlot();
+    const a = store.getState().extras[0].key;
+    let release;
+    mocks.engine.convert.mockImplementationOnce(() => new Promise((r) => { release = () => r(fitted('slow')); }));
+    const pending = store.loadPresetFile(a, file('slow.cube'));
+    await vi.advanceTimersByTimeAsync(5);
+    const k = store.duplicateExtraSlot(a);
+    expect(store.getState().extras[1].preset.busy).toBe(true);
+    release(); await pending; await vi.advanceTimersByTimeAsync(5);
+    expect(store.getState().extras.find((x) => x.key === k).preset.busy).toBe(false);
+    expect(store.getState().extras.find((x) => x.key === k).preset.result).toBeTruthy();
   });
 });
