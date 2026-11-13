@@ -1645,7 +1645,8 @@ function doneToast(root: string, volume: Volume | undefined, moved: number, file
 }
 
 /** Turn a card into a firmware card holding `file` (what is in the way, such as a start-up script of GR Mod 0.7's power-off images, is moved aside). */
-async function firmwareToCard(volume: Volume, file: Uint8Array): Promise<number> {
+async function firmwareToCard(volume: Volume, file: Uint8Array): Promise<number | null> {
+  if (!(await preflightCard(volume, file.length))) return null; // QoL D1: refused (toasted) before anything is moved aside or written
   return runPlan(volume.root, card.planFirmwareCard(await listing(volume.root), file, await freshStamp(volume.root), firmwareFilename()));
 }
 
@@ -1711,6 +1712,8 @@ export async function outputFirmware(dest: Dest, stock = false): Promise<void> {
   }
   const target = await destination(dest);
   if (!target || state.info !== sourceInfo || state.raw !== sourceRaw || state.model !== sourceModel || state.fwBusy) return;
+  // QoL D1: a card that cannot hold the file is refused before the (seconds-long) build, not mid-write; a folder is not checked.
+  if (target.volume && !(await preflightCard(target.volume, sourceRaw.length))) return;
   try {
     let file: Uint8Array;
     if (stock) file = sourceRaw;
@@ -1726,7 +1729,7 @@ export async function outputFirmware(dest: Dest, stock = false): Promise<void> {
     }
     set({ busy: t('writing') });
     let moved = 0;
-    if (target.volume) moved = await firmwareToCard(target.volume, file);
+    if (target.volume) { const m = await firmwareToCard(target.volume, file); if (m === null) { set({ busy: undefined }); void refreshVolumes(); return; } moved = m; }
     else await runPlan(target.root, [{ op: 'write', path: [firmwareFilename()], data: file }]);
     set({ busy: undefined });
     doneToast(target.root, target.volume, moved, firmwareFilename());
@@ -1913,6 +1916,7 @@ export async function writeCopy(): Promise<void> {
   const fresh = newFirmwareWarning(sourceInfo) ?? undefined;
   if (!(await (official ? askOfficial(describeCopy(pick.summary), fresh) : ask(t('confirmTitle'), describeCopy(pick.summary), t('confirmOk'), fresh)))) return;
   if (state.info !== sourceInfo || state.model !== sourceModel || state.fwBusy) return;
+  if (!(await preflightCard(v, pick.entry.size))) return; // QoL D1: the card must hold the copy before it is read
   try {
     set({ busy: t('opening') });
     const file = source === 'card' ? await host.parkedRead(v.id, pick.entry.path) : await host.backupRead(pick.entry.path);
@@ -1922,7 +1926,7 @@ export async function writeCopy(): Promise<void> {
     set({ busy: t('writing') });
     const moved = await firmwareToCard(v, file);
     set({ busy: undefined });
-    doneToast(v.root, v, moved, firmwareFilename());
+    if (moved !== null) doneToast(v.root, v, moved, firmwareFilename());
   } catch (e) { set({ busy: undefined }); fail(e); }
   await refreshCopies();
   void refreshVolumes();
@@ -1957,6 +1961,7 @@ const ERROR_HINTS: Record<string, Key> = {
 export function errorHint(code: string, message = ''): Key | undefined {
   if (code === 'io') {
     if (/no space left|not enough space|disk (is )?full|enospc|quota/i.test(message)) return 'hintCardFull';
+    if (/read-only file system|write.protect|erofs|permission denied|access is denied|eacces|eperm/i.test(message)) return 'hintWriteProtected';
     if (/not ready|no such device|enodev|input\/output error|i\/o error|removed|unplugged|no longer available/i.test(message)) return 'hintRemoved';
     return undefined;
   }
@@ -2096,3 +2101,38 @@ export async function importProject(file: File): Promise<void> {
   catch (e) { fail(e); }
   finally { set({ busy: undefined }); }
 }
+
+// ================================================================== QoL batch D1
+// Card preflight, project snapshots, "New project" and comparing two firmware files. One section
+// (and one block of i18n keys at the end of each dictionary) so that it merges cleanly beside other work.
+
+// ------------------------------------------------------------------ card preflight
+/**
+ * @decision DEC-QOLD1-PREFLIGHT-001
+ * @title Check space and presence of a card with a fresh volume list before any write to it
+ * @status accepted
+ * @rationale A full card used to fail mid-write (after the old firmware was moved aside). The
+ *   check runs in firmwareToCard (every card write: a build, a stock copy, writeCopy) with the exact
+ *   size, and once earlier with the source size so that a hopeless card is refused before the
+ *   build and, in writeCopy, before the copy is read. The cached `state.volumes` can be minutes old, so the host is asked
+ *   again. A card needs the file plus 1 MiB of margin (the file system's own bookkeeping); moves
+ *   into `GRMOD\parked-*` are renames on the same volume and need nothing. Folder exports never
+ *   reach this. Volume carries no read-only flag on any platform (shell/internal/platform), so a
+ *   write-protected card cannot be seen beforehand: the host's write error (EROFS / "write
+ *   protected" / permission denied, code `io`; `forbidden` for the rest) is mapped to a
+ *   write-protect hint after the fact by errorHint(). A volume that reports no size at all is not checked.
+ */
+export const CARD_MARGIN = 1 << 20;
+/** True when `v` is still mounted and has room for `need` bytes; otherwise toasts why (needed vs free) and returns false. */
+export async function preflightCard(v: Volume, need: number): Promise<boolean> {
+  let volumes: Volume[];
+  try { volumes = await host.volumes(state.showAll); }
+  catch (e) { fail(e); return false; }
+  const fresh = volumes.find((x) => x.id === v.id);
+  if (JSON.stringify(volumes) !== JSON.stringify(state.volumes)) set({ volumes });
+  if (!fresh) { toast(t('preflightGone', { c: v.id }), 'error'); void refreshVolumes(); return false; }
+  if (fresh.total === 0 && fresh.free === 0) return true;
+  if (fresh.free < need + CARD_MARGIN) { toast(t('preflightSpace', { c: fresh.id, need: fmtSize(need + CARD_MARGIN), free: fmtSize(fresh.free) }), 'error'); return false; }
+  return true;
+}
+

@@ -174,6 +174,9 @@ const zh = {
   libSave: '存入预设库', libApply: '从预设库应用', libTitleSave: '存入预设库', libTitleApply: '预设库', libName: '名称', libSaveBtn: '保存', libEmpty: '预设库里还没有适用于这台相机的预设。先在某个槽位载入预设，再点“存入预设库”。', libNoPreset: '先载入并转换好预设，才能存入预设库。',
   libSaved: '已存入预设库：{name}', libApplied: '已应用预设：{name}', libSaveFailed: '预设库写入失败', libWrongFamily: '这个预设属于另一类相机，不能用在当前相机上', libMissing: '预设库里找不到这个预设的文件', libDeleteTitle: '从预设库删除这个预设？', libDelete: '从预设库删除', libFamilyGr4: 'GR IV', libFamilyGr3: 'GR III / IIIx',
   compareWith: '对比对象',
+  // QoL batch D1
+  preflightGone: '存储卡 {c} 已不在，请重新插入后再试', preflightSpace: '存储卡 {c} 空间不足：需要约 {need}，可用 {free}。请腾出空间后再试',
+  hintWriteProtected: '存储卡可能处于写保护状态，请拨开卡侧的锁定开关后重试',
 };
 const en: typeof zh = {
   app: 'GR Mod',
@@ -351,6 +354,9 @@ const en: typeof zh = {
   libSave: 'Save to library', libApply: 'Apply from library', libTitleSave: 'Save to library', libTitleApply: 'Preset library', libName: 'Name', libSaveBtn: 'Save', libEmpty: 'The library has no presets for this camera yet. Load a preset on a slot, then choose "Save to library".', libNoPreset: 'Load a preset and let it convert before saving it to the library.',
   libSaved: 'Saved to the library: {name}', libApplied: 'Applied: {name}', libSaveFailed: 'Could not write the preset library', libWrongFamily: 'This preset belongs to another camera family and cannot be used on this camera', libMissing: 'The library has no file for this preset', libDeleteTitle: 'Delete this preset from the library?', libDelete: 'Delete from library', libFamilyGr4: 'GR IV', libFamilyGr3: 'GR III / IIIx',
   compareWith: 'Compare with',
+  // QoL batch D1
+  preflightGone: 'Card {c} is no longer there. Reinsert it and try again', preflightSpace: 'Not enough space on card {c}: about {need} needed, {free} free. Free some space and try again',
+  hintWriteProtected: 'The card may be write-protected. Slide its lock switch to unlocked and try again',
 };
 export type Key = keyof typeof zh;
 /**
