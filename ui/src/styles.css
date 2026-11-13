@@ -567,3 +567,15 @@ html.look-grabbing, html.look-grabbing * { cursor: grabbing !important; }
 .lib-name { font-size: 13.5px; }
 .compare-with { min-width: 0; max-width: 220px; }
 .compare-with-lead { margin-right: 6px; white-space: nowrap; }
+/* QoL batch D1: snapshots dialog, firmware compare table */
+.dialog.inspect.wide { width: 760px; }
+.compare-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 18px; table-layout: fixed; }
+.compare-table th, .compare-table td { text-align: left; padding: 4px 8px; vertical-align: top; overflow-wrap: anywhere; font-weight: normal; }
+.compare-table thead th { font-weight: 600; max-width: 0; white-space: nowrap; border-bottom: 1px solid var(--line2); }
+.compare-table tbody th { color: var(--muted); width: 24%; }
+.compare-table tr.diff { background: var(--amber-bg); }
+.compare-table tr.diff td { color: var(--text); font-weight: 600; }
+.snap-dialog { width: 520px; }
+.snap-list { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 6px; max-height: 360px; overflow: auto; }
+.snap-list li { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--chip); border-radius: 6px; }
+.snap-text { flex: 1; min-width: 0; display: grid; gap: 1px; }

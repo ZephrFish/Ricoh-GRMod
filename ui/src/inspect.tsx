@@ -1,30 +1,13 @@
 // The "Inspect a firmware file" dialog: what any firmware .bin is (official or modified, verified,
 // the features it switches on, ratios, added slots), read by the engine against the open official firmware.
 import { useEffect } from 'react';
-import type { FirmwareSummary } from '@grmod/core';
 import { DropZone, FileButton, Ico, IconCanvas } from './components';
 import { modelLabel } from './firmware';
 import { t } from './i18n';
 import type { Key } from './i18n';
-import { closeInspect, fmtSize, inspectFile, softText, useStore } from './store';
+import { compareRows, featureRows, KIND } from './compare';
+import { closeCompare, closeInspect, fmtSize, inspectCompare, inspectFile, useStore } from './store';
 
-/** Every feature flag of a FirmwareSummary as label / on, in the order the pages list them. */
-export function featureRows(s: FirmwareSummary): { label: string; on: boolean; detail?: string }[] {
-  const bright = s.brightAuto === 'balanced' ? t('brightAutoBalanced') : s.brightAuto ? t('brightAutoBright') : '';
-  return [
-    { label: t('navSoft'), on: s.adjSoftFocus || (s.softFocus?.length ?? 0) > 0, detail: s.softFocus?.length ? softText(s.softFocus) : s.adjSoftFocus ? 'ADJ' : undefined },
-    { label: t('navDate'), on: s.dateStamp },
-    { label: t('navMono'), on: s.monoUnlock },
-    { label: t('navHdr'), on: !!s.hdrGainMap },
-    { label: t('navHlg'), on: s.hlgPhoto },
-    { label: t('navBrightAuto'), on: !!s.brightAuto, detail: bright || undefined },
-    { label: t('navPreview'), on: !!s.exposurePreview },
-    { label: t('navFlash'), on: !!s.directFlash },
-    { label: t('navAdjSlots'), on: !!s.adjSlots, detail: s.adjSlots ? String(s.adjSlots) : undefined },
-  ];
-}
-
-const KIND: Record<FirmwareSummary['kind'], Key> = { official: 'inspectKindOfficial', modified: 'inspectKindModified', bridge: 'inspectKindBridge', unknown: 'inspectKindUnknown' };
 const ERROR: Record<'needs-open' | 'unreadable' | 'size', Key> = { 'needs-open': 'inspectNeedsOpen', unreadable: 'inspectUnreadable', size: 'inspectSize' };
 
 export function InspectDialog() {
@@ -41,15 +24,30 @@ export function InspectDialog() {
   if (!v) return null;
   const s = v.summary;
   const pick = (f: File[]): void => { void inspectFile(f[0]); };
+  const o = v.other;
+  const rows = s && o?.summary ? compareRows(s, o.summary, lang) : null;
   return (
     <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) closeInspect(); }}>
-      <DropZone onFiles={pick} accept={(f) => /\.bin$/i.test(f.name)} className="dialog inspect">
+      <DropZone onFiles={pick} accept={(f) => /\.bin$/i.test(f.name)} className={`dialog inspect${o ? ' wide' : ''}`}>
         <div role="dialog" aria-modal="true" aria-label={t('inspectTitle')}>
           <h3>{t('inspectTitle')}</h3>
           <p className="muted ellipsis" title={v.name}>{v.name} · {fmtSize(v.size)}</p>
           {v.busy && <p><span className="spinner small" /> {t('inspectBusy')}</p>}
           {v.error && <p className="dialog-warn">{t(ERROR[v.error])}</p>}
-          {s && (
+          {o && (
+            <>
+              <p className="muted ellipsis" title={o.name}>{t('cmpFileWith')}: {o.name} · {fmtSize(o.size)}</p>
+              {o.busy && <p><span className="spinner small" /> {t('inspectBusy')}</p>}
+              {o.error && <p className="dialog-warn">{t(ERROR[o.error])}</p>}
+            </>
+          )}
+          {rows && (
+            <table className="compare-table">
+              <thead><tr><th /><th className="ellipsis" title={v.name}>{v.name}</th><th className="ellipsis" title={o!.name}>{o!.name}</th></tr></thead>
+              <tbody>{rows.map((r) => <tr key={r.label} className={r.differs ? 'diff' : ''}><th scope="row">{r.label}</th><td>{r.a}</td><td>{r.b}</td></tr>)}</tbody>
+            </table>
+          )}
+          {s && !rows && (
             <ul className="dialog-lines last">
               <li><b>{t('inspectKind')}</b>: {t(KIND[s.kind])}{s.kind === 'modified' && <> · {t('inspectChanged')} {s.changedBytes}</>}</li>
               <li><b>{t('inspectVerified')}</b>: {t(s.verified ? 'inspectYes' : 'inspectNo')}</li>
@@ -71,6 +69,8 @@ export function InspectDialog() {
             </ul>
           )}
           <div className="dialog-actions">
+            {s && <FileButton accept=".bin" onFiles={(f) => { void inspectCompare(f[0]); }}>{Ico.folder}<span>{t(o ? 'cmpFileAnother' : 'cmpFileBtn')}</span></FileButton>}
+            {o && <button type="button" className="btn" onClick={closeCompare}>{t('cmpFileBack')}</button>}
             <FileButton accept=".bin" onFiles={pick}>{Ico.folder}<span>{t('inspectAgain')}</span></FileButton>
             <button type="button" className="btn primary" onClick={closeInspect}>{t('closeLabel')}</button>
           </div>

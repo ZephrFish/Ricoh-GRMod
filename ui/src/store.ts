@@ -56,7 +56,9 @@ export interface TourState { id: TourId; steps: number[]; index: number; replay:
 /** `reset`: the firmware written is the official one; the dialog asks in red whether the camera's settings were reset first. */
 export interface Confirm { title: string; warn?: string; reset?: boolean; lines: string[]; ok: string; resolve: (v: boolean) => void }
 /** A firmware file being inspected: `error` is `needs-open` (no official firmware to compare with), `unreadable` (not a file the engine can read) or `size`. */
-export interface InspectView { name: string; size: number; busy: boolean; summary?: FirmwareSummary; error?: 'needs-open' | 'unreadable' | 'size' }
+export interface InspectView { name: string; size: number; busy: boolean; summary?: FirmwareSummary; error?: 'needs-open' | 'unreadable' | 'size';
+  /** QoL D1: a second file compared with the first (absent in plain single-file inspect). */
+  other?: { name: string; size: number; busy: boolean; summary?: FirmwareSummary; error?: 'unreadable' | 'size' } }
 export interface State {
   ready: boolean; page: Page;
   fwName?: string; fwBusy: boolean; info?: FirmwareInfo; raw?: Uint8Array;
@@ -107,6 +109,8 @@ export interface State {
   uiLang: UiLangMode;
   /** QoL wave B: the "Inspect a firmware file" dialog (open while set). */
   inspectView?: InspectView;
+  /** QoL D1: the "Restore an earlier version" dialog (open while set). */
+  snapshotsView?: { entries: SnapshotEntry[]; busy: boolean };
 }
 
 const SLOT_IDS: readonly SlotId[] = GR3X_FILM_IDS;
@@ -304,7 +308,7 @@ export function slotTabKeys(s: State = state): SlotKey[] {
 }
 /** Whether something modal is up (a dialog of the store, the crop editor, the tour, the busy overlay, or any open dialog or menu element: focus stays on a menu's toggle, outside the menu). */
 const modalUp = (s: State): boolean =>
-  !!(s.confirm || s.inspectView || s.cropId || s.onlineOpen || s.tour || s.busy)
+  !!(s.confirm || s.inspectView || s.snapshotsView || s.cropId || s.onlineOpen || s.tour || s.busy)
   || (typeof document !== 'undefined' && typeof document.querySelector === 'function' && !!document.querySelector('[role="dialog"],[role="alertdialog"],[role="menu"]'));
 /** Handle a key press; returns whether it was taken. */
 export function handleShortcut(e: ShortcutKey): boolean {
@@ -1677,7 +1681,8 @@ function doneToast(root: string, volume: Volume | undefined, moved: number, file
 }
 
 /** Turn a card into a firmware card holding `file` (what is in the way, such as a start-up script of GR Mod 0.7's power-off images, is moved aside). */
-async function firmwareToCard(volume: Volume, file: Uint8Array): Promise<number> {
+async function firmwareToCard(volume: Volume, file: Uint8Array): Promise<number | null> {
+  if (!(await preflightCard(volume, file.length))) return null; // QoL D1: refused (toasted) before anything is moved aside or written
   return runPlan(volume.root, card.planFirmwareCard(await listing(volume.root), file, await freshStamp(volume.root), firmwareFilename()));
 }
 
@@ -1743,6 +1748,8 @@ export async function outputFirmware(dest: Dest, stock = false): Promise<void> {
   }
   const target = await destination(dest);
   if (!target || state.info !== sourceInfo || state.raw !== sourceRaw || state.model !== sourceModel || state.fwBusy) return;
+  // QoL D1: a card that cannot hold the file is refused before the (seconds-long) build, not mid-write; a folder is not checked.
+  if (target.volume && !(await preflightCard(target.volume, sourceRaw.length))) return;
   try {
     let file: Uint8Array;
     if (stock) file = sourceRaw;
@@ -1758,10 +1765,11 @@ export async function outputFirmware(dest: Dest, stock = false): Promise<void> {
     }
     set({ busy: t('writing') });
     let moved = 0;
-    if (target.volume) moved = await firmwareToCard(target.volume, file);
+    if (target.volume) { const m = await firmwareToCard(target.volume, file); if (m === null) { set({ busy: undefined }); void refreshVolumes(); return; } moved = m; }
     else await runPlan(target.root, [{ op: 'write', path: [firmwareFilename()], data: file }]);
     set({ busy: undefined });
     doneToast(target.root, target.volume, moved, firmwareFilename());
+    if (!stock) void takeSnapshot('build');
   } catch (e) { set({ busy: undefined }); fail(e); }
   void refreshVolumes();
 }
@@ -1945,6 +1953,7 @@ export async function writeCopy(): Promise<void> {
   const fresh = newFirmwareWarning(sourceInfo) ?? undefined;
   if (!(await (official ? askOfficial(describeCopy(pick.summary), fresh) : ask(t('confirmTitle'), describeCopy(pick.summary), t('confirmOk'), fresh)))) return;
   if (state.info !== sourceInfo || state.model !== sourceModel || state.fwBusy) return;
+  if (!(await preflightCard(v, pick.entry.size))) return; // QoL D1: the card must hold the copy before it is read
   try {
     set({ busy: t('opening') });
     const file = source === 'card' ? await host.parkedRead(v.id, pick.entry.path) : await host.backupRead(pick.entry.path);
@@ -1954,7 +1963,7 @@ export async function writeCopy(): Promise<void> {
     set({ busy: t('writing') });
     const moved = await firmwareToCard(v, file);
     set({ busy: undefined });
-    doneToast(v.root, v, moved, firmwareFilename());
+    if (moved !== null) doneToast(v.root, v, moved, firmwareFilename());
   } catch (e) { set({ busy: undefined }); fail(e); }
   await refreshCopies();
   void refreshVolumes();
@@ -1989,6 +1998,7 @@ const ERROR_HINTS: Record<string, Key> = {
 export function errorHint(code: string, message = ''): Key | undefined {
   if (code === 'io') {
     if (/no space left|not enough space|disk (is )?full|enospc|quota/i.test(message)) return 'hintCardFull';
+    if (/read-only file system|write.protect|erofs|permission denied|access is denied|eacces|eperm/i.test(message)) return 'hintWriteProtected';
     if (/not ready|no such device|enodev|input\/output error|i\/o error|removed|unplugged|no longer available/i.test(message)) return 'hintRemoved';
     return undefined;
   }
@@ -2129,7 +2139,218 @@ export async function importProject(file: File): Promise<void> {
   }
   if (!(await ask(t('projectImportTitle'), [t('projectImportLine', { v: p.appVersion || '?', n: Object.keys(p.files).length })], t('projectImportOk'), t('projectImportWarn')))) return;
   set({ busy: t('projectWorking') });
-  try { await applyProjectExport(p); toast(t('projectImported'), 'ok'); }
+  // A pending delete is committed before the snapshot, so neither the snapshot nor the import races its deferred storeDel.
+  flushDeleted();
+  try { await takeSnapshot('import'); await applyProjectExport(p); toast(t('projectImported'), 'ok'); }
   catch (e) { fail(e); }
   finally { set({ busy: undefined }); }
 }
+
+// ================================================================== QoL batch D1
+// Card preflight, project snapshots, "New project" and comparing two firmware files. One section
+// (and one block of i18n keys at the end of each dictionary) so that it merges cleanly beside other work.
+
+// ------------------------------------------------------------------ card preflight
+/**
+ * @decision DEC-QOLD1-PREFLIGHT-001
+ * @title Check space and presence of a card with a fresh volume list before any write to it
+ * @status accepted
+ * @rationale A full card used to fail mid-write (after the old firmware was moved aside). The
+ *   check runs in firmwareToCard (every card write: a build, a stock copy, writeCopy) with the exact
+ *   size, and once earlier with the source size so that a hopeless card is refused before the
+ *   build and, in writeCopy, before the copy is read. The cached `state.volumes` can be minutes old, so the host is asked
+ *   again. A card needs the file plus 1 MiB of margin (the file system's own bookkeeping); moves
+ *   into `GRMOD\parked-*` are renames on the same volume and need nothing. Folder exports never
+ *   reach this. Volume carries no read-only flag on any platform (shell/internal/platform), so a
+ *   write-protected card cannot be seen beforehand: the host's write error (EROFS / "write
+ *   protected" / permission denied, code `io`; `forbidden` for the rest) is mapped to a
+ *   write-protect hint after the fact by errorHint(). A volume that reports no size at all is not checked.
+ */
+export const CARD_MARGIN = 1 << 20;
+/** True when `v` is still mounted and has room for `need` bytes; otherwise toasts why (needed vs free) and returns false. */
+export async function preflightCard(v: Volume, need: number): Promise<boolean> {
+  let volumes: Volume[];
+  try { volumes = await host.volumes(state.showAll); }
+  catch (e) { fail(e); return false; }
+  const fresh = volumes.find((x) => x.id === v.id);
+  if (JSON.stringify(volumes) !== JSON.stringify(state.volumes)) set({ volumes });
+  if (!fresh) { toast(t('preflightGone', { c: v.id }), 'error'); void refreshVolumes(); return false; }
+  if (fresh.total === 0 && fresh.free === 0) return true;
+  if (fresh.free < need + CARD_MARGIN) { toast(t('preflightSpace', { c: fresh.id, need: fmtSize(need + CARD_MARGIN), free: fmtSize(fresh.free) }), 'error'); return false; }
+  return true;
+}
+
+// ------------------------------------------------------------------ project snapshots
+/**
+ * @decision DEC-QOLD1-SNAP-001
+ * @title Snapshots are project exports kept in the host store, newest 10, listed by a small index
+ * @status accepted
+ * @rationale A snapshot is exactly what buildProjectExport() makes, so restoring one is
+ *   applyProjectExport() (the import path, with its write-new-first ordering). Files: `snapshot-<ms>.json`
+ *   (key rules: lower case, at most 64 characters) and `snapshots.json` (the index: time, reason,
+ *   a content signature and counts for the dialog, so the list needs no big reads). Neither matches
+ *   PROJECT_FILE_RE, so they are never part of an export or touched by an import. A snapshot is
+ *   taken before an import, before New project, before a restore (so a restore can be undone) and
+ *   after a successful build; one identical to the newest (same signature) is skipped. The index is
+ *   written before the oldest files are deleted, so a crash leaves an orphan file, never an index
+ *   entry without data. All work is serialised, and a failure never blocks the action: it warns once
+ *   until a snapshot succeeds again.
+ */
+export type SnapshotReason = 'import' | 'new' | 'build' | 'restore';
+export interface SnapshotEntry { id: string; time: number; reason: SnapshotReason; sig: string; model: string; slots: number; extras: number; ratios: number; pictures: number }
+export const SNAPSHOT_KEEP = 10;
+const SNAP_INDEX = 'snapshots.json';
+const snapKey = (id: string): string => `snapshot-${id}.json`;
+/** FNV-1a over the content, to skip a snapshot that equals the newest. */
+function contentSig(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return `${s.length.toString(36)}-${h.toString(36)}`;
+}
+async function readSnapIndex(): Promise<SnapshotEntry[]> {
+  try {
+    const raw = await host.storeGet(SNAP_INDEX);
+    const j = raw ? JSON.parse(new TextDecoder().decode(raw)) : null;
+    const list: unknown = j && j.v === 1 ? j.entries : [];
+    return Array.isArray(list) ? (list as SnapshotEntry[]).filter((e) => e && typeof e.id === 'string' && /^[0-9]{1,16}$/.test(e.id) && typeof e.time === 'number') : [];
+  } catch { return []; }
+}
+/** What a project export holds, in numbers (the open camera's family: its edited slots, added slots, ratios and pictures). */
+function snapshotCounts(p: ProjectExport): Pick<SnapshotEntry, 'model' | 'slots' | 'extras' | 'ratios' | 'pictures'> {
+  const model: CameraModel = ['GR3', 'GR3_HDF', 'GR3X', 'GR3X_HDF', 'HDF', 'STANDARD', 'MONO'].includes(p.project.model) ? p.project.model : 'HDF';
+  const d: FamilyDoc = familyOf(model) === 'gr3' ? (p.projectGr3 ?? p.project) : p.project;
+  const edited = Object.values((d.slots ?? {}) as Record<string, { preset?: unknown; names?: Record<string, string>; icon?: { mode?: string } }>)
+    .filter((x) => x && (x.preset || Object.values(x.names ?? {}).some((n) => !!n) || (x.icon?.mode && x.icon.mode !== 'keep'))).length;
+  const n = (v: unknown): number => (Array.isArray(v) ? v.length : 0);
+  return { model, slots: edited, extras: n(d.extras), ratios: n(d.ratios), pictures: n(d.wall) };
+}
+let snapChain: Promise<unknown> = Promise.resolve();
+let snapWarned = false;
+/** Take a snapshot of the project now. Never throws; resolves to false (and warns once) when it could not be kept. */
+export function takeSnapshot(reason: SnapshotReason): Promise<boolean> {
+  const run = snapChain.then(async () => {
+    if (!host.available) return false;
+    try {
+      const p = await buildProjectExport();
+      const body = JSON.stringify(p);
+      const sig = contentSig(JSON.stringify({ project: p.project, projectGr3: p.projectGr3, files: p.files }));
+      const index = await readSnapIndex();
+      if (index.length && index[index.length - 1].sig === sig) return true;
+      let time = Date.now();
+      if (index.length && time <= index[index.length - 1].time) time = index[index.length - 1].time + 1;
+      const entry: SnapshotEntry = { id: String(time), time, reason, sig, ...snapshotCounts(p) };
+      await host.storeSet(snapKey(entry.id), body);
+      const all = [...index, entry].sort((a, b) => a.time - b.time);
+      const dropped = all.slice(0, Math.max(0, all.length - SNAPSHOT_KEEP)), kept = all.slice(dropped.length);
+      await host.storeSet(SNAP_INDEX, JSON.stringify({ v: 1, entries: kept }));
+      for (const d of dropped) await host.storeDel(snapKey(d.id)).catch(() => undefined);
+      snapWarned = false;
+      return true;
+    } catch (e) {
+      console.warn('snapshot', e);
+      if (!snapWarned) { snapWarned = true; toast(t('snapshotFailed'), 'info'); }
+      return false;
+    }
+  });
+  snapChain = run.catch(() => undefined);
+  return run;
+}
+/** The snapshots whose data is still in the store, newest first. */
+async function listSnapshots(): Promise<SnapshotEntry[]> {
+  const have = new Set((await host.storeList().catch(() => [])).map((k) => k.key));
+  return (await readSnapIndex()).filter((e) => have.has(snapKey(e.id))).sort((a, b) => b.time - a.time);
+}
+export function closeSnapshots(): void { set({ snapshotsView: undefined }); }
+/** The "Restore an earlier version…" dialog: reads the list. */
+export async function openSnapshots(): Promise<void> {
+  if (!host.available || state.busy) return;
+  set({ snapshotsView: { entries: [], busy: true } });
+  const entries = await listSnapshots();
+  if (state.snapshotsView) set({ snapshotsView: { entries, busy: false } });
+}
+/** Restore snapshot `id` through the import path, after a confirm; the current state is snapshotted first so that this can be undone. */
+export async function restoreSnapshot(id: string): Promise<void> {
+  if (!host.available || state.busy) return;
+  const entry = (state.snapshotsView?.entries ?? []).find((e) => e.id === id);
+  let p: ProjectExport;
+  try {
+    const raw = await host.storeGet(snapKey(id));
+    if (!raw) throw bad('snapshot missing');
+    p = parseProjectExport(new TextDecoder().decode(raw));
+  } catch (e) { console.warn('snapshot unreadable', e); toast(t('snapshotMissing'), 'error'); void openSnapshots(); return; }
+  const when = new Date(entry?.time ?? Number(id)).toLocaleString();
+  closeSnapshots();
+  if (!(await ask(t('snapshotRestoreTitle'), [`${when} · ${t(('snapshotReason_' + (entry?.reason ?? 'build')) as Key)}`, snapshotSummary(entry ?? { ...snapshotCounts(p) })], t('snapshotRestoreOk'), t('snapshotRestoreWarn')))) return;
+  set({ busy: t('projectWorking') });
+  try {
+    // The version being restored is already in memory (`p`): the snapshot below may prune it from the store when the list is full.
+    await takeSnapshot('restore');
+    flushDeleted();
+    await applyProjectExport(p);
+    toast(t('snapshotRestored'), 'ok');
+  } catch (e) { fail(e); }
+  finally { set({ busy: undefined }); }
+}
+/** "GR IV HDF · 3 slots · 2 added slots · 1 ratio" for the dialog's rows. */
+export function snapshotSummary(e: Pick<SnapshotEntry, 'model' | 'slots' | 'extras' | 'ratios' | 'pictures'>): string {
+  return [e.model, t('snapshotSlots', { n: e.slots }), t('snapshotExtras', { n: e.extras }), t('snapshotRatios', { n: e.ratios }), ...(e.pictures ? [t('snapshotPictures', { n: e.pictures })] : [])].join(' · ');
+}
+
+// ------------------------------------------------------------------ New project
+/**
+ * @decision DEC-QOLD1-NEW-001
+ * @title New project resets the open camera family's work only, after a snapshot
+ * @status accepted
+ * @rationale Slots, added slots, look order, ratios, power-off pictures and the switches live in
+ *   one FamilyDoc per family (GR IV; GR III / IIIx). The reset is enterFamily() on an empty doc
+ *   (the same path as switching camera), so emptySlots() and parseFamily() define "fresh". Kept:
+ *   the open official firmware, the preset library (`lib-*`), the other family's doc, and the
+ *   app settings (uiLang, camera language, model, tours seen, preview choices). The new doc is saved
+ *   before this family's files (`preset-*` or `gr3-preset-*`, and the `wall-*` pictures its doc
+ *   named) are deleted, so a crash never leaves a doc pointing at missing files. The preview
+ *   photo is a setting, not work, and stays.
+ */
+export async function newProject(): Promise<void> {
+  if (!host.available || state.busy) return;
+  if (!(await ask(t('newProjectTitle'), [t('newProjectLine')], t('newProjectOk'), t('newProjectWarn')))) return;
+  set({ busy: t('projectWorking') });
+  try {
+    await takeSnapshot('new');
+    flushDeleted();
+    const fam = familyOf(state.model);
+    const doc = currentFamilyDoc();
+    const wallIds = (Array.isArray(doc.wall) ? doc.wall : []).map((w: { id: string }) => String(w.id));
+    familyDocs[fam] = null; familyLoading = false; ++familyGen;
+    enterFamily(fam);
+    set({ compareWith: 'orig' });
+    clearTimeout(saveTimer);
+    await saveProject();
+    const prefix = fam === 'gr3' ? 'gr3-preset-' : 'preset-';
+    const stale = (await host.storeList()).map((k) => k.key).filter((k) => (k.startsWith(prefix) && PROJECT_FILE_RE.test(k)) || (k.startsWith('wall-') && wallIds.includes(k.slice(5))));
+    for (const k of stale) await host.storeDel(k).catch(() => undefined);
+    toast(t('newProjectDone'), 'ok');
+  } catch (e) { fail(e); }
+  finally { set({ busy: undefined }); }
+}
+
+// ------------------------------------------------------------------ compare two firmware files
+/**
+ * @decision DEC-QOLD1-COMPARE-001
+ * @title The second file is inspected the same way, against the same open official firmware
+ * @status accepted
+ * @rationale engine.inspect reports each file relative to the open official firmware, so two
+ *   summaries are comparable row by row without a second reference. The comparison itself (compare.ts)
+ *   is a pure function of the two summaries; the dialog only lays it out. Single-file inspect is
+ *   unchanged: `other` is simply absent until a second file is chosen, and choosing a new first file clears it.
+ */
+export async function inspectCompare(file: File): Promise<void> {
+  const v = state.inspectView; if (!v?.summary) return;
+  const gen = inspectGen;
+  const side = { name: file.name, size: file.size };
+  if (file.size < 1_000_000 || file.size > 200_000_000) { set({ inspectView: { ...v, other: { ...side, busy: false, error: 'size' } } }); return; }
+  set({ inspectView: { ...v, other: { ...side, busy: true } } });
+  const put = (other: NonNullable<InspectView['other']>): void => { if (gen === inspectGen && state.inspectView) set({ inspectView: { ...state.inspectView, other } }); };
+  try { put({ ...side, busy: false, summary: await engine.inspect(new Uint8Array(await file.arrayBuffer())) }); }
+  catch (e) { console.warn('inspect compare', e); put({ ...side, busy: false, error: 'unreadable' }); }
+}
+export function closeCompare(): void { const v = state.inspectView; if (v?.other) set({ inspectView: { ...v, other: undefined } }); }
