@@ -16,10 +16,12 @@ vi.mock('../../ui/src/host', () => ({ host: mocks.host, HostError: class extends
 vi.mock('../../ui/src/pixels', () => ({ ensureIconFont: vi.fn() }));
 vi.mock('../../ui/src/preview', () => ({ decodePreview: vi.fn() }));
 
+const local = new Map(), session = new Map();
 const enc = (s) => new TextEncoder().encode(s);
 const dec = (b) => new TextDecoder().decode(b);
 let store, i18n, EngineError, HostError;
 beforeEach(async () => {
+  local.clear(); session.clear();
   vi.resetModules(); vi.clearAllMocks(); vi.useFakeTimers();
   mocks.files.clear();
   mocks.host.available = true;
@@ -31,6 +33,9 @@ beforeEach(async () => {
   mocks.host.sidecar.mockResolvedValue(null);
   mocks.engine.heartbeat.mockResolvedValue(true);
   vi.stubGlobal('document', { hidden: true });
+  // the page's storage (the app language lives in localStorage; sessionStorage guards the one-off adoption reload); kept across vi.resetModules() like a restart
+  const storageOf = (m) => ({ getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => { m.set(k, String(v)); }, removeItem: (k) => { m.delete(k); } });
+  vi.stubGlobal("localStorage", storageOf(local)); vi.stubGlobal("sessionStorage", storageOf(session));
   store = await import('../../ui/src/store');
   i18n = await import('../../ui/src/i18n');
   ({ EngineError } = await import('../../ui/src/engine'));
@@ -83,49 +88,65 @@ describe('plain-language error hints', () => {
   });
 });
 
-describe('app UI language', () => {
-  it('switches t() output live, persists in project.json and is restored by init()', async () => {
-    store.setUiLanguage('en');
-    expect(i18n.t('projectExport')).toBe('Export project…');
-    store.setUiLanguage('zh');
-    expect(i18n.t('projectExport')).toBe('导出项目…');
-    expect(store.getState().uiLang).toBe('zh');
-    await store.init(); store.setUiLanguage('en'); await save();
-    expect(JSON.parse(dec(mocks.files.get('project.json'))).uiLang).toBe('en');
-    vi.resetModules();
-    const s2 = await import('../../ui/src/store'); const i2 = await import('../../ui/src/i18n');
-    await s2.init();
-    expect(s2.getState().uiLang).toBe('en');
-    expect(i2.t('uiLangTitle')).toBe('Interface language');
+describe('app language (one setting; the camera menu language follows it)', () => {
+  const fresh = async () => { vi.resetModules(); const s = await import('../../ui/src/store'); const i = await import('../../ui/src/i18n'); return { s, i }; };
+  const system = (...languages) => vi.stubGlobal('navigator', { language: languages[0], languages });
+  it('a fresh install is English for the app and the camera, whatever the system language', async () => {
+    system('zh-CN');
+    const { s, i } = await fresh();
+    expect(i.uiLangPref()).toBe('en');
+    expect(i.t('projectExport')).toBe('Export project…');
+    expect(i.uiLangCode()).toBe('en');
+    expect(s.getState().lang).toBe('en'); expect(s.getState().langAuto).toBe(false);
+    mocks.files.set('project.json', enc(JSON.stringify({ v: 1, model: 'HDF', lang: 'zh-CN' }))); // an old project: its camera language is not the setting
+    await s.init();
+    expect(s.getState().lang).toBe('en');
   });
-  it('the interface starts in English, whatever the system language, and an old project without uiLang stays English', async () => {
-    vi.stubGlobal('navigator', { language: 'zh-CN' });
-    vi.resetModules(); let s2 = await import('../../ui/src/store'); let i2 = await import('../../ui/src/i18n');
-    expect(s2.getState().uiLang).toBe('en');
-    expect(i2.t('projectExport')).toBe('Export project…');
-    mocks.files.set('project.json', enc(JSON.stringify({ v: 1, model: 'HDF', lang: 'en' })));
-    await s2.init();
-    expect(s2.getState().uiLang).toBe('en');
-    expect(i2.t('projectExport')).toBe('Export project…');
-    mocks.files.set('project.json', enc(JSON.stringify({ v: 1, model: 'HDF', uiLang: 'xx' })));
-    vi.resetModules(); s2 = await import('../../ui/src/store'); i2 = await import('../../ui/src/i18n'); await s2.init();
-    expect(s2.getState().uiLang).toBe('en');
-    // 'auto' stays available and follows the system
-    s2.setUiLanguage('auto');
-    expect(i2.t('projectExport')).toBe('导出项目…');
-    expect(i2.uiLangCode()).toBe('zh');
-    vi.unstubAllGlobals(); vi.stubGlobal('document', { hidden: true });
-  });
-  it('the camera menu language starts on English; a saved one is kept, an unknown one falls back to English', async () => {
-    expect(store.getState().lang).toBe('en');
+  it('简体中文 switches the app and gives zh-CN camera names; it is saved in the project and kept across a restart', async () => {
     await store.init();
-    expect(store.getState().lang).toBe('en');
-    mocks.files.set('project.json', enc(JSON.stringify({ v: 1, model: 'HDF', lang: 'zh-CN' })));
-    vi.resetModules(); let s2 = await import('../../ui/src/store'); await s2.init();
-    expect(s2.getState().lang).toBe('zh-CN');
-    mocks.files.set('project.json', enc(JSON.stringify({ v: 1, model: 'HDF', lang: 'xx' })));
-    vi.resetModules(); s2 = await import('../../ui/src/store'); await s2.init();
-    expect(s2.getState().lang).toBe('en');
+    await store.setAppLanguage('zh');
+    expect(JSON.parse(dec(mocks.files.get('project.json'))).uiLang).toBe('zh');
+    expect(local.get('grmod.uiLang')).toBe('zh');
+    const { s, i } = await fresh(); // the restart: the page reloads in the new language
+    expect(i.t('projectExport')).toBe('导出项目…'); expect(i.uiLangCode()).toBe('zh');
+    await s.init();
+    expect(s.getState().lang).toBe('zh-CN');
+    await s.setAppLanguage('en');
+    const r2 = await fresh(); await r2.s.init();
+    expect(r2.i.t('projectExport')).toBe('Export project…'); expect(r2.s.getState().lang).toBe('en');
+  });
+  it('Follow system follows the system for both: Chinese system, a language the camera has, one it does not', async () => {
+    await store.init(); await store.setAppLanguage('');
+    expect(local.get('grmod.uiLang')).toBe('auto');
+    expect(JSON.parse(dec(mocks.files.get('project.json'))).uiLang).toBe('');
+    system('zh-TW', 'en');
+    let r = await fresh(); await r.s.init();
+    expect(r.i.uiLangCode()).toBe('zh'); expect(r.s.getState().lang).toBe('zh-TW'); expect(r.s.getState().langAuto).toBe(true);
+    system('fr-FR', 'en');
+    r = await fresh(); await r.s.init();
+    expect(r.i.uiLangCode()).toBe('en'); expect(r.s.getState().lang).toBe('fr'); // the app has no French: English; the camera has
+    system('xx-YY');
+    r = await fresh(); await r.s.init();
+    expect(r.s.getState().lang).toBe('en');
+  });
+  it('a saved language the page has lost (storage cleared) is taken back once; the fork\'s earlier "auto" means follow system', async () => {
+    mocks.files.set('project.json', enc(JSON.stringify({ v: 1, model: 'HDF', uiLang: 'zh' })));
+    await store.init();
+    expect(local.get('grmod.uiLang')).toBe('zh'); // the page would reload in it
+    expect(store.getState().lang).toBe('zh-CN');
+    local.clear(); session.clear(); system('de-DE');
+    mocks.files.set('project.json', enc(JSON.stringify({ v: 1, model: 'HDF', uiLang: 'auto' })));
+    const { s } = await fresh(); await s.init();
+    expect(local.get('grmod.uiLang')).toBe('auto'); expect(s.getState().lang).toBe('de');
+  });
+  it('the production sequence: switch, restart, import a project saved in the other language', async () => {
+    await store.init(); await store.setAppLanguage('zh');
+    const { s, i } = await fresh(); await s.init();
+    const p = await s.buildProjectExport();
+    expect(p.project.uiLang).toBe('zh');
+    await s.applyProjectExport({ ...p, project: { ...p.project, uiLang: 'en', lang: 'ja' } });
+    expect(i.uiLangCode()).toBe('zh'); expect(s.getState().lang).toBe('zh-CN'); expect(local.get('grmod.uiLang')).toBe('zh');
+    expect(JSON.parse(dec(mocks.files.get('project.json'))).uiLang).toBe('zh');
   });
 });
 

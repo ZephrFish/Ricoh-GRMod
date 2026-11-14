@@ -15,10 +15,12 @@ vi.mock('../../ui/src/host', () => ({ host: mocks.host, HostError: class extends
 vi.mock('../../ui/src/pixels', () => ({ ensureIconFont: vi.fn() }));
 vi.mock('../../ui/src/preview', () => ({ decodePreview: vi.fn() }));
 
+const local = new Map(), session = new Map();
 const enc = (s) => new TextEncoder().encode(s);
 const dec = (b) => new TextDecoder().decode(b);
 let store, i18n;
 beforeEach(async () => {
+  local.clear(); session.clear();
   vi.resetModules(); vi.clearAllMocks(); vi.useFakeTimers();
   mocks.files.clear();
   mocks.host.available = true;
@@ -30,6 +32,9 @@ beforeEach(async () => {
   mocks.engine.heartbeat.mockResolvedValue(true);
   mocks.engine.ratio.mockImplementation(async (ratio) => ({ label: ratio, actual: ratio, sizes: [[6000, 4000]] }));
   vi.stubGlobal('document', { hidden: true });
+  // the page's storage (the app language lives in localStorage; sessionStorage guards the one-off adoption reload); kept across vi.resetModules() like a restart
+  const storageOf = (m) => ({ getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => { m.set(k, String(v)); }, removeItem: (k) => { m.delete(k); } });
+  vi.stubGlobal("localStorage", storageOf(local)); vi.stubGlobal("sessionStorage", storageOf(session));
   store = await import('../../ui/src/store');
   i18n = await import('../../ui/src/i18n');
   vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -149,20 +154,21 @@ describe('project file: compareWith and the interface language', () => {
     await doImport(store, JSON.stringify(p));
     expect(store.getState().compareWith).toBe('CG');
   });
-  it('import keeps the current interface language; startup still restores the saved one', async () => {
+  it('import keeps the current app language; startup still restores the saved one', async () => {
     await store.init();
-    expect(store.getState().uiLang).toBe('en');
-    await doImport(store, projectText({ uiLang: 'zh' }));
-    expect(store.getState().uiLang).toBe('en');
+    expect(local.get('grmod.uiLang') ?? 'en').toBe('en');
+    await doImport(store, projectText({ uiLang: 'zh', lang: 'ja' }));
+    expect(local.get('grmod.uiLang') ?? 'en').toBe('en'); expect(store.getState().lang).toBe('en');
     expect(JSON.parse(dec(mocks.files.get('project.json'))).uiLang).toBe('en'); // not left as the file's for the next start
     mocks.files.set('project.json', enc(JSON.stringify({ v: 1, model: 'HDF', lang: 'en', uiLang: 'zh' })));
     vi.resetModules(); const s2 = await import('../../ui/src/store'); await s2.init();
-    expect(s2.getState().uiLang).toBe('zh');
+    expect(local.get('grmod.uiLang')).toBe('zh'); expect(s2.getState().lang).toBe('zh-CN');
   });
 });
 
 describe('export and import wording', () => {
   it('counts attached files in plain words, in both languages; the confirm button is "Import"', async () => {
+    local.set('grmod.uiLang', 'zh'); vi.resetModules(); const zhI18n = await import('../../ui/src/i18n'); // the app reloaded in Chinese
     await store.init();
     vi.stubGlobal('URL', { createObjectURL: () => 'blob:x', revokeObjectURL: () => {} });
     const a = { click: vi.fn(), remove: vi.fn() };
@@ -179,8 +185,7 @@ describe('export and import wording', () => {
     const done = store.importProject(new File([projectText()], 'p.json')); await flush();
     expect(store.getState().confirm.ok).toBe('Import');
     store.answerConfirm(false); await done;
-    i18n.setUiLang('zh');
-    expect(i18n.t('projectExported', { n: 3 })).toBe('项目已导出（含 3 个附属文件）');
-    expect(i18n.t('projectImportOk')).toBe('导入');
+    expect(zhI18n.t('projectExported', { n: 3 })).toBe('项目已导出（含 3 个附属文件）');
+    expect(zhI18n.t('projectImportOk')).toBe('导入');
   });
 });

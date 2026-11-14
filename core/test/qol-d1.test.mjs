@@ -25,17 +25,19 @@ const info = () => ({
 });
 const MB = 1 << 20;
 const card = (free) => ({ id: 'E:', root: '/card', label: 'CARD', fs: 'FAT32', total: 64 * 1024 * MB, free, removable: true, bus: 'USB' });
+const local = new Map(), session = new Map();
 let store, mem;
 const stored = () => [...mem.keys()];
 const snapIndex = () => JSON.parse(mem.get('snapshots.json') ?? '{"entries":[]}').entries;
 beforeEach(async () => {
+  local.clear(); session.clear();
   vi.resetModules(); vi.clearAllMocks(); vi.useFakeTimers();
   mem = new Map();
   mocks.host.available = true;
   mocks.engine.open.mockReset().mockResolvedValue(info());
   mocks.engine.ratio.mockImplementation(async ratio => ({ label: ratio, actual: ratio, sizes: [[6000, 4000]] }));
   mocks.engine.build.mockResolvedValue({ file: new Uint8Array([9, 2]), checks: { integrity: true } });
-  const enc = (d) => (typeof d === 'string' ? new TextEncoder().encode(d) : d);
+const enc = (d) => (typeof d === 'string' ? new TextEncoder().encode(d) : d);
   mocks.host.storeGet.mockImplementation(async (k) => (mem.has(k) ? mem.get(k) : null));
   mocks.host.storeSet.mockImplementation(async (k, d) => { mem.set(k, typeof d === 'string' ? d : new TextDecoder().decode(d)); });
   mocks.host.storeDel.mockImplementation(async (k) => { mem.delete(k); });
@@ -46,6 +48,9 @@ beforeEach(async () => {
   mocks.host.list.mockResolvedValue([]); mocks.host.move.mockResolvedValue();
   mocks.host.volumes.mockResolvedValue([card(8 * 1024 * MB)]);
   vi.stubGlobal('document', { hidden: true });
+  // the page's storage (the app language lives in localStorage; sessionStorage guards the one-off adoption reload); kept across vi.resetModules() like a restart
+  const storageOf = (m) => ({ getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => { m.set(k, String(v)); }, removeItem: (k) => { m.delete(k); } });
+  vi.stubGlobal("localStorage", storageOf(local)); vi.stubGlobal("sessionStorage", storageOf(session));
   store = await import('../../ui/src/store');
 });
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -185,8 +190,8 @@ describe('New project', () => {
     const doc = (extra = {}) => ({ v: 1, ratios: [{ id: 'r1', ratio: '4:3', name: '' }, { id: 'r2', ratio: '16:9', name: '' }], ...extra });
     await store.applyProjectExport({ format: 'grmod-project', formatVersion: 1, appVersion: '1', exported: '', files: {}, project: doc({ model: 'GR3X_HDF', uiLang: 'zh', lang: 'ja', tours: ['overview'], toursV: 2 }), projectGr3: doc() });
     expect(store.getState().ratios).toHaveLength(2);
-    // an import keeps the current interface language (review fix #9), so the user picks zh here
-    store.setUiLanguage('zh');
+    // an import keeps the current app language (review fix #9), so the user picks zh here
+    await store.setAppLanguage('zh');
     mem.set('library.json', '{"v":1,"entries":[]}'); mem.set('lib-a', 'x');
     mem.set('gr3-preset-cy', '<xmp/>'); mem.set('preset-cy', '<other-family/>'); mem.set('preview.jpg', 'photo');
     const before = mem.get('project.json');
@@ -194,7 +199,7 @@ describe('New project', () => {
     await confirmed(store.newProject());
     const s = store.getState();
     expect(s.ratios).toEqual([]); expect(s.soft).toBe(false); expect(s.extras).toEqual([]);
-    expect(s.uiLang).toBe('zh'); expect(s.lang).toBe('ja'); expect(s.model).toBe('GR3X_HDF'); expect(s.toursSeen).toEqual(['overview']);
+    expect(local.get('grmod.uiLang')).toBe('zh'); expect(s.lang).toBe('en'); // the camera language changes with the page's reload, not live expect(s.model).toBe('GR3X_HDF'); expect(s.toursSeen).toEqual(['overview']);
     expect(snapIndex().map((e) => e.reason)).toEqual(['new']);
     expect(snapIndex()[0]).toMatchObject({ ratios: 2 });
     // files: this family's preset gone, everything else kept

@@ -75,7 +75,7 @@ const zh = {
   tOvWelcomeT: '欢迎使用 GR Mod', tOvWelcomeB: '本应用程序可为理光 GR IV 和 GR III / GR IIIx 增加影像控制预设、自定义长宽比和结束画面等功能。',
   tOvCardT: '存储卡', tOvCardB: '首次写入固件前，请先使用照相机格式化存储卡。',
   tOvFirmwareT: '固件', tOvFirmwareB: '可从理光官方网站获取固件。选择正确的机型和固件版本后，单击[在线下载]；也可将已下载的固件拖入窗口。新版（1.20）和旧版（1.11）固件均可使用。照相机安装新版固件后，无法恢复至旧版。',
-  tOvLangT: '照相机语言', tOvLangB: '选择照相机菜单的显示语言。影像控制中更改的名称将应用于此语言。',
+  tOvLangT: '界面语言', tOvLangB: '选择 GR Mod 的显示语言。影像控制中更改的名称将应用于照相机菜单的同一语言；跟随系统时，使用与系统相同的照相机语言。',
   tOvIcT: '影像控制', tOvIcB: '可将 .xmp / .cube（基于 sRGB / Rec.709）预设导入照相机，并更改名称和图标。可将自定义预设用于 Cinema (Yellow) / Cinema (Green) 槽位；未导入预设时，恢复为照相机对应槽位的原厂预设。',
   tOvRatioT: '长宽比', tOvRatioB: '可在四个原厂比例之外新增自定义遮幅比例。',
   tOvCombineT: '一并写入', tOvCombineB: '影像控制和长宽比页面中的更改可写入同一固件。分别完成更改后，在任一页面写入存储卡即可；此前的更改将保留。',
@@ -151,7 +151,17 @@ const zh = {
   lookOrderGr3Note: 'GR III：影片的影像控制列表原本不包含软单色和 HDR 色调。正在使用的风格被隐藏时，照相机将改用[标准]；自定义 1 / 2 中保存的风格不变。', lookOrderHiddenTag: '已隐藏', lookOrderMono: '单色', lookOrderCount: '{n} 个隐藏',
   icViews: '影像控制页面', icViewSlots: '影像控制', icViewOrder: '菜单顺序', lookOrderShown: '{n} 个显示', lookOrderMoved: '{name} 移至第 {n} 位', lookOrderDrag: '拖动以调整顺序',
   tIcViewsT: '槽位与菜单顺序', tIcViewsB: '[影像控制]用于设定各槽位；[菜单顺序]用于调整照相机影像控制菜单中 look 的顺序，也可隐藏不用的 look。',
-  tIcSoftT: '附加功能', tIcSoftB: '柔焦：开启后，可将[柔焦]添加至 ADJ 快捷菜单，提供关闭、弱、中、强四档。效果无法在实时显示中预览，可与 HDF 滤光镜同时使用；照相机固件 1.20 也可在[拍摄菜单] › [影像处理设定] › [柔焦]中设定。 \n 拍摄时间戳：在照片右下角打印日期（竖拍照片同样按观看时的右下角定位；关闭菜单中的[跟随照相机方向]后，按横向位置打印）。安装固件后默认为关闭，可在[拍摄辅助] › [拍摄时间戳]中开启，并选择两种样式。 \n 黑白风格：解锁 GR IV Monochrome 机型的 6 个黑白风格；照相机固件 1.20 还包括[中途曝光效果]。 \n HLG 照片：将[HDR 色调]改造为机内直出 BT.2100 HLG HDR 照片（Rec.2020 + CICP），不能与 HDR 增益图同时使用。 \n 直闪模式：闪光灯以固定功率闪光时，照相机根据对焦距离和输入的闪光灯 GN 值设定曝光。 \n 曝光预览开关（固件 1.20）：在[拍摄菜单] › [曝光设定] › [曝光预览]或 ADJ 中，选择实时显示是否随曝光设定改变亮度（开启 / 直闪模式时关闭 / 始终关闭）。',
+  tIcSoftT: '附加功能', tIcSoftB: '以下是 GR Mod 为照相机新增的功能。开启的功能将与其他更改一并写入固件；接下来逐项介绍。',
+  tIcFSoftB: '开启后，可将[柔焦]添加至 ADJ 快捷菜单，提供关闭、弱、中、强四档。效果无法在实时显示中预览，可与 HDF 滤光镜同时使用；照相机固件 1.20 也可在[拍摄菜单] › [影像处理设定] › [柔焦]中设定。',
+  tIcFSoftBG3: '开启后，拍摄的照片直接获得柔光滤光镜效果。效果无法在实时显示中预览。',
+  tIcFDateB: '在照片右下角打印日期（竖拍照片同样按观看时的右下角定位；关闭菜单中的[跟随照相机方向]后，按横向位置打印）。安装固件后默认为关闭，可在[拍摄辅助] › [拍摄时间戳]中开启，并选择两种样式。',
+  tIcFMonoB: '解锁 GR IV Monochrome 机型的 6 个黑白风格；照相机固件 1.20 还包括[中途曝光效果]。',
+  tIcFFlashB: '闪光灯以固定功率闪光时，照相机根据对焦距离和输入的闪光灯 GN 值设定曝光。',
+  tIcFHdrB: '在 JPEG 中写入 HDR 增益图，在支持 HDR 的显示屏上查看时，高光部分更亮。可在[拍摄菜单] › [HDR]中开启或关闭。',
+  tIcFPreviewB: '照相机固件 1.20：在[拍摄菜单] › [曝光设定] › [曝光预览]或 ADJ 中，选择实时显示是否随曝光设定改变亮度（开启 / 直闪模式时关闭 / 始终关闭）。',
+  tIcFAdjB: '将 ADJ 拨杆的栏目增加至所选数量，并可在照相机的[自定义设定] › [ADJ 模式设定]中设定每个栏目的功能。',
+  tIcFBrightB: '照相机的户外显示设定为自动时，提高显示屏在室内光线下的亮度：[稍亮]适度提高，[最亮]进一步提高；最高亮度不变。',
+  followSystem: '跟随系统', uiLanguage: '界面语言',
   // QoL wave A: save warning, error hints, project export / import, app language
   saveFailed: '项目没有保存成功，关闭程序后改动可能丢失。请检查磁盘空间和权限',
   hintFirmware: '固件文件不对、已损坏或不受支持，请使用官方原始固件', hintUnsupportedHere: '这台相机的固件不支持该功能',
@@ -159,10 +169,9 @@ const zh = {
   hintTooMany: '添加的比例或图片超过上限，请减少一些', hintCardFull: '存储卡或磁盘已满，请腾出空间后重试',
   hintRemoved: '存储卡或磁盘已断开或未就绪，请重新插入后重试', hintNotFound: '找不到文件，它可能已被移动，或存储卡已拔出',
   hintDenied: '没有权限访问该位置，请换一个文件夹，或检查存储卡是否写保护', hintOffline: '连不上 GR Mod 程序，请关闭窗口后重新打开',
-  projectMenu: '项目与语言', projectExport: '导出项目…', projectImport: '导入项目…', projectWorking: '正在处理项目…',
+  projectMenu: '项目', projectExport: '导出项目…', projectImport: '导入项目…', projectWorking: '正在处理项目…',
   projectExported: '项目已导出（含 {n} 个附属文件）', projectExported1: '项目已导出（含 1 个附属文件）', projectExported0: '项目已导出', projectImportOk: '导入', projectImported: '项目已导入', projectBad: '这不是有效的 GR Mod 项目文件', projectTooNew: '这个项目文件来自更新的 GR Mod，请先更新',
   projectImportTitle: '导入项目', projectImportLine: '文件来自 GR Mod {v}，含 {n} 个附属文件', projectImportWarn: '当前项目（影像控制、比例、关机画面和设置）将被替换。官方固件不受影响',
-  uiLangTitle: '界面语言', uiLangAuto: '跟随系统', uiLangZh: '中文', uiLangEn: 'English',
   // QoL wave B
   undo: '撤销', undoExtra: '已删除新增槽位', undoWall: '已移除关机画面', undoRatio: '已移除长宽比', undoGone: '这次删除已无法撤销', undoFull: '已达上限，无法撤销',
   inspectFw: '查看固件文件…', inspectTitle: '查看固件文件', inspectDrop: '拖入或选择任意 .bin 固件', inspectAgain: '换一个文件', inspectRef: '对照的官方固件', inspectKind: '类型', inspectVerified: '校验', inspectChanged: '改动字节', inspectFeatures: '功能', inspectNone: '无',
@@ -268,7 +277,7 @@ const en: typeof zh = {
   tOvWelcomeT: 'Welcome to GR Mod', tOvWelcomeB: 'This app brings owners of the Ricoh GR IV and GR III / GR IIIx more Image Control presets, adjustable aspect ratios and custom power-off images.',
   tOvCardT: 'Memory card', tOvCardB: 'Before writing firmware for the first time, format the card once in the camera.',
   tOvFirmwareT: 'Firmware', tOvFirmwareB: 'The firmware can be fetched from the official source: choose the right model and version and press Download. A firmware file you already downloaded can also be dropped on the window. Both the new (1.20) and the earlier firmware (1.11) can be used; a camera that installs the new one cannot go back to the earlier one.',
-  tOvLangT: 'Camera language', tOvLangB: 'The language of the camera menu. Names changed under Image Control are for this language.',
+  tOvLangT: 'App language', tOvLangB: 'The language of GR Mod. Names changed under Image Control are for the same language of the camera menu; following the system, for the camera language matching the system\'s.',
   tOvIcT: 'Image Control', tOvIcB: 'Import .xmp / .cube presets (sRGB / Rec.709) into the camera; names and icons can be changed. (Your presets can replace the camera\'s Cinema (Yellow) / Cinema (Green) slots; a slot left without a preset goes back to the camera\'s own preset for it.)',
   tOvRatioT: 'Aspect ratio', tOvRatioB: 'Add custom aspect ratios next to the four factory ones.',
   tOvCombineT: 'Written together', tOvCombineB: 'What you set on the Image Control and Aspect ratio pages is written together: make the changes on each page, then write to the card from either page. Earlier changes are kept.',
@@ -344,7 +353,17 @@ const en: typeof zh = {
   lookOrderGr3Note: 'GR III: the movie Image Control list has no Soft Monotone and HDR Tone of its own. A hidden look in use becomes Standard; Custom 1 / 2 keep theirs.', lookOrderHiddenTag: 'hidden', lookOrderMono: 'mono', lookOrderCount: '{n} hidden',
   icViews: 'Image Control views', icViewSlots: 'Image Control', icViewOrder: 'Menu order', lookOrderShown: '{n} shown', lookOrderMoved: '{name} moved to position {n}', lookOrderDrag: 'Drag to reorder',
   tIcViewsT: 'Slots and menu order', tIcViewsB: '"Image Control" sets up the slots; "Menu order" arranges the looks of the camera\'s Image Control menu and hides the ones you do not use.',
-  tIcSoftT: 'Additions', tIcSoftB: 'Soft focus: adds "Soft Focus" to the ADJ lever, with off, low, medium and high. The effect cannot be seen in live view; it can be used together with the HDF filter. On camera firmware 1.20 it is also under Shooting › Image Process Settings › Soft Focus. \n Date imprint: prints the date in the bottom right corner of the photo (as it is viewed, also when shot upright; with "Follow Orientation" off in its menu, as stored). Off after flashing; turn it on under Shooting Assist › Date Imprint, two styles. \n B&W looks: unlocks the 6 black-and-white looks of the GR IV Monochrome, and on camera firmware 1.20 its Solarized Effect as well. \n HLG photo: turns "HDR Tone" into in-camera BT.2100 HLG HDR capture (Rec.2020 + CICP); it cannot be combined with the HDR gain map. \n Direct Flash: when the flash fires at a fixed power, Direct Flash sets the exposure from the focus distance and the flash\'s guide number you enter. \n Exposure preview switch (firmware 1.20): choose under Shooting › Exposure Settings › Exposure Preview or on the ADJ lever whether the live view gets brighter and darker with the exposure set (On / Off in Direct Flash / Always Off).',
+  tIcSoftT: 'Additions', tIcSoftB: 'Features GR Mod adds to the camera. Those switched on go into the firmware with the other changes; each one is introduced next.',
+  tIcFSoftB: 'Adds "Soft Focus" to the ADJ lever, with off, low, medium and high. The effect cannot be seen in live view; it can be used together with the HDF filter. On camera firmware 1.20 it is also under Shooting › Image Process Settings › Soft Focus.',
+  tIcFSoftBG3: 'Gives the photos a soft-focus filter look straight out of camera. The effect cannot be seen in live view.',
+  tIcFDateB: 'Prints the date in the bottom right corner of the photo (as it is viewed, also when shot upright; with "Follow Orientation" off in its menu, as stored). Off after flashing; turn it on under Shooting Assist › Date Imprint, two styles.',
+  tIcFMonoB: 'Unlocks the 6 black-and-white looks of the GR IV Monochrome, and on camera firmware 1.20 its Solarized Effect as well.',
+  tIcFFlashB: 'When the flash fires at a fixed power, Direct Flash sets the exposure from the focus distance and the flash\'s guide number you enter.',
+  tIcFHdrB: 'Writes an HDR gain map into the JPEGs, so the highlights show brighter on HDR screens. Switched on and off in the camera under Shooting › HDR.',
+  tIcFPreviewB: 'Camera firmware 1.20: choose under Shooting › Exposure Settings › Exposure Preview or on the ADJ lever whether the live view gets brighter and darker with the exposure set (On / Off in Direct Flash / Always Off).',
+  tIcFAdjB: 'Raises the number of items on the ADJ lever to the number chosen; what each one does is set in the camera under Customize Settings › ADJ Mode Setting.',
+  tIcFBrightB: 'With the camera\'s Outdoor View Setting on Auto, the screen is brighter in indoor light: Brighter a little, Brightest more; the highest brightness stays as it is.',
+  followSystem: 'Follow system', uiLanguage: 'App language',
   // QoL wave A: save warning, error hints, project export / import, app language
   saveFailed: 'The project could not be saved, so recent changes may be lost on exit. Check disk space and permissions',
   hintFirmware: 'The firmware file is wrong, damaged or unsupported. Use the original official firmware', hintUnsupportedHere: 'This camera\'s firmware does not support that feature',
@@ -352,10 +371,9 @@ const en: typeof zh = {
   hintTooMany: 'Too many added ratios or pictures. Remove some', hintCardFull: 'The card or disk is full. Free some space and try again',
   hintRemoved: 'The card or disk was removed or is not ready. Reinsert it and try again', hintNotFound: 'File not found. It may have been moved, or the card was removed',
   hintDenied: 'Permission denied. Pick another folder, or check that the card is not write-protected', hintOffline: 'Cannot reach the GR Mod program. Close this window and open it again',
-  projectMenu: 'Project and language', projectExport: 'Export project…', projectImport: 'Import project…', projectWorking: 'Working on the project…',
+  projectMenu: 'Project', projectExport: 'Export project…', projectImport: 'Import project…', projectWorking: 'Working on the project…',
   projectExported: 'Project exported ({n} attached files)', projectExported1: 'Project exported (1 attached file)', projectExported0: 'Project exported', projectImportOk: 'Import', projectImported: 'Project imported', projectBad: 'This is not a valid GR Mod project file', projectTooNew: 'This project file comes from a newer GR Mod. Update first',
   projectImportTitle: 'Import project', projectImportLine: 'File from GR Mod {v}, with {n} attached files', projectImportWarn: 'The current project (Image Control, ratios, power-off pictures and settings) will be replaced. The official firmware is not touched',
-  uiLangTitle: 'Interface language', uiLangAuto: 'Follow system', uiLangZh: '中文', uiLangEn: 'English',
   // QoL wave B
   undo: 'Undo', undoExtra: 'Added slot removed', undoWall: 'Power-off image removed', undoRatio: 'Aspect ratio removed', undoGone: 'That delete can no longer be undone', undoFull: 'Cannot undo: the list is full again',
   inspectFw: 'Inspect a firmware file…', inspectTitle: 'Inspect a firmware file', inspectDrop: 'Drop or choose any firmware .bin', inspectAgain: 'Choose another file', inspectRef: 'Compared with the open firmware', inspectKind: 'Type', inspectVerified: 'Verified', inspectChanged: 'Changed bytes', inspectFeatures: 'Features', inspectNone: 'none',
@@ -387,28 +405,33 @@ const en: typeof zh = {
 export type Key = keyof typeof zh;
 /**
  * @decision DEC-QOL-LANG-001
- * @title App UI language is a mutable dictionary plus a store field, switched live
+ * @title One app language (kept by the page, saved in the project); the camera menu language follows it
  * @status accepted
- * @rationale The dictionary used to be fixed at module load from navigator.language. `dict` is now
- *   reassigned by setUiLang(); the store mirrors the mode in `uiLang` and the root component
- *   subscribes to it, so every component (none is memoised) re-renders in the new language without a
- *   reload and without remounting (open dialogs and crop editors keep their state). This is the UI
- *   language, not the camera menu language (`lang` in the store).
- *   The default is English, not the browser language: a new or older project (no `uiLang` saved) and
- *   an unknown value start on English; 'auto' (follow the system, English when it is not Chinese) and
- *   中文 are opt-in from the menu.
+ * @rationale Supersedes the fork's earlier live-switching UiLangMode / setUiLang / state.uiLang. Upstream GR Mod 0.8.13
+ *   has ONE language setting: the preference lives in localStorage and in the saved project (`uiLang`), the camera
+ *   menu language follows it (store.ts cameraLang), and a change saves the work then reloads the page, so `dict` is a
+ *   constant and the store holds no language field (a smaller diff against upstream for later merges).
+ *   Fork default kept: with nothing stored the app and the camera are English, not the system's language ('auto' is
+ *   written to storage for an explicit "Follow system"; '' is its in-memory form). 简体中文 gives zh-CN camera names.
+ *   Project import and snapshot restore never change the language (store.ts applyProjectExport).
  */
-export type UiLangMode = 'auto' | 'zh' | 'en';
-const autoDict = (): typeof zh => ((typeof navigator !== 'undefined' && navigator.language) || 'en').toLowerCase().startsWith('zh') ? zh : en;
-let dict: typeof zh = en;
-export const normaliseUiLang = (v: unknown): UiLangMode => (v === 'zh' || v === 'auto' ? v : 'en');
-/** The language t() currently speaks, for code that formats text itself (release notes, credits). */
-export const uiLangCode = (): 'zh' | 'en' => (dict === zh ? 'zh' : 'en');
-/** Choose the UI language; 'auto' follows the browser. */
-export function setUiLang(mode: UiLangMode): void {
-  dict = mode === 'zh' ? zh : mode === 'en' ? en : autoDict();
-  if (typeof document !== 'undefined' && document.documentElement) document.documentElement.lang = dict === zh ? 'zh' : 'en';
+const UI_LANG_KEY = 'grmod.uiLang';
+/** The language the user picked: 'zh' | 'en', or '' for "follow system"; English when nothing was ever stored. */
+export function uiLangPref(): '' | 'zh' | 'en' {
+  try { const v = localStorage.getItem(UI_LANG_KEY); return v === 'zh' || v === 'en' ? v : v === 'auto' ? '' : 'en'; } catch { return 'en'; }
 }
+/** Stores the language ('' = follow system, kept as 'auto'); the page reloads in it unless `reload` is false (store.ts setAppLanguage saves the work first). */
+export function setUiLangPref(v: '' | 'zh' | 'en', reload = true): void {
+  try { localStorage.setItem(UI_LANG_KEY, v || 'auto'); } catch { /* not kept */ }
+  if (reload && typeof window !== 'undefined') window.setTimeout(() => window.location.reload(), 120);
+}
+const systemZh = ((typeof navigator !== 'undefined' && navigator.language) || 'en').toLowerCase().startsWith('zh');
+/** The interface language in use (fixed for the life of the page). */
+export const UI_LANG: 'zh' | 'en' = uiLangPref() || (systemZh ? 'zh' : 'en');
+const dict = UI_LANG === 'zh' ? zh : en;
+if (typeof document !== 'undefined' && document.documentElement) document.documentElement.lang = UI_LANG;
+/** The language t() speaks, for code that formats text itself (release notes, credits). */
+export const uiLangCode = (): 'zh' | 'en' => UI_LANG;
 export function t(key: Key, vars?: Record<string, string | number>): string {
   let s: string = dict[key] ?? key;
   if (vars) for (const k of Object.keys(vars)) s = s.split(`{${k}}`).join(String(vars[k]));
