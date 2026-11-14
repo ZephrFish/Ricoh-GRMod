@@ -150,8 +150,8 @@ describe('summary before export', () => {
     await flush();
     const c = store.getState().confirm;
     expect(c).toBeTruthy();
-    expect(c.lines.join('\n')).toContain('4:3');
-    expect(c.lines.join('\n')).toContain('16:9');
+    // 0.8.12's short form: the ratios as one line with their count, not by name
+    expect(c.lines).toContain('Added aspect ratios  ·  2');
     expect(c.lines.length).toBeGreaterThanOrEqual(2); // the ratios and the soft-focus switch
     store.answerConfirm(false); await pending;
     expect(mocks.engine.build).not.toHaveBeenCalled();
@@ -237,7 +237,7 @@ describe('keyboard shortcuts', () => {
     expect(store.getState().ratios.map(r => r.ratio)).toEqual(['4:3', '16:9']);
     expect(press('e', { metaKey: true }).taken).toBe(true);
     await flush();
-    expect(store.getState().confirm.lines.join('\n')).toContain('4:3');
+    expect(store.getState().confirm.lines).toContain('Added aspect ratios  ·  2');
     store.answerConfirm(true); await flush(); await flush();
     expect(mocks.engine.build).toHaveBeenCalledTimes(1);
   });
