@@ -44,7 +44,7 @@ Use only firmware intended for your camera model and a base version listed above
 - **Monochrome looks:** use supported GR IV Monochrome looks on colour GR IV models.
 - **Direct Flash:** use guide-number-based flash exposure on supported GR IV firmware.
 - **HDR gain maps:** create JPEGs with brighter highlights on compatible HDR displays.
-- **HLG HDR photo (this fork):** turn the factory HDR Tone look into in-camera BT.2100 HLG capture on GR IV firmware 1.20 and 1.11 (not 1.21 yet); it cannot be combined with the HDR gain map. See [`docs/HLG_PHOTO.md`](docs/HLG_PHOTO.md).
+- **HLG HDR photo (this fork):** turn the factory HDR Tone look into in-camera BT.2100 HLG capture on GR IV firmware 1.21, 1.20 and 1.11; it cannot be combined with the HDR gain map. The 1.21 version is an address port of the 1.20 one and has not yet been tried on a camera. See [`docs/HLG_PHOTO.md`](docs/HLG_PHOTO.md).
 - **More ADJ options:** add ADJ lever slots on supported GR IV firmware.
 - **Exposure preview and display options:** access additional preview and automatic screen-brightness settings on supported GR IV firmware.
 

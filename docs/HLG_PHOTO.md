@@ -1,7 +1,7 @@
 # BT.2100 HLG HDR Photo Mod for Ricoh GR IV
 
 > **Feature Branch**: `feat/hlg-photo`  
-> **Target Camera**: Ricoh GR IV / GR IV HDF (Firmware 1.11)  
+> **Target Camera**: Ricoh GR IV / GR IV HDF (Firmware 1.11, 1.20 and 1.21; the 1.20 and 1.21 programs are address ports of the 1.11 one: `core/src/fw/gr4v120/aspect/hlg.ts`, `core/src/fw/gr4v121/aspect/hlg.ts`)  
 > **Integrated Toolchain**: [Ricoh-GRMod](https://github.com/Maxwooow/Ricoh-GRMod)  
 > **Target Slot**: Image Control Slot 22 (`toneId = 22 = 0x16`, "HDR Tone" / HDR色调)
 

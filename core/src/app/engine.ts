@@ -84,7 +84,7 @@ export interface FirmwareInfo {
     hdrGainMap?: boolean;
     /** 0.8.11: exposure preview as a camera setting, and soft focus's still-menu line (GR IV 1.20). */
     exposurePreview?: boolean;
-    /** The fork's BT.2100 HLG photo mode on HDR Tone (GR IV 1.11 and 1.20: the programs that carry `installHlgPhoto`). */
+    /** The fork's BT.2100 HLG photo mode on HDR Tone (GR IV 1.11, 1.20 and 1.21: the programs that carry `installHlgPhoto`). */
     hlgPhoto?: boolean;
     /** GR III / IIIx: the most films a build can have (9; 20 on GR III 2.10, where
      * the number is chosen with BuildOptions.filmCount and Halation is set in the camera). */
@@ -524,9 +524,10 @@ export class Engine {
       // The 1.12 bridge firmware goes back to 1.11 only: no bridge for 1.20.
       capabilities: { build: true, presets: true, wallpaper: true, factoryEntry: true, bridge: !bridge && g4 === Gr4Program111, menuPictures: true, lookLayout: true },
       features: { softFocus: 'adj', dateStamp: true, monoUnlock: true, brightAuto: true, directFlash: true, maxAdjSlots: 8, hdrGainMap: true, ...(g4 !== Gr4Program111 ? { exposurePreview: true } : {}),
-        // @decision DEC-HLG-121-001: HLG is offered only by a program that has its code. The fork's HLG port
-        // covers 1.11 and 1.20; upstream's 1.21 port (fw/gr4v121, 0.8.14) was generated from a 1.20 without it,
-        // so on 1.21 the switch is hidden and buildFirmware refuses the option instead of building without it.
+        // @decision DEC-HLG-121-001: HLG is offered only by a program that has its code. Upstream's 1.21 port
+        // (fw/gr4v121, 0.8.15) was generated from a 1.20 without it; the fork ported it to 1.21 by address
+        // (DEC-HLG-121-002). A later program generated the same way hides the switch and buildFirmware refuses
+        // the option, instead of building without it, until HLG is ported to it too.
         ...(typeof (g4.aspect as { installHlgPhoto?: unknown }).installHlgPhoto === 'function' ? { hlgPhoto: true } : {}) },
       version: g4.FIRMWARE_VERSION,
       looks: { factory: [...g4.aspect.FACTORY_LOOK_IDS], extraFirst: g4.aspect.EXTRA_FIRST_STYLE, monoOnly: g4.aspect.FACTORY_LOOK_IDS.filter((n) => n >= 25) },

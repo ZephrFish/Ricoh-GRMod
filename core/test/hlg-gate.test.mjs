@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // @mock-exempt: engine worker, host bridge, pixels and preview are external boundaries (same pattern as gr3x-ui.test.mjs)
-// The fork's HLG photo mode exists only in the GR IV programs that carry its code (1.11 and 1.20).
-// Upstream 0.8.14 added a 1.21 program generated from a 1.20 without HLG: the engine must not offer
-// the feature there, and the UI must not send it (DEC-HLG-121-001 in core/src/app/engine.ts).
+// The fork's HLG photo mode is offered only by GR IV programs that carry its code (DEC-HLG-121-001 in
+// core/src/app/engine.ts). Upstream's 1.21 program came without it; the fork ported it (DEC-HLG-121-002 in
+// core/src/fw/gr4v121/aspect/hlg.ts), so every GR IV program has it now and the gate stays for any later port.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Gr4Program111 from '../src/fw';
 import * as Gr4Program120 from '../src/fw/gr4v120';
@@ -20,10 +20,14 @@ vi.mock('../../ui/src/preview', () => ({ decodePreview: vi.fn() }));
 const hasHlg = (program) => typeof program.aspect.installHlgPhoto === 'function';
 
 describe('HLG photo mode per GR IV program', () => {
-  it('1.11 and 1.20 carry the HLG code, 1.21 does not', () => {
+  it('1.11, 1.20 and 1.21 carry the HLG code', () => {
     expect(hasHlg(Gr4Program111)).toBe(true);
     expect(hasHlg(Gr4Program120)).toBe(true);
-    expect(hasHlg(Gr4Program121)).toBe(false);
+    expect(hasHlg(Gr4Program121)).toBe(true);
+  });
+  it('1.21 keeps 1.20\'s icon numbers, so its HDR scale is the same icon', () => {
+    expect(Gr4Program120.aspect.HDR_SCALE_ICON_ID).toBe(800);
+    expect(Gr4Program121.aspect.HDR_SCALE_ICON_ID).toBe(800);
   });
 });
 
@@ -34,7 +38,7 @@ describe('the UI only sends HLG where the open firmware offers it', () => {
   it('is on for a GR IV file whose features include hlgPhoto', () => {
     expect(store.hlgPhotoOn({ ...base, info: { family: 'gr4', features: { hlgPhoto: true } } })).toBe(true);
   });
-  it('is off for a 1.21 file (no hlgPhoto feature), even with the switch saved on in the project', () => {
+  it('is off for a file without the hlgPhoto feature, even with the switch saved on in the project', () => {
     expect(store.hlgPhotoOn({ ...base, info: { family: 'gr4', features: { hdrGainMap: true } } })).toBe(false);
   });
   it('stays off for the Monochrome and with nothing open', () => {

@@ -1,7 +1,7 @@
 # 理光 GR IV BT.2100 HLG HDR 照片直出功能技术文档
 
 > **功能分支**: `feat/hlg-photo`  
-> **适用机型**: 理光 Ricoh GR IV / GR IV HDF (固件版本 1.11)  
+> **适用机型**: 理光 Ricoh GR IV / GR IV HDF (固件版本 1.11、1.20 和 1.21；1.20 与 1.21 为 1.11 版的地址移植：`core/src/fw/gr4v120/aspect/hlg.ts`、`core/src/fw/gr4v121/aspect/hlg.ts`)  
 > **适配框架**: [Ricoh-GRMod](https://github.com/Maxwooow/Ricoh-GRMod)  
 > **目标槽位**: 图像控制 Slot 22 (`toneId = 22 = 0x16`，“HDR色调”)
 
