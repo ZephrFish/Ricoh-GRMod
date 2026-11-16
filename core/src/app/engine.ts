@@ -18,6 +18,7 @@ import {
 } from '../fw';
 import * as Gr4Program111 from '../fw';
 import * as Gr4Program120 from '../fw/gr4v120';
+import * as Gr4Program121 from '../fw/gr4v121';
 import type { BuildResult, BuiltRatio, ClarityChange, ClarityEdit, ExtensionFeatures, ExtraSlotSpec, LookLayout, ShutdownPictureSpec, SoftFocusLevel, SoftFocusStrength, FactoryEntry, LangCode, Layout, NameValidation, Range, RatioSpec, SlotEdit, SlotId as NativeSlotId } from '../fw';
 import { BRIDGE_SHA256, BRIDGE_SIZE, isBridgeFirmware, makeBridgeFirmware, officialFromBridge } from '../fw/bridge';
 import { convertCube, convertXmp, hueCopy0, hueFromQ10, HUE_BLOCK_BYTES, quantizeSlot } from '../color';
@@ -28,6 +29,7 @@ import { MODEL_INFO, rotationScript } from '../wallpaper';
 import { requireGr3xPort } from '../fw/gr3x/profile';
 import * as Gr3Program210 from '../fw/gr3x/program';
 import * as Gr3Program220 from '../fw/gr3x170/program';
+import * as Gr3Program221 from '../fw/gr3x171/program';
 import { planGr3xRatio } from '../fw/gr3x/geometry';
 import { GR3X_MAX_CUSTOM_RATIOS, GR3X_T4_MENU, gr3xCustoms, planGr3xMenu } from '../fw/gr3x/geometry';
 import type { Gr3xMenuRatio } from '../fw/gr3x/geometry';
@@ -82,6 +84,8 @@ export interface FirmwareInfo {
     hdrGainMap?: boolean;
     /** 0.8.11: exposure preview as a camera setting, and soft focus's still-menu line (GR IV 1.20). */
     exposurePreview?: boolean;
+    /** The fork's BT.2100 HLG photo mode on HDR Tone (GR IV 1.11 and 1.20: the programs that carry `installHlgPhoto`). */
+    hlgPhoto?: boolean;
     /** GR III / IIIx: the most films a build can have (9; 20 on GR III 2.10, where
      * the number is chosen with BuildOptions.filmCount and Halation is set in the camera). */
     maxFilms?: number };
@@ -350,7 +354,7 @@ function boxBlur(rgb: Uint8Array, w: number, h: number, radius: number): Uint8Ar
  * 1.70 / GR III 2.20 (fw/gr3x170, experimental). Every firmware address lives in one of them; an
  * engine keeps the program of the file it opened and never mixes the two.
  */
-const GR3_PROGRAMS = [Gr3Program210, Gr3Program220] as const;
+const GR3_PROGRAMS = [Gr3Program210, Gr3Program220, Gr3Program221] as const;
 /** Development: the patch manifest of each GR III / IIIx build (tools/port/compare_builds.mts compares the programs' builds). */
 export const gr3BuildManifests = new Map<string, unknown>();
 type Gr3Program = typeof GR3_PROGRAMS[number];
@@ -360,14 +364,14 @@ async function gr3ProgramOf(raw: Uint8Array): Promise<Gr3Program | null> {
 }
 
 /**
- * The GR IV programs: firmware 1.11 (fw/) and its generated port to 1.20 (fw/gr4v120, experimental;
- * GR IV Monochrome 1.10 is the same file). Every firmware address lives in one of them; an engine
+ * The GR IV programs: firmware 1.11 (fw/), its generated port to 1.20 (fw/gr4v120; GR IV Monochrome
+ * 1.10 is the same file) and the port of that to 1.21 (fw/gr4v121; Monochrome 1.11 is the same file). Every firmware address lives in one of them; an engine
  * keeps the program of the file it opened (GR III / IIIx engines keep 1.11's, which their own
  * program does not use for anything firmware-specific).
  */
 type Gr4Program = typeof Gr4Program111;
 // The port has the same API (generated from the same sources); only constant values differ.
-const GR4_PROGRAMS: readonly Gr4Program[] = [Gr4Program111, Gr4Program120 as unknown as Gr4Program];
+const GR4_PROGRAMS: readonly Gr4Program[] = [Gr4Program111, Gr4Program120 as unknown as Gr4Program, Gr4Program121 as unknown as Gr4Program];
 async function gr4ProgramOf(raw: Uint8Array): Promise<Gr4Program | null> {
   for (const program of GR4_PROGRAMS) if (raw.length === program.OFFICIAL_SIZE && (await sha256Hex(raw)) === program.OFFICIAL_SHA256) return program;
   return null;
@@ -519,7 +523,11 @@ export class Engine {
       factoryRatios: ['3:2', '4:3', '16:9', '1:1'],
       // The 1.12 bridge firmware goes back to 1.11 only: no bridge for 1.20.
       capabilities: { build: true, presets: true, wallpaper: true, factoryEntry: true, bridge: !bridge && g4 === Gr4Program111, menuPictures: true, lookLayout: true },
-      features: { softFocus: 'adj', dateStamp: true, monoUnlock: true, brightAuto: true, directFlash: true, maxAdjSlots: 8, hdrGainMap: true, ...(g4 !== Gr4Program111 ? { exposurePreview: true } : {}) },
+      features: { softFocus: 'adj', dateStamp: true, monoUnlock: true, brightAuto: true, directFlash: true, maxAdjSlots: 8, hdrGainMap: true, ...(g4 !== Gr4Program111 ? { exposurePreview: true } : {}),
+        // @decision DEC-HLG-121-001: HLG is offered only by a program that has its code. The fork's HLG port
+        // covers 1.11 and 1.20; upstream's 1.21 port (fw/gr4v121, 0.8.14) was generated from a 1.20 without it,
+        // so on 1.21 the switch is hidden and buildFirmware refuses the option instead of building without it.
+        ...(typeof (g4.aspect as { installHlgPhoto?: unknown }).installHlgPhoto === 'function' ? { hlgPhoto: true } : {}) },
       version: g4.FIRMWARE_VERSION,
       looks: { factory: [...g4.aspect.FACTORY_LOOK_IDS], extraFirst: g4.aspect.EXTRA_FIRST_STYLE, monoOnly: g4.aspect.FACTORY_LOOK_IDS.filter((n) => n >= 25) },
       sha256: await sha256Hex(raw),
@@ -1065,6 +1073,7 @@ export class Engine {
     if (exposurePreview && !on120) throw new FirmwareError('bad-edit', 'exposure preview needs GR IV firmware 1.20');
     if (exposurePreview && clarity.length > 0) throw new FirmwareError('bad-clarity', 'exposure preview cannot be combined with the clarity-table soft focus of 0.4.x');
     const softFocusMenu = adjSoftFocus && on120;
+    if (hlgPhoto && !this.info.features.hlgPhoto) throw new FirmwareError('feature-unsupported', `the HLG photo mode is not available on GR IV firmware ${this.info.version}`);
     if (hdrGainMap && hlgPhoto) throw new FirmwareError('bad-hlg', 'the HLG photo mode cannot be combined with the HDR gain map');
     if (hdrGainMap && clarity.length > 0) throw new FirmwareError('bad-clarity', 'the HDR gain map cannot be combined with the clarity-table soft focus of 0.4.x');
     if (directFlash && clarity.length > 0) throw new FirmwareError('bad-clarity', 'Direct Flash cannot be combined with the clarity-table soft focus of 0.4.x');

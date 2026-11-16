@@ -2,7 +2,8 @@ import { useSyncExternalStore } from 'react';
 import { FACTORY_LOOK_IDS, card, color, GR3X_FILM_IDS, GR3X_MAX_CUSTOM_RATIOS, GR3X_T4_CUSTOM, LANGS, MAX_CUSTOM_RATIOS, EXTRA_NAME_MAX, MAX_EXTRA_SLOTS, SHUTDOWN_MAX_PICTURES, SHUTDOWN_NAME_MAX, validateExtraSlotName, validateGr3xRatioName, validateRatioName, validateShutdownName } from '@grmod/core';
 import type { CameraModel, ClarityChange, ExtraSlotSpec, FirmwareInfo, FirmwareSummary, LangCode, LookLayout, PresetResult, RatioPreview, RatioSpec, ShutdownPictureSpec, SlotId, SlotRequest, SoftFocusRequest, SoftFocusStrength } from '@grmod/core';
 import { engine, EngineError } from './engine';
-import { host, HostError, sha256Hex } from './host';
+import { host, HostError, isMobile, sha256Hex } from './host';
+import { upload } from './host-android';
 import type { ParkedEntry, Volume } from './host';
 import { setUiLangPref, t, uiLangPref } from './i18n';
 import type { Key } from './i18n';
@@ -111,6 +112,8 @@ export interface State {
   inspectView?: InspectView;
   /** QoL D1: the "Restore an earlier version" dialog (open while set). */
   snapshotsView?: { entries: SnapshotEntry[]; busy: boolean };
+  /** Android: a firmware file on its way to the camera over Wi-Fi (camera.tsx shows the dialog while it is set). */
+  push?: { file: Uint8Array; label: string; stock: boolean };
 }
 
 const SLOT_IDS: readonly SlotId[] = GR3X_FILM_IDS;
@@ -179,12 +182,12 @@ function ask(title: string, lines: string[], ok: string, warn?: string, reset = 
   return new Promise((resolve) => set({ confirm: { title, warn, lines, ok, resolve, ...(reset ? { reset } : {}) } }));
 }
 /**
- * The warning for a firmware made from (or being) one of the cameras' current releases (GR IV 1.20,
- * GR III 2.20, GR IIIx 1.70): a camera that installs it cannot go back to the earlier release.
+ * The warning for a firmware made from (or being) one of the cameras' newer releases (GR IV 1.20 / 1.21,
+ * GR III 2.20 / 2.21, GR IIIx 1.70 / 1.71): a camera that installs it cannot go back to an earlier release.
  */
 function newFirmwareWarning(info: FirmwareInfo | undefined): string | null {
   if (!info) return null;
-  const newer = info.family === 'gr4' ? ['1.20'] : ['2.20', '1.70'];
+  const newer = info.family === 'gr4' ? ['1.20', '1.21'] : ['2.20', '1.70', '2.21', '1.71'];
   return newer.includes(info.version) ? t('newFwWriteLine') : null;
 }
 /**
@@ -546,7 +549,7 @@ async function restoreProject(doc: FamilyDoc, gr3Doc: FamilyDoc | null): Promise
 }
 export async function init(): Promise<void> {
   if (!host.available) { set({ ready: true }); return; }
-  void engine.heartbeat(host.info!.token);
+  if (!isMobile) void engine.heartbeat(host.info!.token);
   void ensureIconFont();
   void loadPreviewPhoto();
   void loadBuilds();
@@ -564,8 +567,10 @@ export async function init(): Promise<void> {
   set({ ready: true });
   // A GR III project found in project.json goes to its own file at once.
   if (gr3Legacy) scheduleSave();
-  void refreshVolumes();
-  setInterval(() => { if (!document.hidden && !state.busy) void refreshVolumes(); }, 2500);
+  if (!isMobile) {
+    void refreshVolumes();
+    setInterval(() => { if (!document.hidden && !state.busy) void refreshVolumes(); }, 2500);
+  }
   for (const id of allSlotKeys()) void renderIcon(id);
 }
 
@@ -585,6 +590,8 @@ export function tourStep(delta: 1 | -1): void {
 }
 /** Forget which tours were seen (and stop the one running): they start by themselves again. */
 export function resetTours(): void { set({ tour: undefined, toursSeen: [] }); scheduleSave(); }
+/** "Skip all guides": the running guide and every other one count as seen (Guides › Start all guides again undoes it). */
+export function skipAllTours(): void { set({ tour: undefined, toursSeen: [...TOUR_IDS] }); scheduleSave(); }
 /** Finished or skipped: either way it is not started by itself again. */
 export function endTour(): void {
   const tr = state.tour;
@@ -1291,7 +1298,7 @@ export const wallMax = (): number => SHUTDOWN_MAX_PICTURES;
 export async function addWallFiles(files: File[]): Promise<void> {
   for (const f of files) {
     if (state.wall.length >= wallMax()) { toast(t('wallMax', { n: wallMax() }), 'info'); break; }
-    if (!/^image\//.test(f.type) && !/\.(jpe?g|png|webp|bmp|gif|avif)$/i.test(f.name)) continue;
+    if (!/^image\//.test(f.type) && !/\.(jpe?g|png|webp|bmp|gif|avif|heic|heif)$/i.test(f.name)) continue;
     try {
       const bmp = await loadBitmap(f);
       const wc = await workingCopy(bmp);
@@ -1413,7 +1420,7 @@ export function monoUnlockOn(s: State = state): boolean {
 /** HLG photo and the HDR gain map exclude each other (see `installExtensions`): turning one on turns the other off. */
 export function setHlgPhoto(hlgPhoto: boolean): void { set(hlgPhoto ? { hlgPhoto, hdr: false } : { hlgPhoto }); scheduleSave(); }
 export function hlgPhotoOn(s: State = state): boolean {
-  return !!s.hlgPhoto && s.model !== 'MONO' && !isGr3(s.model);
+  return !!s.hlgPhoto && s.model !== 'MONO' && !isGr3(s.model) && !!s.info?.features.hlgPhoto;
 }
 export const GR3X_SOFT_FOCUS: readonly SoftFocusRequest[] = [
   { level: -1, strength: 'weak' }, { level: -2, strength: 'medium' }, { level: -3, strength: 'strong' },
@@ -1695,8 +1702,10 @@ async function runPlan(root: string, steps: card.PlanStep[]): Promise<number> {
   }
   return moved;
 }
-type Dest = { kind: 'card' } | { kind: 'folder' };
+type Dest = { kind: 'card' } | { kind: 'folder' } | { kind: 'camera' } | { kind: 'phone' };
 async function destination(dest: Dest): Promise<{ root: string; volume?: Volume } | null> {
+  // The phone app: to the camera over Wi-Fi, or into the phone's own files.
+  if (dest.kind === 'camera' || dest.kind === 'phone') return { root: '' };
   if (dest.kind === 'card') {
     const v = state.volumes.find((x) => x.id === state.volumeId);
     if (!v) { toast(t('noCard'), 'error'); return null; }
@@ -1755,10 +1764,15 @@ export async function outputFirmware(dest: Dest, stock = false): Promise<void> {
   if (!stock && changes.length === 0 && ratios.length === 0 && !soft && !dateStamp && !monoUnlock && !hlgPhoto && !directFlash && !hdr && !exposurePreview && !brightAuto && adjSlots === 5 && extras.length === 0 && pictures.length === 0 && films === 0 && !lookLayout) { toast(t('nothingToDo'), 'info'); return; }
   const fresh = newFirmwareWarning(sourceInfo);
   // The cannot-go-back warning is a paragraph (the dialog's lines are cut to one line each).
-  if (stock && !(await askOfficial([t('copyOfficial')], fresh && dest.kind === 'card' ? fresh : undefined))) return;
+  // GR III / IIIx cannot take a firmware over Wi-Fi (only the GR IV's camera has that interface).
+  if (dest.kind === 'camera' && sourceInfo.family !== 'gr4') { toast(t('pushOnlyGr4'), 'info'); return; }
+  // everything that leaves for a camera (also a file saved on the phone for it) is confirmed first
+  const toCamera = dest.kind === 'card' || dest.kind === 'camera' || dest.kind === 'phone';
+  if (stock && !(await askOfficial([t('copyOfficial')], fresh && toCamera ? fresh : undefined))) return;
   // @decision DEC-QOLB-SUMMARY-001: the summary of what the build contains is asked before every
-  // modified build, to the card and to a folder alike (it used to be the card only). Cancel returns
-  // before the destination is chosen and before engine.build runs. Its lines are 0.8.12's short form.
+  // modified build, to the card, the camera, the device and a folder alike (upstream asks only for the
+  // first three). Cancel returns before the destination is chosen and before engine.build runs.
+  // Its lines are 0.8.12's short form.
   if (!stock) {
     // The check before writing: only what changes, by name; with a count where one item holds several.
     const named = (name: string, n: number, unit: Key = 'chkCount'): string => (n > 1 ? `${name}  ·  ${t(unit, { n })}` : name);
@@ -1777,7 +1791,9 @@ export async function outputFirmware(dest: Dest, stock = false): Promise<void> {
     if (extras.length) lines.push(named(t('extraTitle'), extras.length));
     if (lookLayout) lines.push(lookLayout.hidden.length ? `${t('icViewOrder')}  ·  ${t('chkHidden', { n: lookLayout.hidden.length })}` : t('icViewOrder'));
     if (pictures.length) lines.push(named(t('navWall'), pictures.length, 'chkPictures'));
-    if (!(await ask(dest.kind === 'card' ? t('confirmTitle') : t('exportConfirmTitle'), lines, dest.kind === 'card' ? t('confirmOk') : t('exportConfirmOk'), fresh ?? undefined))) return;
+    const [title, ok] = dest.kind === 'camera' ? [t('pushTitle'), t('pushStart')] : dest.kind === 'phone' ? [t('saveTitle'), t('saveStart')]
+      : dest.kind === 'card' ? [t('confirmTitle'), t('confirmOk')] : [t('exportConfirmTitle'), t('exportConfirmOk')];
+    if (!(await ask(title, lines, ok, fresh ?? undefined))) return;
   }
   const target = await destination(dest);
   if (!target || state.info !== sourceInfo || state.raw !== sourceRaw || state.model !== sourceModel || state.fwBusy) return;
@@ -1796,6 +1812,15 @@ export async function outputFirmware(dest: Dest, stock = false): Promise<void> {
       file = built.file;
       void recordBuild(file, changes);
     }
+    if (dest.kind === 'camera') { set({ busy: undefined, push: { file, label: firmwareFilename(), stock } }); return; }
+    if (dest.kind === 'phone') {
+      set({ busy: t('writing') });
+      // Android: Download/GR Mod/…; iOS: wherever the user puts it in the Files app (or nowhere: cancelled)
+      const r = await upload(file, { to: 'download', name: firmwareFilename() }) as { path?: string; cancelled?: boolean };
+      set({ busy: undefined });
+      if (!r.cancelled) toast(t('savedTo', { p: r.path ?? '' }), 'ok');
+      return;
+    }
     set({ busy: t('writing') });
     let moved = 0;
     if (target.volume) { const m = await firmwareToCard(target.volume, file); if (m === null) { set({ busy: undefined }); void refreshVolumes(); return; } moved = m; }
@@ -1809,6 +1834,7 @@ export async function outputFirmware(dest: Dest, stock = false): Promise<void> {
 
 
 export function wallReady(s: State = state): boolean { return menuReady(s); }
+export function closePush(): void { set({ push: undefined }); }
 
 // ------------------------------------------------------------------ copies moved aside on the card, and their backups
 const BUILDS_KEY = 'builds.json';
@@ -2022,7 +2048,7 @@ const FIRMWARE_CODES = ['unsupported-firmware', 'too-short', 'unexpected-layout'
 export const isBadFirmwareCode = (code: string): boolean => code === 'unsupported-firmware' || code.startsWith('bad-') || code === 'too-short';
 const ERROR_HINTS: Record<string, Key> = {
   ...Object.fromEntries(FIRMWARE_CODES.map((c) => [c, 'hintFirmware' as Key])),
-  'gr3x-unsupported': 'hintUnsupportedHere', 'bad-hlg': 'hintConflict', 'no-space': 'hintFwFull',
+  'gr3x-unsupported': 'hintUnsupportedHere', 'feature-unsupported': 'hintUnsupportedHere', 'bad-hlg': 'hintConflict', 'no-space': 'hintFwFull',
   'too-many-ratios': 'hintTooMany', 'too-many-pictures': 'hintTooMany',
   'not-found': 'hintNotFound', forbidden: 'hintDenied', 'too-large': 'errTooBig', network: 'fwNetError', checksum: 'fwChecksum',
   offline: 'hintOffline', 'no-host': 'hintOffline',
@@ -2121,7 +2147,11 @@ export async function applyProjectExport(p: ProjectExport): Promise<void> {
   flushDeleted();
   importingProject = true; clearTimeout(saveTimer);
   // The interface language is a setting of the app, not project content: the import keeps the current one (startup, init(), still restores the saved one).
-  const project = { ...p.project, uiLang: uiLangPref() };
+  // @decision DEC-TOURS-KEEP-001: the guides already seen are an app setting too. An import or a snapshot
+  // restore keeps them (the union with the file's), so an older snapshot or a project from a fresh install
+  // does not start every guide again (the first-run guides could not be skipped).
+  const tours = [...new Set([...state.toursSeen, ...(Array.isArray(p.project.tours) ? (p.project.tours as TourId[]) : [])])];
+  const project = { ...p.project, uiLang: uiLangPref(), tours, toursV: 2 };
   try {
     const have = (await host.storeList()).map((k) => k.key).filter((k) => PROJECT_FILE_RE.test(k));
     for (const [key, b64] of Object.entries(p.files)) await host.storeSet(key, fromBase64(b64));

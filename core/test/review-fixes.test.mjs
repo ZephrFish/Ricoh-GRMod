@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
     storeGet: vi.fn(), storeSet: vi.fn(), storeDel: vi.fn(), storeList: vi.fn(), volumes: vi.fn(), sidecar: vi.fn() },
 }));
 vi.mock('../../ui/src/engine', () => ({ engine: mocks.engine, EngineError: class extends Error {} }));
-vi.mock('../../ui/src/host', () => ({ host: mocks.host, HostError: class extends Error {}, sha256Hex: async () => 'h' }));
+vi.mock('../../ui/src/host', () => ({ host: mocks.host, HostError: class extends Error {}, sha256Hex: async () => 'h', isAndroid: false, isMobile: false }));
 vi.mock('../../ui/src/pixels', () => ({ ensureIconFont: vi.fn() }));
 vi.mock('../../ui/src/preview', () => ({ decodePreview: vi.fn() }));
 
@@ -163,6 +163,32 @@ describe('project file: compareWith and the interface language', () => {
     mocks.files.set('project.json', enc(JSON.stringify({ v: 1, model: 'HDF', lang: 'en', uiLang: 'zh' })));
     vi.resetModules(); const s2 = await import('../../ui/src/store'); await s2.init();
     expect(local.get('grmod.uiLang')).toBe('zh'); expect(s2.getState().lang).toBe('zh-CN');
+  });
+});
+
+describe('guides seen survive an import, and can all be skipped', () => {
+  it('an import of a project with no guides seen does not start them again; the file\'s own are added', async () => {
+    mocks.files.set('project.json', enc(JSON.stringify({ v: 1, model: 'HDF', lang: 'en', tours: ['overview', 'ic', 'ratio'], toursV: 2 })));
+    await store.init();
+    expect(store.getState().toursSeen).toEqual(['overview', 'ic', 'ratio']);
+    await doImport(store, projectText({ tours: ['wall'], toursV: 2 }));
+    expect([...store.getState().toursSeen].sort()).toEqual(['ic', 'overview', 'ratio', 'wall']);
+    await doImport(store, projectText({}));
+    expect([...store.getState().toursSeen].sort()).toEqual(['ic', 'overview', 'ratio', 'wall']);
+    await flush(); await vi.advanceTimersByTimeAsync(2000);
+    expect(JSON.parse(dec(mocks.files.get('project.json'))).tours.sort()).toEqual(['ic', 'overview', 'ratio', 'wall']);
+  });
+  it('Skip all guides ends the running one, marks every guide seen and saves it; Start all guides again undoes it', async () => {
+    await store.init();
+    store.startTour('overview', [0, 1, 2], false);
+    expect(store.getState().tour?.id).toBe('overview');
+    store.skipAllTours();
+    expect(store.getState().tour).toBeUndefined();
+    expect([...store.getState().toursSeen].sort()).toEqual([...store.TOUR_IDS].sort());
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(JSON.parse(dec(mocks.files.get('project.json'))).tours.sort()).toEqual([...store.TOUR_IDS].sort());
+    store.resetTours();
+    expect(store.getState().toursSeen).toEqual([]);
   });
 });
 

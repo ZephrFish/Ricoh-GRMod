@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
     storeGet: vi.fn(), storeSet: vi.fn(), storeDel: vi.fn(), storeList: vi.fn(), volumes: vi.fn(), sidecar: vi.fn() },
 }));
 vi.mock('../../ui/src/engine', () => ({ engine: mocks.engine, EngineError: class extends Error { constructor(code, message) { super(message); this.code = code; } } }));
-vi.mock('../../ui/src/host', () => ({ host: mocks.host, HostError: class extends Error { constructor(code, message) { super(message); this.code = code; } }, sha256Hex: async () => 'h' }));
+vi.mock('../../ui/src/host', () => ({ host: mocks.host, HostError: class extends Error { constructor(code, message) { super(message); this.code = code; } }, sha256Hex: async () => 'h', isAndroid: false, isMobile: false }));
 vi.mock('../../ui/src/pixels', () => ({ ensureIconFont: vi.fn() }));
 vi.mock('../../ui/src/preview', () => ({ decodePreview: vi.fn() }));
 
