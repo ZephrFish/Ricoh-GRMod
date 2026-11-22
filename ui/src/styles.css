@@ -967,3 +967,12 @@ html.mobile-app .tour-hole { border-radius: 14px; }
 .dialog.upd .upd-notes { white-space: pre-line; margin: 2px 0 10px; line-height: 1.5; }
 .dialog.upd .upd-hint { font-size: 12.5px; margin: 0 0 6px; }
 .dialog.upd h3 .push-file { margin-left: 10px; }
+
+/* fork: built-in power-off pictures (poweroff-defaults.ts) */
+.builtin-strip { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; }
+.builtin-row { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.builtin-thumb { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 8px; background: none; color: var(--muted); }
+.builtin-thumb:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.builtin-thumb:disabled { opacity: 0.45; }
+.builtin-pic { width: 132px; height: 88px; border-radius: 4px; overflow: hidden; background: #000; }
+.builtin-pic canvas { width: 100%; height: 100%; display: block; }
