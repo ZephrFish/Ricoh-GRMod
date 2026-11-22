@@ -78,14 +78,15 @@ describe('preset library', () => {
     expect(store.getState().slots.CG.preset).toMatchObject({ fileName: 'warm.cube', busy: false });
     expect(new TextDecoder().decode(files.get('preset-cg'))).toBe('LUT_3D_SIZE 2 warm'); // kept in the project like an imported file
   });
-  it('refits from the stored source when the options differ (keep white, or an added slot with hue sectors)', async () => {
+  it('refits from the stored source when the options differ (the photo fit switched, or an added slot with hue sectors)', async () => {
     await store.saveToLibrary('CY', 'Warm');
     const id = index().entries[0].id;
-    store.setKeepWhite(true);
+    store.setPhotoFit(!store.getState().photoFit);
+    const want = store.getState().photoFit ? { photoFit: true } : {};
     mocks.engine.convert.mockClear();
     await store.applyFromLibrary('CG', id);
-    expect(mocks.engine.convert).toHaveBeenCalledWith('cube', 'LUT_3D_SIZE 2 warm', { keepWhite: true });
-    store.setKeepWhite(false);
+    expect(mocks.engine.convert).toHaveBeenCalledWith('cube', 'LUT_3D_SIZE 2 warm', want);
+    store.setPhotoFit(false);
     store.setExtraCount(1);
     mocks.engine.convert.mockClear();
     const x = store.getState().extras[0].key;

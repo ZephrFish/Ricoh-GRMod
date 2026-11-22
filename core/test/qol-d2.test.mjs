@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 vi.mock('../../ui/src/engine', () => ({ engine: mocks.engine, EngineError: class extends Error {} }));
-vi.mock('../../ui/src/host', () => ({ host: mocks.host, HostError: class extends Error {}, sha256Hex: async () => 'test-hash', isAndroid: false, isMobile: false }));
+vi.mock('../../ui/src/host', () => ({ host: mocks.host, HostError: class extends Error {}, sha256Hex: async (b) => (await import('node:crypto')).createHash('sha256').update(b).digest('hex') /* a real hash: the fit cache (PR 42) is keyed by it */, isAndroid: false, isMobile: false }));
 vi.mock('../../ui/src/pixels', () => ({ ensureIconFont: vi.fn(), textIcon: vi.fn(() => new Uint8Array(1)), imageIcon: vi.fn(() => new Uint8Array(1)) }));
 vi.mock('../../ui/src/preview', () => ({ decodePreview: vi.fn() }));
 
@@ -169,6 +169,17 @@ describe('batch preset import', () => {
     expect(s.extras).toHaveLength(0);
     expect(lastToast().kind).toBe('error');
     expect(lastToast().text).toBe('0 presets applied · 2 skipped (no free slot) · 1 failed: bad.cube');
+  });
+  it('every key it stores is one the desktop host accepts (the photo fit\'s cache included)', async () => {
+    mocks.engine.convert.mockImplementation(async (_k, text) => fitted(text));
+    store.setExtraCount(1); await vi.advanceTimersByTimeAsync(5);
+    expect(store.getState().photoFit).toBe(true); // on by default: .cube imports go through the cache
+    const done = store.loadPresetFiles([file('1.cube', 'one'), file('2.cube', 'two')]);
+    await vi.advanceTimersByTimeAsync(5); await done; await vi.advanceTimersByTimeAsync(5);
+    const keys = mocks.host.storeSet.mock.calls.map((c) => c[0]);
+    expect(keys.some((k) => k.startsWith('fit-'))).toBe(true);
+    // shell/internal/server/store.go keyPattern
+    for (const k of keys) expect(k, k).toMatch(/^[a-z0-9][a-z0-9._-]{0,63}$/);
   });
   it('runs fits one after another and shows progress', async () => {
     const order = []; const seen = [];

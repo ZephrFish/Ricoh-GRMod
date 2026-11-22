@@ -4,7 +4,7 @@ import { FirmwareHero } from '../firmware';
 import { t } from '../i18n';
 import {
   useStore, loadFirmwareFile, gridOffered, setExtrasView, setSoft, setDateStamp, setMonoUnlock, setFlashPlus, flashPlusOn, setAdjSlots, adjSlotsOf, setHdr, setExposurePreview, setFilmGrain,
-  setShadowLearn, setBattery, setVideoAf, setAwbLearn, setBrightAuto, setCustomGrid, setAdditiveHue, setHlgPhoto, setKeepWhite,
+  setShadowLearn, setBattery, setVideoAf, setAwbLearn, setBrightAuto, setCustomGrid, setHlgPhoto, setPhotoFit,
 } from '../store';
 import { isFirmware } from './files';
 import { GridDetail, GridThumb } from './grid';
@@ -79,11 +79,9 @@ function ExtrasList() {
   const hdr = useStore((s) => s.hdr);
   const brightAuto = useStore((s) => s.brightAuto);
   const brightAutoOk = useStore((s) => !!s.info?.features.brightAuto);
-  const additiveHue = useStore((s) => s.additiveHue);
-  const keepWhite = useStore((s) => s.keepWhite);
-  // The import-fitting switches act only on GR IV firmware; additive hue only on added slots.
+  const photoFit = useStore((s) => s.photoFit);
+  // Fitting LUTs to real photos acts only on GR IV firmware.
   const gr4 = useStore((s) => s.info?.family === 'gr4');
-  const hasExtras = useStore((s) => s.extras.length > 0);
   const hdrOk = useStore((s) => !!s.info?.features.hdrGainMap);
   const preview = useStore((s) => s.exposurePreview);
   const previewOk = useStore((s) => !!s.info?.features.exposurePreview);
@@ -130,8 +128,7 @@ function ExtrasList() {
           value={brightAuto || 'off'} onChange={(v) => setBrightAuto(v === 'off' ? false : v as 'bright' | 'balanced')}
           options={([['off', 'brightAutoOff'], ['balanced', 'brightAutoBalanced'], ['bright', 'brightAutoBright']] as const).map(([value, key]) => ({ value, label: level(key) }))} />
       )}
-      {gr4 && hasExtras && <FeatureCapsule icon={Ico.image} title={t('additiveHueTitle')} sub={t('additiveHueSub')} on={additiveHue} onChange={setAdditiveHue} />}
-      {gr4 && <FeatureCapsule icon={Ico.image} title={t('keepWhiteTitle')} sub={t('keepWhiteSub')} on={keepWhite} onChange={setKeepWhite} />}
+      {gr4 && <FeatureCapsule icon={Ico.image} title={t('photoFitTitle')} sub={t('photoFitSub')} on={photoFit} onChange={setPhotoFit} />}
     </div></div>
   );
 }

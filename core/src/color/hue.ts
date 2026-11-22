@@ -17,8 +17,6 @@
  * camera's own order (`slotApply` with `hue`, see camera.ts): with no correction the slot renders
  * as one that uses Standard's block.
  */
-import { composeAdditive } from './hue-additive';
-
 
 /** Sector boundaries in degrees. */
 export const HUE_BOUNDS: readonly number[] = [359.8, 27.4, 62.2, 92.6, 112.0, 142.8, 179.2, 211.4, 238.6, 267.2, 306.0, 326.5];
@@ -73,8 +71,7 @@ function mul3(a: readonly number[], b: readonly number[]): number[] {
 }
 
 /** A slot's block: Standard's matrix of each sector times the correction of that sector. */
-export function composeWithStandard(standard: readonly (readonly number[])[], correction: readonly (readonly number[])[], additive = false): number[][] {
-  if (additive) return composeAdditive(standard, correction);
+export function composeWithStandard(standard: readonly (readonly number[])[], correction: readonly (readonly number[])[]): number[][] {
   return standard.map((m, g) => mul3(m, correction[g]));
 }
 

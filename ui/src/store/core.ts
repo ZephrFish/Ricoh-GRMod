@@ -28,7 +28,8 @@ export function savedGridLines(v: unknown): CustomGrid {
 }
 /** One added aspect ratio as typed; `preview` is what the camera would make of it (absent while that is worked out). */
 export interface RatioItem { id: string; ratio: string; name: string; preview?: RatioPreview }
-export interface PresetState { fileName: string; kind: 'xmp' | 'cube'; text: string; busy: boolean; result?: PresetResult; error?: string }
+/** `photoFit`: a GR IV .cube imported with the photo-weighted fit (core color/photo-fit.ts); kept with the project. */
+export interface PresetState { fileName: string; kind: 'xmp' | 'cube'; text: string; busy: boolean; result?: PresetResult; error?: string; photoFit?: boolean }
 export interface IconState { mode: 'keep' | 'text' | 'image'; text: string; style: 'film' | 'plain'; image?: string; pixels?: Uint8Array }
 /** `halation`: Cinema Yellow / Green with a preset (0.8.2); their Toning becomes the Halation slider. */
 export interface SlotState { preset?: PresetState; names: Partial<Record<LangCode, string>>; icon: IconState; halation?: HalationState }
@@ -84,10 +85,8 @@ export interface State {
   ratios: RatioItem[]; activeRatio?: string; ratioBackdrop: RatioBackdrop;
   /** GR IV rear-LCD Auto curve, off by default. */
   brightAuto: false | 'bright' | 'balanced';
-  /** GR IV import fitting; off by default. */
-  additiveHue: boolean;
-  /** GR IV import fitting; off by default. */
-  keepWhite: boolean;
+  /** GR IV: .cube presets imported from now on also fit with real picture colours (core color/photo-fit.ts); on by default. Presets already imported keep how they were fitted. */
+  photoFit: boolean;
   soft: boolean; dateStamp: boolean; monoUnlock: boolean; hlgPhoto: boolean;
   /** GR IV: Direct Flash, a fifth Flash Mode (GR III / IIIx have the GF-2 mode of their own). */
   directFlash: boolean;
@@ -161,7 +160,7 @@ export const emptySlot = (): SlotState => ({ names: {}, icon: { mode: 'keep', te
 export const emptySlots = (): Record<SlotId, SlotState> => Object.fromEntries(SLOT_IDS.map(id => [id, emptySlot()])) as Record<SlotId, SlotState>;
 export let state: State = {
   ready: false, page: 'ic', extrasView: 'list', fwBusy: false, model: 'HDF', lang: cameraLang(), langAuto: uiLangPref() === '',
-  slots: emptySlots(), extras: [], lookOrder: [], lookHidden: [], lookOrder3: [], lookHidden3: [], wall: [], ratios: [], ratioBackdrop: 'photo', brightAuto: false, additiveHue: false, keepWhite: false, soft: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, directFlash: false, hdr: false, exposurePreview: false, filmGrain: false, shadowLearn: false, ratioShade: false, ratioShadeTone: 'dark', shadePreview: '75', battery: false, customGrid: false, gridLines: cameraGrid(), flashTtl: false, videoAf: false, awbLearn: false, adjSlots: 5, filmCount: 0, previewMode: 'photo', photoRev: 0, activeSlot: 'CY', library: [], compareWith: 'orig', volumes: [],
+  slots: emptySlots(), extras: [], lookOrder: [], lookHidden: [], lookOrder3: [], lookHidden3: [], wall: [], ratios: [], ratioBackdrop: 'photo', brightAuto: false, photoFit: true, soft: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, directFlash: false, hdr: false, exposurePreview: false, filmGrain: false, shadowLearn: false, ratioShade: false, ratioShadeTone: 'dark', shadePreview: '75', battery: false, customGrid: false, gridLines: cameraGrid(), flashTtl: false, videoAf: false, awbLearn: false, adjSlots: 5, filmCount: 0, previewMode: 'photo', photoRev: 0, activeSlot: 'CY', library: [], compareWith: 'orig', volumes: [],
   copySource: 'card', parked: [], backups: [], copySel: [], copyInfo: {}, builds: [], showAll: false, toasts: [], onlineOpen: false, toursSeen: [],
 };
 const listeners = new Set<() => void>();

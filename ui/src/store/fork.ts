@@ -12,7 +12,7 @@ import { extraName, normalizeLookOrder } from './looks';
 import { outputFirmware, refreshVolumes } from './output';
 import { setActiveSlot } from './photo';
 import { setActiveRatio } from './ratios';
-import { addExtraSlot, allSlotKeys, loadPresetFile, presetRuns, nextPresetRun, renderIcon, runPreset, fitOptions } from './slots';
+import { addExtraSlot, allSlotKeys, loadPresetFile, presetRuns, nextPresetRun, renderIcon, runPreset, fitOptions, photoFitForImport } from './slots';
 import { CameraModel, EXTRA_NAME_MAX, MAX_EXTRA_SLOTS, PresetResult, SlotId, color } from '@grmod/core';
 // SPDX-License-Identifier: GPL-2.0-only
 /**
@@ -185,7 +185,7 @@ const libFitKey = (id: string): string => 'library-' + id + '-fit';
 /** The options a fit was made with, as a comparable string (null when nothing can be fitted: no preset support). */
 function fitKeyOf(id: SlotKey, kind: 'xmp' | 'cube'): string | undefined {
   if (!state.info?.capabilities.presets) return undefined;
-  return [familyOf(state.model), kind, JSON.stringify(fitOptions(id, kind))].join('|');
+  return [familyOf(state.model), kind, JSON.stringify(fitOptions(id, kind, photoFitForImport(kind)))].join('|');
 }
 const TYPED: Record<string, new (a: number[]) => ArrayLike<number>> = { Int16Array, Uint16Array, Float64Array, Float32Array, Uint8Array } as never;
 /** A fit result as JSON; typed arrays are tagged `{ __ta, data }` so that reading it back gives the same arrays. */
@@ -266,8 +266,8 @@ export async function applyFromLibrary(id: SlotKey, entryId: string): Promise<bo
   const result = stored ? unpackFit(new TextDecoder().decode(stored)) : undefined;
   if (result) {
     presetRuns.set(id, nextPresetRun()); // a conversion still running for this slot is now stale
-    patchSlot(id, { preset: { fileName: e.fileName, kind: e.kind, text, busy: false, result } });
-  } else await runPreset(id, e.fileName, e.kind, text);
+    patchSlot(id, { preset: { fileName: e.fileName, kind: e.kind, text, busy: false, result, ...(photoFitForImport(e.kind) ? { photoFit: true } : {}) } });
+  } else await runPreset(id, e.fileName, e.kind, text, photoFitForImport(e.kind));
   scheduleSave();
   closeLibrary();
   toast(t('libApplied', { name: e.name }), 'ok');
@@ -753,7 +753,7 @@ export function duplicateExtraSlot(key: string): string | undefined {
     return { extras, lookOrder: order, lookHidden: hidden ? [...s.lookHidden, newKey] : s.lookHidden, activeSlot: newKey };
   });
   if (p && host.available) void host.storeSet(presetKey(newKey), p.text).catch(() => undefined);
-  if (p?.busy) void runPreset(newKey, p.fileName, p.kind, p.text); // the source's conversion is not finished: the copy runs its own
+  if (p?.busy) void runPreset(newKey, p.fileName, p.kind, p.text, p.photoFit === true); // the source's conversion is not finished: the copy runs its own
   if (!copy.icon.pixels) void renderIcon(newKey);
   scheduleSave();
   toast(t('extraDuplicated', { name }), 'ok');

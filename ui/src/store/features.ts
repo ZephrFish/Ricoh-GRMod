@@ -1,30 +1,15 @@
 import { CAMERA_GRID, GRID_LINE_COUNT, isCameraGrid } from '@grmod/core';
 import type { ClarityChange, CustomGrid, SoftFocusRequest, SoftFocusStrength } from '@grmod/core';
 import { t } from '../i18n';
-import { State, set, state, isExtra, isGr3, slotOf } from './core';
+import { State, set, state, isGr3 } from './core';
 import { scheduleSave } from './families';
 import { hasLookLayout } from './looks';
-import { allSlotKeys, runPreset } from './slots';
 
-// ------------------------------------------------------------------ import fitting options
-/** GR IV: refit with an additive hue-sector correction (PR #21) or with the LUT's white kept (PR #22); both start off. */
-export function setAdditiveHue(value: boolean): void {
+// ------------------------------------------------------------------ import fitting
+/** GR IV: whether .cube presets imported from now on also fit with real picture colours. Presets already imported keep how they were fitted; importing one again uses this. */
+export function setPhotoFit(value: boolean): void {
   if (state.info?.family !== 'gr4') return;
-  set({ additiveHue: value }); scheduleSave();
-  // Refit current applicable presets too; the existing per-slot run id drops stale results.
-  for (const id of allSlotKeys()) {
-    const p = slotOf(id)?.preset;
-    if (p && isExtra(id)) void runPreset(id, p.fileName, p.kind, p.text);
-  }
-}
-export function setKeepWhite(value: boolean): void {
-  if (state.info?.family !== 'gr4') return;
-  set({ keepWhite: value }); scheduleSave();
-  // Refit current applicable presets too; the existing per-slot run id drops stale results.
-  for (const id of allSlotKeys()) {
-    const p = slotOf(id)?.preset;
-    if (p && p.kind === 'cube') void runPreset(id, p.fileName, p.kind, p.text);
-  }
+  set({ photoFit: value }); scheduleSave();
 }
 
 // ------------------------------------------------------------------ soft focus
