@@ -292,6 +292,8 @@ svg { width: 18px; height: 18px; flex: none; }
 .ratio-frame:hover .compare-swap { opacity: 1; }
 .ratio-photo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: cover; }
 .ratio-shade { position: absolute; background: rgba(0, 0, 0, 0.72); pointer-events: none; }
+/* GR IV: as its live view, black outside the photo area (lower specificity than the frame's other states). */
+.camera-black .ratio-shade { background: #000; }
 /* The live-view shade as the camera draws it: black at 50 %, or grey at 25 %. */
 .ratio-frame.live-shade .ratio-shade { background: rgba(0, 0, 0, 0.5); }
 .ratio-frame.live-shade.tone-light .ratio-shade { background: rgba(85, 85, 85, 0.25); }
