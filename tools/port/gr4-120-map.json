@@ -7380,7 +7380,9 @@
    "files": [
     "tools/shutdown/menu_check.py",
     "tools/shutdown/shutdown.c",
-    "tools/shade/draw_check.py"
+    "tools/shade/draw_check.py",
+    "core/src/fw/aspect/shade.ts",
+    "tools/grid/check.py"
    ]
   },
   "0x5372b640": {
@@ -10158,6 +10160,15 @@
    "files": [
     "core/src/fw/aspect/battery.ts",
     "tools/battery/check.py"
+   ]
+  },
+  "0x537575a8": {
+   "new": "0x5377cab8",
+   "how": "aligned + refs 0x5377cab8x47",
+   "ok": true,
+   "files": [
+    "core/src/fw/aspect/shade.ts",
+    "tools/grid/check.py"
    ]
   },
   "0x531c8c34": {

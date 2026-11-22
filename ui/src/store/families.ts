@@ -225,7 +225,7 @@ export async function restoreProject(doc: FamilyDoc, gr3Doc: FamilyDoc | null): 
   else familyDocs.gr4 = doc;
   const fam = familyOf(model), work = familyDocs[fam];
   set({ ...parseFamily(work), model,
-    page: doc.page === 'wall' || doc.page === 'copies' || doc.page === 'ratio' || doc.page === 'grid' || doc.page === 'ic' ? doc.page : doc.page === 'script' ? 'wall' : 'ic',
+    page: doc.page === 'wall' || doc.page === 'copies' || doc.page === 'ratio' || doc.page === 'extras' || doc.page === 'ic' ? doc.page : doc.page === 'script' ? 'wall' : doc.page === 'grid' ? 'extras' : 'ic',
     ...langOf(doc), fwName: doc.fwName, showAll: !!doc.showAll,
     previewMode: doc.previewMode === 'swatch' ? 'swatch' : 'photo', ratioBackdrop: doc.ratioBackdrop === 'gray' ? 'gray' : 'photo',
     compareWith: typeof doc.compareWith === 'string' && doc.compareWith ? doc.compareWith : 'orig',
