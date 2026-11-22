@@ -40,3 +40,7 @@ mobile/www/
 *.p12
 *.p8
 *-private.key
+
+# Claude Code hook output (machine-local)
+.claude/
+DECISIONS.md
