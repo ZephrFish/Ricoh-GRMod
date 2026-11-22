@@ -1,0 +1,296 @@
+import { useSyncExternalStore } from 'react';
+import { CAMERA_GRID, card, GR3X_FILM_IDS, GRID_LINE_COUNT, LANGS } from '@grmod/core';
+import type { CameraModel, CustomGrid, FirmwareInfo, FirmwareSummary, LangCode, PresetResult, RatioPreview, ShadeTone, SlotId } from '@grmod/core';
+
+/** How dark the live-view shade is: black at 50 % or grey at 25 % (core's ShadeTone). */
+export type { ShadeTone };
+import { EngineError } from '../engine';
+import { HostError } from '../host';
+import type { ParkedEntry, Volume } from '../host';
+import { t, uiLangPref } from '../i18n';
+import type { Crop } from '../pixels';
+import { SUPPORTED_LINES } from '../releases.gen';
+import type { Key } from '../i18n';
+import type { LibraryEntry, SnapshotEntry } from './fork';
+
+export type Page = 'ic' | 'ratio' | 'grid' | 'wall' | 'copies';
+/** The camera's own grids, as custom grid lines (a fresh copy to edit). */
+export const cameraGrid = (): CustomGrid => ({ g3: [...CAMERA_GRID.g3], g4: [...CAMERA_GRID.g4] });
+/** Grid lines as saved in the project: eight booleans per style, else the camera's own. */
+export function savedGridLines(v: unknown): CustomGrid {
+  const ok = (x: unknown): x is boolean[] => Array.isArray(x) && x.length === GRID_LINE_COUNT && x.every((b) => typeof b === 'boolean');
+  const g = v as Partial<CustomGrid> | undefined;
+  const base = cameraGrid();
+  return { g3: ok(g?.g3) ? [...g!.g3] : base.g3, g4: ok(g?.g4) ? [...g!.g4] : base.g4 };
+}
+/** One added aspect ratio as typed; `preview` is what the camera would make of it (absent while that is worked out). */
+export interface RatioItem { id: string; ratio: string; name: string; preview?: RatioPreview }
+export interface PresetState { fileName: string; kind: 'xmp' | 'cube'; text: string; busy: boolean; result?: PresetResult; error?: string }
+export interface IconState { mode: 'keep' | 'text' | 'image'; text: string; style: 'film' | 'plain'; image?: string; pixels?: Uint8Array }
+/** `halation`: Cinema Yellow / Green with a preset (0.8.2); their Toning becomes the Halation slider. */
+export interface SlotState { preset?: PresetState; names: Partial<Record<LangCode, string>>; icon: IconState; halation?: HalationState }
+/**
+ * An added Image Control slot (style 34, 35, ... in the camera): `key` is `x-` and a random id;
+ * `name` as typed (empty: the default name of its place), one name for every language.
+ */
+/** A slot's halation (the fixed CineStill 800T look): on (always for an added slot), and which level the preview shows (0 = off, 1 Weak, 2 Medium, 3 Strong). */
+export interface HalationState { on: boolean; preview: 0 | 1 | 2 | 3; /** Colour the preview shows (chosen in the camera). */ colour?: 'red' | 'white' }
+export interface ExtraSlot { key: string; name: string; preset?: PresetState; icon: IconState; halation?: HalationState }
+/** A factory Cinema slot (`CY`, `CG`) or the key of an added slot. */
+export type SlotKey = SlotId | string;
+/**
+ * A power-off image. They are built into the firmware and chosen in the camera's End Screen menu
+ * (Setup > Display > End Screen > Picture): `menuName` is the name in the camera's list, `menuId`
+ * its stable identity, `menuJpeg` the picture file. (GR Mod 0.7 and earlier could also put them on
+ * the card with a start-up script; 0.8 only builds them into the firmware.)
+ */
+export interface WallItem {
+  id: string; name: string; blob?: Blob; width: number; height: number; crop: Crop;
+  busy: boolean; error?: string; preview?: Uint8Array;
+  menuName?: string; menuId?: number; menuJpeg?: Uint8Array;
+}
+export interface Toast { id: number; text: string; kind: 'ok' | 'error' | 'info'; action?: { label: string; run: () => void } }
+export type PreviewMode = 'photo' | 'swatch';
+/** What the frame of an added ratio is drawn on. */
+export type RatioBackdrop = 'photo' | 'gray';
+/** Where the copies page looks: files moved aside on the selected card, or their backups on this computer. */
+export type CopySource = 'card' | 'pc';
+export interface CopyInfo { busy?: boolean; summary?: FirmwareSummary; failed?: boolean }
+/** What went into a firmware this program built, so that a copy of it can be named later. */
+export interface BuildRecord { sha256: string; time: number; slots: { id: SlotId; preset?: string }[] }
+/** `warn` is an optional caution shown under the lines (used where something is deleted for good). */
+/** A guided tour: `overview` is the one of the first start, the others belong to a page. */
+export type TourId = 'overview' | Page;
+export const TOUR_IDS: readonly TourId[] = ['overview', 'ic', 'ratio', 'grid', 'wall', 'copies'];
+/** The tour being shown: `steps` are the indices of its steps that have something to point at; a replay can be skipped. */
+export interface TourState { id: TourId; steps: number[]; index: number; replay: boolean }
+/** `reset`: the firmware written is the official one; the dialog asks in red whether the camera's settings were reset first. */
+export interface Confirm { title: string; warn?: string; reset?: boolean; lines: string[]; ok: string; resolve: (v: boolean) => void }
+/** A firmware file being inspected: `error` is `needs-open` (no official firmware to compare with), `unreadable` (not a file the engine can read) or `size`. */
+export interface InspectView { name: string; size: number; busy: boolean; summary?: FirmwareSummary; error?: 'needs-open' | 'unreadable' | 'size';
+  /** QoL D1: a second file compared with the first (absent in plain single-file inspect). */
+  other?: { name: string; size: number; busy: boolean; summary?: FirmwareSummary; error?: 'unreadable' | 'size' } }
+export interface State {
+  ready: boolean; page: Page;
+  fwName?: string; fwBusy: boolean; info?: FirmwareInfo; raw?: Uint8Array;
+  model: CameraModel; lang: LangCode;
+  /** The camera language follows the system's (lang is then systemCameraLang()): the app language is "follow system". */
+  langAuto: boolean;
+  slots: Record<SlotId, SlotState>;
+  wall: WallItem[];
+  ratios: RatioItem[]; activeRatio?: string; ratioBackdrop: RatioBackdrop;
+  /** GR IV rear-LCD Auto curve, off by default. */
+  brightAuto: false | 'bright' | 'balanced';
+  /** GR IV import fitting; off by default. */
+  additiveHue: boolean;
+  /** GR IV import fitting; off by default. */
+  keepWhite: boolean;
+  soft: boolean; dateStamp: boolean; monoUnlock: boolean; hlgPhoto: boolean;
+  /** GR IV: Direct Flash, a fifth Flash Mode (GR III / IIIx have the GF-2 mode of their own). */
+  directFlash: boolean;
+  /** An HDR gain map in the JPEGs (switched in the camera: Shooting menu › HDR). */
+  hdr: boolean;
+  /** GR IV 1.20: exposure preview as a camera setting (Shooting › Exposure Settings, ADJ lever). */
+  exposurePreview: boolean;
+  /** GR IV: live view of the added ratios shows the whole frame with the part outside darkened, instead of the photo area only. */
+  ratioShade: boolean;
+  /** How dark the live-view shade is (UI palette black 50 % / grey 25 %). */
+  ratioShadeTone: ShadeTone;
+  /** GR IV 1.20 / 1.21: the shade level the ratio page previews (not saved). */
+  shadePreview: '100' | '75' | '50' | '25' | '0';
+  /** GR IV: the battery icon shows the charge in steps of 10 % instead of the bars. */
+  battery: boolean;
+  /** GR IV: custom grid lines (`gridLines`) instead of the camera's own grids. */
+  customGrid: boolean;
+  /** Which lines the camera's 3x3 and 4x4 grids draw with `customGrid` on (core: CustomGrid). */
+  gridLines: CustomGrid;
+  /** The learned Auto for Shadow Correction (GR IV 1.11 / 1.20 / 1.21; off by default). */
+  shadowLearn: boolean;
+  /** GR IV 1.20 / 1.21: GR Mod's film grain in place of the camera's Grain Effect (off by default). */
+  filmGrain: boolean;
+  /** GR IV 1.20 / 1.21: pre-flash (TTL) metering for a GF-2 class flash in the two red-eye flash modes (off by default). */
+  flashTtl: boolean;
+  /** GR IV 1.20 / 1.21: movie AF driven by the phase data (off by default). */
+  videoAf: boolean;
+  /** GR IV 1.20 / 1.21: the learned auto white balance for the three Auto modes (off by default). */
+  awbLearn: boolean;
+  /** ADJ lever slots in the build: 5 (the camera's) to 8 (GR IV). */
+  adjSlots: number;
+  /** GR IV, experimental: .cube presets of added slots get hue sectors of their own (core color/hue.ts). */
+  /** GR III / IIIx: how many films the build has (1..info.features.maxFilms). */
+  filmCount: number;
+  previewMode: PreviewMode; photoRev: number; activeSlot: SlotKey;
+  /** QoL wave C. Preset library entries of both cameras (loaded on first use, see loadLibrary). */
+  library: LibraryEntry[];
+  /** QoL wave C. What the left side of the photo preview shows: `orig` (the photo as it is, the default) or another slot's key. View state, saved with previewMode. */
+  compareWith: string;
+  /** The library dialog: which slot it works on and whether it saves that slot's preset or applies an entry to it. */
+  libraryPicker?: { slot: SlotKey; mode: 'save' | 'apply' };
+  /** Added Image Control slots, in the camera's order (none by default). */
+  extras: ExtraSlot[];
+  /** Image Control menu order (`f11`..`f30`, or an added slot's key) and hidden keys. Empty = factory order, nothing hidden. */
+  lookOrder: string[];
+  lookHidden: string[];
+  /** GR III / IIIx (round 8): its order (`g11`..`g22`, films `g64`..) and hidden keys, kept apart from GR IV's. */
+  lookOrder3: string[];
+  lookHidden3: string[];
+  volumes: Volume[]; showAll: boolean; volumeId?: string; role?: card.CardRole;
+  copySource: CopySource; parked: ParkedEntry[]; backups: ParkedEntry[]; copySel: string[]; copyInfo: Record<string, CopyInfo>; builds: BuildRecord[];
+  busy?: string; toasts: Toast[]; confirm?: Confirm; cropId?: string; onlineOpen: boolean;
+  tour?: TourState; toursSeen: TourId[];
+  /** QoL wave B: the "Inspect a firmware file" dialog (open while set). */
+  inspectView?: InspectView;
+  /** QoL D1: the "Restore an earlier version" dialog (open while set). */
+  snapshotsView?: { entries: SnapshotEntry[]; busy: boolean };
+  /** Android: a firmware file on its way to the camera over Wi-Fi (camera.tsx shows the dialog while it is set). */
+  push?: { file: Uint8Array; label: string; stock: boolean };
+}
+
+export const SLOT_IDS: readonly SlotId[] = GR3X_FILM_IDS;
+/** GR IIIx 1.60 and GR III 2.10: one program, one code path in GR Mod. */
+export const isGr3 = (m?: CameraModel): boolean => m === 'GR3X_HDF' || m === 'GR3_HDF' || m === 'GR3X' || m === 'GR3';
+/** The film count can be chosen (GR III / IIIx: 1..20, each film with Halation in the camera). */
+export const filmCountChoosable = (s: State = state): boolean => s.info?.family === 'gr3x' && (s.info.features.maxFilms ?? 9) > 9;
+/** The slots of the open firmware the page shows: on GR III / IIIx the first `filmCount`. */
+export const shownSlots = (s: State = state): FirmwareInfo['slots'] => (s.info ? (filmCountChoosable(s) ? s.info.slots.slice(0, s.filmCount) : s.info.slots) : []);
+export const availableSlots = (s: State = state): SlotId[] => s.info ? shownSlots(s).map(slot => slot.id) : (isGr3(s.model) ? [...GR3X_FILM_IDS] : ['CY', 'CG']);
+export const emptySlot = (): SlotState => ({ names: {}, icon: { mode: 'keep', text: '', style: 'film' } });
+export const emptySlots = (): Record<SlotId, SlotState> => Object.fromEntries(SLOT_IDS.map(id => [id, emptySlot()])) as Record<SlotId, SlotState>;
+export let state: State = {
+  ready: false, page: 'ic', fwBusy: false, model: 'HDF', lang: cameraLang(), langAuto: uiLangPref() === '',
+  slots: emptySlots(), extras: [], lookOrder: [], lookHidden: [], lookOrder3: [], lookHidden3: [], wall: [], ratios: [], ratioBackdrop: 'photo', brightAuto: false, additiveHue: false, keepWhite: false, soft: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, directFlash: false, hdr: false, exposurePreview: false, filmGrain: false, shadowLearn: false, ratioShade: false, ratioShadeTone: 'dark', shadePreview: '75', battery: false, customGrid: false, gridLines: cameraGrid(), flashTtl: false, videoAf: false, awbLearn: false, adjSlots: 5, filmCount: 0, previewMode: 'photo', photoRev: 0, activeSlot: 'CY', library: [], compareWith: 'orig', volumes: [],
+  copySource: 'card', parked: [], backups: [], copySel: [], copyInfo: {}, builds: [], showAll: false, toasts: [], onlineOpen: false, toursSeen: [],
+};
+const listeners = new Set<() => void>();
+export function set(patch: Partial<State> | ((s: State) => Partial<State>)): void {
+  state = { ...state, ...(typeof patch === 'function' ? patch(state) : patch) };
+  listeners.forEach((l) => l());
+}
+export const getState = (): State => state;
+/**
+ * @decision DEC-UI-STORE-001
+ * @title useStore refuses an unstable selector outside production builds
+ * @status accepted
+ * @rationale useSyncExternalStore compares successive snapshots with Object.is; a selector that builds a new array or object per call (filter, map, sort, a literal)
+ *   never settles and React throws error #185, which blanked the whole app once (libraryFor in LibraryDialog). Select stable fields and derive with useMemo. In dev and
+ *   test, calling the selector twice on the same state and comparing makes that mistake fail loudly at its source. The same snapshot is the server snapshot, so renderToString works.
+ */
+export function useStore<T>(sel: (s: State) => T): T {
+  const snap = (): T => {
+    const a = sel(state);
+    if (!import.meta.env.PROD && !Object.is(a, sel(state))) throw new Error('useStore: the selector returns a new array/object on every call, so the snapshot never settles (React error #185). Select stable fields and derive the value with useMemo.');
+    return a;
+  };
+  return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, snap, snap);
+}
+export function setSlot(id: SlotId, patch: Partial<SlotState> | ((s: SlotState) => Partial<SlotState>)): void {
+  set((s) => ({ slots: { ...s.slots, [id]: { ...s.slots[id], ...(typeof patch === 'function' ? patch(s.slots[id]) : patch) } } }));
+}
+export const isExtra = (k: SlotKey): boolean => k.startsWith('x-');
+/** The preset and icon of a factory or an added slot. */
+export function slotOf(k: SlotKey, s: State = state): { preset?: PresetState; icon: IconState } | undefined {
+  return isExtra(k) ? s.extras.find((x) => x.key === k) : s.slots[k as SlotId];
+}
+export function patchSlot(k: SlotKey, patch: { preset?: PresetState; icon?: IconState } | ((s: { preset?: PresetState; icon: IconState }) => { preset?: PresetState; icon?: IconState })): void {
+  if (!isExtra(k)) { setSlot(k as SlotId, patch as Partial<SlotState>); return; }
+  set((s) => ({ extras: s.extras.map((x) => (x.key === k ? { ...x, ...(typeof patch === 'function' ? patch(x) : patch) } : x)) }));
+}
+export function setWall(id: string, patch: Partial<WallItem>): void {
+  set((s) => ({ wall: s.wall.map((w) => (w.id === id ? { ...w, ...patch } : w)) }));
+}
+
+// ------------------------------------------------------------------ toasts / confirm
+let toastSeq = 0;
+export function toast(text: string, kind: Toast['kind'] = 'info', action?: Toast['action']): number {
+  const id = ++toastSeq;
+  set((s) => ({ toasts: [...s.toasts.slice(-2), { id, text, kind, action }] }));
+  setTimeout(() => dismissToast(id), kind === 'error' ? 9000 : action ? 12000 : 4500);
+  return id;
+}
+export function dismissToast(id: number): void { set((s) => ({ toasts: s.toasts.filter((x) => x.id !== id) })); }
+export function ask(title: string, lines: string[], ok: string, warn?: string, reset = false): Promise<boolean> {
+  return new Promise((resolve) => set({ confirm: { title, warn, lines, ok, resolve, ...(reset ? { reset } : {}) } }));
+}
+/**
+ * The warning for a firmware made from (or being) one of the cameras' newer releases (GR IV 1.20 / 1.21,
+ * GR III 2.20 / 2.21, GR IIIx 1.70 / 1.71): a camera that installs it cannot go back to an earlier release.
+ */
+export function newFirmwareWarning(info: FirmwareInfo | undefined): string | null {
+  if (!info) return null;
+  const newer = info.family === 'gr4' ? ['1.20', '1.21'] : ['2.20', '1.70', '2.21', '1.71'];
+  return newer.includes(info.version) ? t('newFwWriteLine') : null;
+}
+/**
+ * Before the official firmware goes back on the camera: settings made with GR Mod's firmware (an
+ * added slot or ratio selected, soft focus on the ADJ lever, the date imprint, added slots'
+ * parameters) are values the official firmware does not know and may freeze on. The dialog says so
+ * in red and its button confirms that the camera was reset to factory defaults.
+ */
+export function askOfficial(lines: string[], warn?: string): Promise<boolean> {
+  return ask(t('resetConfirmTitle'), lines, t('resetConfirmOk'), warn, true);
+}
+export function answerConfirm(v: boolean): void { const c = state.confirm; set({ confirm: undefined }); c?.resolve(v); }
+/** The official releases a firmware file can be, for the message an unusable file gets. */
+export function supportedList(): string { return SUPPORTED_LINES.map((l) => `${l.name} ${l.versions.join(' / ')}`).join(t('listSep')); }
+
+// ------------------------------------------------------------------ plain-language error hints
+/**
+ * @decision DEC-QOL-HINT-001
+ * @title Known error codes get a plain-language hint; the short code stays for bug reports
+ * @status accepted
+ * @rationale fail() used to toast `Error · code · message`, which means nothing to most users. The
+ *   codes below are the user-actionable ones thrown by the engine (core FirmwareError / JpegError)
+ *   and the host (shell/internal/server/errors.go, plus the client-side `offline` / `no-host`). A host
+ *   `io` error carries only the OS text, so card-full and card-removed are told apart by that text.
+ *   Unknown codes keep the old `code · message` format.
+ */
+/** Codes meaning "this is not a firmware file GR Mod can open" (also used by openFirmware's own toast). */
+const FIRMWARE_CODES = ['unsupported-firmware', 'too-short', 'unexpected-layout', 'bad-checksum', 'bad-footer', 'bad-stream', 'bad-stream-length', 'bad-decoded-length', 'bad-models'];
+export const isBadFirmwareCode = (code: string): boolean => code === 'unsupported-firmware' || code.startsWith('bad-') || code === 'too-short';
+const ERROR_HINTS: Record<string, Key> = {
+  ...Object.fromEntries(FIRMWARE_CODES.map((c) => [c, 'hintFirmware' as Key])),
+  'gr3x-unsupported': 'hintUnsupportedHere', 'feature-unsupported': 'hintUnsupportedHere', 'bad-hlg': 'hintConflict', 'no-space': 'hintFwFull',
+  'too-many-ratios': 'hintTooMany', 'too-many-pictures': 'hintTooMany',
+  'not-found': 'hintNotFound', forbidden: 'hintDenied', 'too-large': 'errTooBig', network: 'fwNetError', checksum: 'fwChecksum',
+  offline: 'hintOffline', 'no-host': 'hintOffline',
+};
+/** The hint for an error code (and message, for the host's catch-all `io`), or undefined for a code without one. */
+export function errorHint(code: string, message = ''): Key | undefined {
+  if (code === 'io') {
+    if (/no space left|not enough space|disk (is )?full|enospc|quota/i.test(message)) return 'hintCardFull';
+    if (/read-only file system|write.protect|erofs|permission denied|access is denied|eacces|eperm/i.test(message)) return 'hintWriteProtected';
+    if (/not ready|no such device|enodev|input\/output error|i\/o error|removed|unplugged|no longer available/i.test(message)) return 'hintRemoved';
+    return undefined;
+  }
+  return Object.prototype.hasOwnProperty.call(ERROR_HINTS, code) ? ERROR_HINTS[code] : undefined;
+}
+/** Exported for the tests. A code with a plain-language hint (errorHint) shows the hint and the short code; others show code and message. */
+export function fail(e: unknown): void {
+  const code = e instanceof HostError || e instanceof EngineError ? e.code : '';
+  const msg = e instanceof Error ? e.message : String(e);
+  console.error(e);
+  const hint = code ? errorHint(code, msg) : undefined;
+  if (hint) { toast(`${t('error')} · ${t(hint)} (${code})`.slice(0, 220), 'error'); return; }
+  toast(`${t('error')}${code ? ` · ${code}` : ''}${msg && msg !== code ? ` · ${msg}` : ''}`.slice(0, 220), 'error');
+}
+
+/**
+ * The camera language (whose names Image Control changes) follows the app language: 简体中文 → zh-CN, English → en,
+ * following the system → the system's language where the camera has it (else English).
+ */
+export function cameraLang(): LangCode {
+  const ui = uiLangPref();
+  return ui === 'zh' ? 'zh-CN' as LangCode : ui === 'en' ? 'en' as LangCode : systemCameraLang();
+}
+/** The camera language closest to the phone's own: its first language GR IV has, else English. */
+export function systemCameraLang(): LangCode {
+  const have = LANGS as readonly string[];
+  for (const raw of navigator.languages?.length ? navigator.languages : [navigator.language || 'en']) {
+    const l = raw.toLowerCase();
+    if (l.startsWith('zh')) return (/-(tw|hk|mo)|hant/.test(l) ? 'zh-TW' : 'zh-CN') as LangCode;
+    const base = l.split('-')[0];
+    if (have.includes(base)) return base as LangCode;
+  }
+  return 'en' as LangCode;
+}
+/** The app language (and with it the camera language): kept, the work saved with it, then the page reloads in it. */

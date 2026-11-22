@@ -21,7 +21,7 @@ export function featureRows(s: FirmwareSummary): { label: string; on: boolean; d
   ];
 }
 
-export const KIND: Record<FirmwareSummary['kind'], Key> = { official: 'inspectKindOfficial', modified: 'inspectKindModified', bridge: 'inspectKindBridge', unknown: 'inspectKindUnknown' };
+export const KIND: Record<FirmwareSummary['kind'], Key> = { official: 'inspectKindOfficial', modified: 'inspectKindModified', unknown: 'inspectKindUnknown' };
 export interface CompareRow { label: string; a: string; b: string; differs: boolean; head?: boolean }
 const none = (): string => t('inspectNone');
 const yesNo = (on: boolean, detail?: string): string => (on ? `${t('inspectYes')}${detail ? ` · ${detail}` : ''}` : t('inspectNo'));
@@ -32,7 +32,7 @@ function valueRows(s: FirmwareSummary, lang: LangCode): { label: string; value: 
     { label: t('inspectKind'), value: `${t(KIND[s.kind])}${s.kind === 'modified' ? ` · ${t('inspectChanged')} ${s.changedBytes}` : ''}` },
     { label: t('inspectVerified'), value: t(s.verified ? 'inspectYes' : 'inspectNo') },
   ];
-  if (s.kind === 'unknown' || s.kind === 'bridge') return rows;
+  if (s.kind === 'unknown') return rows;
   for (const f of featureRows(s)) rows.push({ label: f.label, value: yesNo(f.on, f.detail) });
   rows.push(
     { label: t('inspectRatios'), value: s.ratios.length ? s.ratios.map((r) => `${r.name} (${r.ratio})`).join(' / ') : none() },

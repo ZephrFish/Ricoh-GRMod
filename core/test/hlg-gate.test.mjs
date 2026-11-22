@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // @mock-exempt: engine worker, host bridge, pixels and preview are external boundaries (same pattern as gr3x-ui.test.mjs)
 // The fork's HLG photo mode is offered only by GR IV programs that carry its code (DEC-HLG-121-001 in
-// core/src/app/engine.ts). Upstream's 1.21 program came without it; the fork ported it (DEC-HLG-121-002 in
-// core/src/fw/gr4v121/aspect/hlg.ts), so every GR IV program has it now and the gate stays for any later port.
+// core/src/app/engine.ts). Since upstream 0.8.16, 1.21 runs 1.20's modules with its own addresses, so the 1.20
+// module (DEC-HLG-121-002 in core/src/fw/gr4v120/aspect/hlg.ts) covers it; the gate stays for any later program.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Gr4Program111 from '../src/fw';
 import * as Gr4Program120 from '../src/fw/gr4v120';

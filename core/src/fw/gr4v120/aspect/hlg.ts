@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /**
- * BT.2100 HLG HDR Still Photography mod for Ricoh GR IV (firmware 1.20).
+ * BT.2100 HLG HDR Still Photography mod for Ricoh GR IV (firmware 1.20, and 1.21 through its address table).
+ *
+ * @decision DEC-HLG-121-002: since upstream 0.8.16, 1.21 is this program with 1.21's addresses (fw/release.ts),
+ *   so every address here is `adr(1.20 address)`. Their 1.21 places are in tools/port/gr4-121-map.json: found by
+ *   tools/port/addrmap.py on the two official RTOS images (16-word code windows, relocations masked, every
+ *   reference agreeing) or, for RAM tables, the RAM image and the text catalogue, by upstream's own overrides.
+ *   ExifJpegWriter::SetupAppNInfo is the same 51 words in both releases but for one BL that names the same
+ *   target, so the hook block is the same. Texts and icons are unchanged in 1.21. Camera-tested on 1.21
+ *   (2026-11-17, the fork's 0.8.15 build of this port). `installHlgPhoto` checks every word it replaces.
  *
  * Transforms the camera's "HDR Tone" (HDR色调, toneId = 22 = 0x16) image control slot into
  * an in-camera direct BT.2100 HLG HDR photo capture mode:
@@ -33,10 +41,11 @@ import { FirmwareError } from '../../types';
 import { BASE, ICON_CATALOG, LOOKUP_BOUNDS, Patch, concat, expectWord, u16le, u32le } from './build';
 import { branchWord, movImmediate, movWord } from './arm';
 import { HLG_CURVE, HLG_HOOK_BLOCK, HLG_MATRIX, createHdrScale } from '../../aspect/hlg';
+import { adr } from '../target';
 
 export const TARGET_TONE_ID = 22; // HDR Tone
 export const TARGET_TEXT_ID = 323; // Index 323 in 1.20 text tables (1.11 was 306)
-export const HOOK_SITE = 0x53832b60; // ExifJpegWriter::SetupAppNInfo (1.11 was 0x5380bf50)
+export const HOOK_SITE = adr(0x53832b60); // ExifJpegWriter::SetupAppNInfo (1.11 was 0x5380bf50)
 
 // Scale graphic IDs: 0x261 = native 3-step [1, 2, 3] in 1.20 (1.11 was 0x23b)
 // 0xd2 = native 3-step toning scale with official Ricoh OFF icon in 1.20 (1.11 was 0xc4)
@@ -44,39 +53,39 @@ export const HOOK_SITE = 0x53832b60; // ExifJpegWriter::SetupAppNInfo (1.11 was 
 export const HDR_SCALE_ICON_ID = 800;
 const NATIVE_SCALE_ICON = 0x261;
 const NATIVE_TONING_SCALE_ICON = 0xd2;
-export const HDR_SCALE_SHOOTING = 0x531ca1e0; // Shooting mode detail line slider scale (1.11 was 0x531c8c34)
-export const HDR_SCALE_PLAYBACK = 0x531cda58; // Playback / RAW development detail line slider scale (1.11 was 0x531cc27c)
+export const HDR_SCALE_SHOOTING = adr(0x531ca1e0); // Shooting mode detail line slider scale (1.11 was 0x531c8c34)
+export const HDR_SCALE_PLAYBACK = adr(0x531cda58); // Playback / RAW development detail line slider scale (1.11 was 0x531cc27c)
 
 // HDR Tone Level (HDR Intense) tables and UI control sites in 1.20:
-export const HDR_INTENSE_TABLE_0 = 0x53de573c; // cuisine 0 (1.11 was 0x53dbaed4)
-export const HDR_INTENSE_TABLE_1 = 0x53de551c; // cuisine 1 (1.11 was 0x53dbacc4)
-export const HDR_INTENSE_TABLE_2 = 0x53de5734; // cuisine 2 (1.11 was 0x53dbaecc)
-export const HDR_INTENSE_TABLE_3 = 0x53de55f0; // cuisine 3 (1.11 was 0x53dbad84)
+export const HDR_INTENSE_TABLE_0 = adr(0x53de573c); // cuisine 0 (1.11 was 0x53dbaed4)
+export const HDR_INTENSE_TABLE_1 = adr(0x53de551c); // cuisine 1 (1.11 was 0x53dbacc4)
+export const HDR_INTENSE_TABLE_2 = adr(0x53de5734); // cuisine 2 (1.11 was 0x53dbaecc)
+export const HDR_INTENSE_TABLE_3 = adr(0x53de55f0); // cuisine 3 (1.11 was 0x53dbad84)
 export const HDR_INTENSE_TABLE = HDR_INTENSE_TABLE_3;
 
-export const HDR_INTENSE_COUNT_CMP = 0x533cfa34; // GetHdrCuisineHdrIntenseValueCount: cmp r0, #3 (1.11 was 0x533bec24)
-export const HDR_INTENSE_COUNT_MOV = 0x533cfa38; // GetHdrCuisineHdrIntenseValueCount: movls r0, #3 (1.11 was 0x533bec28)
-export const HDR_INTENSE_ASCII_CMP = 0x533aacc8; // GetImageControlParameterHdrIntenseAscii: beq #... (1.11 was 0x5339b610)
+export const HDR_INTENSE_COUNT_CMP = adr(0x533cfa34); // GetHdrCuisineHdrIntenseValueCount: cmp r0, #3 (1.11 was 0x533bec24)
+export const HDR_INTENSE_COUNT_MOV = adr(0x533cfa38); // GetHdrCuisineHdrIntenseValueCount: movls r0, #3 (1.11 was 0x533bec28)
+export const HDR_INTENSE_ASCII_CMP = adr(0x533aacc8); // GetImageControlParameterHdrIntenseAscii: beq #... (1.11 was 0x5339b610)
 
 // Secondary & Raw Development formatters (0x533aad5c and 0x533aae14 in 1.20)
-export const HDR_FORMATTER1_MOV = 0x533aad68; // moveq r3, #2 -> mov r3, r2 (1.11 was 0x5339b6b0)
-export const HDR_FORMATTER1_B = 0x533aad78; // beq 0x533aad90 -> b 0x533aad90 (1.11 was 0x5339b6c0)
-export const HDR_FORMATTER2_MOV = 0x533aae20; // moveq r3, #2 -> mov r3, r2 (1.11 was 0x5339b768)
-export const HDR_FORMATTER2_B = 0x533aae30; // beq 0x533aae48 -> b 0x533aae48 (1.11 was 0x5339b778)
+export const HDR_FORMATTER1_MOV = adr(0x533aad68); // moveq r3, #2 -> mov r3, r2 (1.11 was 0x5339b6b0)
+export const HDR_FORMATTER1_B = adr(0x533aad78); // beq 0x533aad90 -> b 0x533aad90 (1.11 was 0x5339b6c0)
+export const HDR_FORMATTER2_MOV = adr(0x533aae20); // moveq r3, #2 -> mov r3, r2 (1.11 was 0x5339b768)
+export const HDR_FORMATTER2_B = adr(0x533aae30); // beq 0x533aae48 -> b 0x533aae48 (1.11 was 0x5339b778)
 
-export const STD_REC_VA = 0x5501c118; // 1.11 was 0x5501adbc
-export const STD_MA_DESC_VA = 0x54081348; // 1.11 was 0x54049de8
-export const T_REC_BASE = 0x55054800; // 1.11 was 0x55053780
-export const T_GAM_BASE = 0x55054158; // 1.11 was 0x55053138
-export const T_MA_BASE = 0x55054554; // 1.11 was 0x55053504
-export const NATIVE_TEXT_ROOTS = 0x55002118;
-export const TEXT_CATALOG = 0x5440da00; // 1.11 was 0x543d4ac0
+export const STD_REC_VA = adr(0x5501c118); // 1.11 was 0x5501adbc
+export const STD_MA_DESC_VA = adr(0x54081348); // 1.11 was 0x54049de8
+export const T_REC_BASE = adr(0x55054800); // 1.11 was 0x55053780
+export const T_GAM_BASE = adr(0x55054158); // 1.11 was 0x55053138
+export const T_MA_BASE = adr(0x55054554); // 1.11 was 0x55053504
+export const NATIVE_TEXT_ROOTS = adr(0x55002118);
+export const TEXT_CATALOG = adr(0x5440da00); // 1.11 was 0x543d4ac0
 export const LANGUAGES = 21;
 
-const RAM_DEST = 0x55000000;
-const RAM_SRC = 0x543b3100; // 1.11 was 0x5437b640
+const RAM_DEST = adr(0x55000000);
+const RAM_SRC = adr(0x543b3100); // 1.11 was 0x5437b640
 const RAM_LEN = 0x58500; // 1.11 was 0x57480
-const GAMMA_DESC_WORD0 = 0x540b4da0; // 1.11 was 0x5407def4
+const GAMMA_DESC_WORD0 = adr(0x540b4da0); // 1.11 was 0x5407def4
 
 /** Maps a runtime RAM VA (0x55000000..0x55058500) to its ROM image address (0x543b3100..) for Patch writes */
 export function romVa(va: number): number {

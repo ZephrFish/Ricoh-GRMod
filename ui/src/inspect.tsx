@@ -52,7 +52,7 @@ export function InspectDialog() {
               <li><b>{t('inspectKind')}</b>: {t(KIND[s.kind])}{s.kind === 'modified' && <> · {t('inspectChanged')} {s.changedBytes}</>}</li>
               <li><b>{t('inspectVerified')}</b>: {t(s.verified ? 'inspectYes' : 'inspectNo')}</li>
               {info && <li><b>{t('inspectRef')}</b>: {modelLabel(model)} {info.version}</li>}
-              {s.kind !== 'unknown' && s.kind !== 'bridge' && (
+              {s.kind !== 'unknown' && (
                 <>
                   <li><b>{t('inspectFeatures')}</b></li>
                   {featureRows(s).map((f) => <li key={f.label}>{f.label}: {f.on ? <>{t('inspectYes')}{f.detail ? ` · ${f.detail}` : ''}</> : t('inspectNo')}</li>)}

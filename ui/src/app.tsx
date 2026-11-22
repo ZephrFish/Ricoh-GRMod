@@ -11,14 +11,14 @@ import { haptic, setBackFallback } from './host-android';
 import { t, uiLangPref } from './i18n';
 import type { Key } from './i18n';
 import { CopiesPage } from './copies';
-import { BridgeBanner, FirmwareOnline, FirmwareRow, MODELS, modelLabel } from './firmware';
+import { FirmwareOnline, FirmwareRow, MODELS, modelLabel } from './firmware';
 import { InspectDialog } from './inspect';
 import { SnapshotsDialog } from './snapshots';
-import { CropEditor, ImageControlPage, RatioPage, WallpaperPage } from './pages';
+import { CropEditor, GridPage, ImageControlPage, RatioPage, WallpaperPage } from './pages';
 import { Tour, replayTour, restartTours } from './tour';
 import { UpdatePill, UpdateWatcher, checkForUpdate, openWhatsNew } from './updates';
 import {
-  askForOfficial, bridgeLoaded, getState, isGr3, backupCopies, extrasOn, copyList, deleteCopies, hasNameErrors, hasRatioErrors, ratioSpecs, revealBackups, writableCopy, writeCopy, menuPictures, outputFirmware, handleShortcut, modKeyName, toast, pendingChanges, refreshVolumes, selectVolume, setModel, setPage, setShowAll, useStore, wallReady, exportProject, importProject, setAppLanguage, newProject, openSnapshots,
+  pageOffered, getState, isGr3, backupCopies, extrasOn, copyList, deleteCopies, hasNameErrors, hasRatioErrors, ratioSpecs, revealBackups, writableCopy, writeCopy, menuPictures, outputFirmware, handleShortcut, modKeyName, toast, pendingChanges, refreshVolumes, selectVolume, setModel, setPage, setShowAll, useStore, wallReady, exportProject, importProject, setAppLanguage, newProject, openSnapshots,
 } from './store';
 import type { State } from './store';
 
@@ -29,11 +29,13 @@ function Sidebar() {
   const model = useStore((s) => s.model);
   const menuPics = useStore((s) => !!s.info?.capabilities.menuPictures);
   const info = useStore((s) => !!s.info);
+  const grid = useStore((s) => pageOffered('grid', s));
   return (
     <aside className="sidebar">
       <nav>
         <button className={`nav ${page === 'ic' ? 'on' : ''}`} data-tour="nav-ic" onClick={() => setPage('ic')}>{Ico.aperture}<span>{t('navIC')}</span></button>
         <button className={`nav ${page === 'ratio' ? 'on' : ''}`} data-tour="nav-ratio" onClick={() => setPage('ratio')}>{Ico.ratio}<span>{t('navRatio')}</span></button>
+        {grid && <button className={`nav ${page === 'grid' ? 'on' : ''}`} data-tour="nav-grid" onClick={() => setPage('grid')}>{Ico.grid}<span>{t('navGridPage')}</span></button>}
         {(!isGr3(model) || menuPics || !info) && <button className={`nav ${page === 'wall' ? 'on' : ''}`} data-tour="nav-wall" onClick={() => setPage('wall')}>{Ico.image}<span>{t('navWall')}</span></button>}
       </nav>
       <div className="grow" />
@@ -76,21 +78,20 @@ function CopyActions() {
   const n = useStore((s) => s.copySel.length);
   const busy = useStore((s) => !!s.busy);
   const writable = useStore((s) => !!writableCopy(s) && s.volumes.some((v) => v.id === s.volumeId));
-  const bridge = useStore((s) => bridgeLoaded(s));
   return (
     <div className="out-actions" data-tour="copies-actions">
       {source === 'pc' && <button className="btn" title={t('copiesOpenFolder')} onClick={() => revealBackups()}>{Ico.folder}<span className="out-label">{t('copiesOpenFolder')}</span></button>}
       <button className="btn" disabled={busy || count === 0} onClick={() => { void deleteCopies(true); }}>{t('copiesDeleteAll')}</button>
       <button className="btn danger" disabled={busy || n === 0} onClick={() => { void deleteCopies(false); }}>{Ico.trash}<span>{t('copiesDelete')}{n ? ` ${n}` : ''}</span></button>
       {source === 'card' && <button className="btn" disabled={busy || n === 0} onClick={() => { void backupCopies(); }}>{t('copiesBackup')}{n ? ` ${n}` : ''}</button>}
-      <button className="btn primary" disabled={busy || (!writable && !bridge)} title={writable || bridge ? undefined : t('copiesPickOne')} onClick={() => { if (bridge) askForOfficial(); else void writeCopy(); }}>{t('writeCard')}</button>
+      <button className="btn primary" disabled={busy || !writable} title={writable ? undefined : t('copiesPickOne')} onClick={() => { void writeCopy(); }}>{t('writeCard')}</button>
     </div>
   );
 }
 
 /** Whether the page's output buttons can make a firmware file now. */
 function canOutput(s: State): boolean {
-  const isIC = s.page === 'ic' || s.page === 'ratio'; const isWall = s.page === 'wall';
+  const isIC = s.page === 'ic' || s.page === 'ratio' || s.page === 'grid'; const isWall = s.page === 'wall';
   return !!s.info && s.info.models.includes(s.model) && (isIC ? s.info.capabilities.build : isWall ? (s.info.capabilities.wallpaper || s.info.capabilities.menuPictures) : s.info.capabilities.factoryEntry) && !s.busy && (isIC ? (pendingChanges(s).length + ratioSpecs(s).length > 0 || extrasOn(s) || (s.model !== 'MONO' && s.info.family !== 'gr3x' && s.extras.length > 0) || menuPictures(s).length > 0) && !hasNameErrors(s) && !hasRatioErrors(s) : isWall ? wallReady(s) && !hasNameErrors(s) && !hasRatioErrors(s) : true);
 }
 
@@ -100,9 +101,7 @@ function OutputBar() {
   // Image Control (with its switches), the added ratios and the power-off images go into one firmware file: every page writes the same thing.
   const can = canOutput(s);
   const role: Key | '' = s.role === 'firmware' ? 'roleFirmware' : s.role === 'wallpaper' ? 'roleWallpaper' : s.role === 'mixed' ? 'roleMixed' : s.role === 'empty' ? 'roleEmpty' : '';
-  // With the bridge firmware open the buttons stay live but offer the official download instead.
-  const bridge = bridgeLoaded(s) && !s.busy;
-  const run = (kind: 'card' | 'folder'): void => { if (bridge) { askForOfficial(); return; } void outputFirmware({ kind }); };
+  const run = (kind: 'card' | 'folder'): void => { void outputFirmware({ kind }); };
   return (
     <footer className="outbar">
       <div className="out-card" data-tour="card">
@@ -123,8 +122,8 @@ function OutputBar() {
       </div>
       <span className="grow" />
       {s.page === 'copies' && <CopyActions />}
-      {s.page !== 'copies' && <button className="btn" data-tour="export" disabled={!can && !bridge} title={t('exportFolderKey', { m: modKeyName() })} onClick={() => run('folder')}>{Ico.folder}<span className="out-label">{t('exportFolder')}</span></button>}
-      {s.page !== 'copies' && <button className="btn primary" data-tour="write" disabled={!bridge && (!can || !vol)} onClick={() => run('card')}>{t('writeCard')}</button>}
+      {s.page !== 'copies' && <button className="btn" data-tour="export" disabled={!can} title={t('exportFolderKey', { m: modKeyName() })} onClick={() => run('folder')}>{Ico.folder}<span className="out-label">{t('exportFolder')}</span></button>}
+      {s.page !== 'copies' && <button className="btn primary" data-tour="write" disabled={!can || !vol} onClick={() => run('card')}>{t('writeCard')}</button>}
     </footer>
   );
 }
@@ -176,6 +175,7 @@ export function App() {
   const gr3 = useStore((s) => isGr3(s.model));
   const menuPicsReady = useStore((s) => !!s.info?.capabilities.menuPictures);
   const fwOpen = useStore((s) => !!s.info);
+  const gridOk = useStore((s) => pageOffered('grid', s));
   const ready = useStore((s) => s.ready);
   useEffect(() => { const key = (e: KeyboardEvent): void => { handleShortcut(e); }; window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key); }, []);
   if (!host.available) return <div className="nohost">{t('hostMissing')}</div>;
@@ -184,8 +184,7 @@ export function App() {
     <div className="app" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }} onDrop={(e) => e.preventDefault()}>
       <Sidebar />
       <main className="main">
-        <BridgeBanner />
-        <div className="stage">{ready ? (page === 'ratio' ? <RatioPage /> : page === 'wall' && (!gr3 || menuPicsReady || !fwOpen) ? <WallpaperPage /> : page === 'copies' ? <CopiesPage /> : <ImageControlPage />) : <div className="page"><span className="spinner" /></div>}</div>
+        <div className="stage">{ready ? (page === 'ratio' ? <RatioPage /> : page === 'grid' && gridOk ? <GridPage /> : page === 'wall' && (!gr3 || menuPicsReady || !fwOpen) ? <WallpaperPage /> : page === 'copies' ? <CopiesPage /> : <ImageControlPage />) : <div className="page"><span className="spinner" /></div>}</div>
         <OutputBar />
       </main>
       <CropEditor />
@@ -204,7 +203,7 @@ export function App() {
 
 // ------------------------------------------------------------------ Android: the same pages in a phone layout
 
-const PAGE_TITLE: Record<string, Key> = { ic: 'navIC', ratio: 'navRatio', wall: 'navWall', copies: 'navIC' };
+const PAGE_TITLE: Record<string, Key> = { ic: 'navIC', ratio: 'navRatio', grid: 'navGridPage', wall: 'navWall', copies: 'navIC' };
 
 function MobileTop({ onSettings, wide }: { onSettings: () => void; wide: boolean }) {
   const page = useStore((s) => s.page);
@@ -215,8 +214,8 @@ function MobileTop({ onSettings, wide }: { onSettings: () => void; wide: boolean
       <span className="grow" />
       {!wide && <>
       <button type="button" className="m-fw" data-tour="m-fw" onClick={onSettings} aria-label={t('mSettings')}>
-        <span className={info ? '' : 'muted'}>{info ? (info.bridge ? t('fwBridgeValue') : <><span className="m-fw-file">{info.filename} · </span>{info.version}</>) : t('noFirmware')}</span>
-        <i className={`dot ${info ? (info.bridge ? 'warn' : 'ok') : ''}`} />
+        <span className={info ? '' : 'muted'}>{info ? <><span className="m-fw-file">{info.filename} · </span>{info.version}</> : t('noFirmware')}</span>
+        <i className={`dot ${info ? 'ok' : ''}`} />
       </button>
       <button type="button" className="btn ghost icon-only m-icon" data-tour="m-settings" onClick={onSettings} aria-label={t('mSettings')}>{Ico.sliders}</button>
       </>}
@@ -283,9 +282,11 @@ function usePageTabs(): { p: TabPage; icon: React.ReactNode; key: Key }[] {
   const model = useStore((s) => s.model);
   const menuPics = useStore((s) => !!s.info?.capabilities.menuPictures);
   const info = useStore((s) => !!s.info);
+  const grid = useStore((s) => pageOffered('grid', s));
   return [
     { p: 'ic', icon: Ico.aperture, key: 'navIC' },
     { p: 'ratio', icon: Ico.ratio, key: 'navRatio' },
+    ...(grid ? [{ p: 'grid' as TabPage, icon: Ico.grid, key: 'navGridPage' as Key }] : []),
     ...((!isGr3(model) || menuPics || !info) ? [{ p: 'wall' as TabPage, icon: Ico.image, key: 'navWall' as Key }] : []),
   ];
 }
@@ -335,23 +336,22 @@ function usePressed(): { pressed: boolean; bind: React.HTMLAttributes<HTMLButton
 function MobileActions() {
   const s = useStore((x) => x);
   const can = canOutput(s);
-  const bridge = bridgeLoaded(s) && !s.busy;
   const gr4 = s.info?.family === 'gr4';
   const glass = useGlass('lg-save', { rim: 14, strength: 9, radius: 24 });
   const glass2 = useGlass('lg-send', { rim: 14, strength: 9, radius: 24 });
   const p1 = usePressed();
   const p2 = usePressed();
-  const run = (kind: 'camera' | 'phone'): void => { haptic(); if (bridge) { askForOfficial(); return; } void outputFirmware({ kind }); };
+  const run = (kind: 'camera' | 'phone'): void => { haptic(); void outputFirmware({ kind }); };
   return (
     <div className="m-actions">
       <GlassDefs>{glass.filter}{glass2.filter}</GlassDefs>
-      <button ref={glass.ref} data-tour="export" className={`btn glass ${p1.pressed ? 'pressed' : ''}`} disabled={!can && !bridge} {...p1.bind} onClick={() => run('phone')}>{Ico.save}<span>{t('saveToPhone')}</span></button>
-      <button ref={glass2.ref} data-tour="write" className={`btn glass tint ${p2.pressed ? 'pressed' : ''}`} disabled={(!can && !bridge) || (!!s.info && !gr4)} title={s.info && !gr4 ? t('pushOnlyGr4') : undefined} {...p2.bind} onClick={() => run('camera')}>{Ico.send}<span>{t('pushCamera')}</span></button>
+      <button ref={glass.ref} data-tour="export" className={`btn glass ${p1.pressed ? 'pressed' : ''}`} disabled={!can} {...p1.bind} onClick={() => run('phone')}>{Ico.save}<span>{t('saveToPhone')}</span></button>
+      <button ref={glass2.ref} data-tour="write" className={`btn glass tint ${p2.pressed ? 'pressed' : ''}`} disabled={!can || (!!s.info && !gr4)} title={s.info && !gr4 ? t('pushOnlyGr4') : undefined} {...p2.bind} onClick={() => run('camera')}>{Ico.send}<span>{t('pushCamera')}</span></button>
     </div>
   );
 }
 
-type TabPage = 'ic' | 'ratio' | 'wall';
+type TabPage = 'ic' | 'ratio' | 'grid' | 'wall';
 
 /**
  * The page tabs: a floating bar of glass with a lens over the current tab (after Kyant0/AndroidLiquidGlass).
@@ -361,6 +361,9 @@ type TabPage = 'ic' | 'ratio' | 'wall';
  * - Pressing swells the lens and strengthens its rim, light and inner shade; it can be dragged along the bar and
  *   lands on the nearest tab; a tap sends it to the tab tapped. It moves on a spring and stretches with its speed.
  */
+/** Tab names for a bar of more than four tabs. */
+const SHORT_TAB: Partial<Record<Key, Key>> = { navIC: 'navICTab', navRatio: 'navRatioTab', navWall: 'navWallTab' };
+
 function MobileTabs() {
   const page = useStore((s) => s.page);
   const tabs = usePageTabs();
@@ -464,7 +467,7 @@ function MobileTabs() {
     <button
       key={x.p} type="button" tabIndex={hot ? -1 : 0} aria-hidden={hot || undefined} className={`m-tab ${hot ? 'on' : ''}`} data-tour={hot ? undefined : `nav-${x.p}`}
       aria-current={!hot && i === current ? 'page' : undefined} onClick={hot ? undefined : (e) => { if (e.detail === 0) setPage(x.p); }}
-    >{x.icon}<span>{t(x.key)}</span></button>
+    >{x.icon}<span>{t(tabs.length > 4 ? SHORT_TAB[x.key] ?? x.key : x.key)}</span></button>
   ));
   return (
     <div className="m-dock">
@@ -487,6 +490,7 @@ function MobileApp() {
   const gr3 = useStore((s) => isGr3(s.model));
   const menuPicsReady = useStore((s) => !!s.info?.capabilities.menuPictures);
   const fwOpen = useStore((s) => !!s.info);
+  const gridOk = useStore((s) => pageOffered('grid', s));
   const ready = useStore((s) => s.ready);
   const [settings, setSettings] = useState(false);
   const wide = useWide();
@@ -513,7 +517,7 @@ function MobileApp() {
     if (!el || from === page) return;
     shown.current = page;
     el.scrollTop = scrolls.current[page] ?? 0;
-    const ORDER = ['ic', 'ratio', 'wall'];
+    const ORDER = ['ic', 'ratio', 'grid', 'wall'];
     const dir = Math.sign(ORDER.indexOf(page) - ORDER.indexOf(from)) || 1;
     const view = el.firstElementChild as HTMLElement | null;
     if (view && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -524,8 +528,7 @@ function MobileApp() {
     <>
       <MobileTop wide={wide} onSettings={() => setSettings(true)} />
       <main className="main">
-        <BridgeBanner />
-        <div className="stage" ref={stage} onScroll={(e) => { scrolls.current[shown.current] = e.currentTarget.scrollTop; }}>{ready ? (page === 'ratio' ? <RatioPage /> : page === 'wall' && (!gr3 || menuPicsReady || !fwOpen) ? <WallpaperPage /> : <ImageControlPage />) : <div className="page"><span className="spinner" /></div>}</div>
+        <div className="stage" ref={stage} onScroll={(e) => { scrolls.current[shown.current] = e.currentTarget.scrollTop; }}>{ready ? (page === 'ratio' ? <RatioPage /> : page === 'grid' && gridOk ? <GridPage /> : page === 'wall' && (!gr3 || menuPicsReady || !fwOpen) ? <WallpaperPage /> : <ImageControlPage />) : <div className="page"><span className="spinner" /></div>}</div>
       </main>
       {/* both float over the page, which scrolls on under them */}
       <MobileActions />

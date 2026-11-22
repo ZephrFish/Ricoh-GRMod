@@ -1,13 +1,13 @@
 // Guided tours over the real interface: one part is lit, the rest dimmed a little, and a card
 // next to it says what the part is for. The first start shows the overview, and each page shows
-// its own tour the first time it is opened with something on it; in this fork "Skip all guides" turns them all off. The
+// its own tour the first time it is opened with something on it; those cannot be skipped. The
 // help button in the sidebar shows the current page's tour again, with a skip button.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { isMobile } from './host-android';
 import { t } from './i18n';
 import type { Key } from './i18n';
-import { endTour, getState, isGr3, resetTours, skipAllTours, startTour, tourStep, useStore } from './store';
+import { endTour, getState, isGr3, resetTours, skipTours, startTour, tourStep, useStore } from './store';
 import type { TourId } from './store';
 
 type Side = 'right' | 'left' | 'top' | 'bottom';
@@ -55,6 +55,11 @@ export const TOURS: Record<TourId, Step[]> = {
     { target: 'ic-f-flash', title: 'navFlash', body: 'tIcFFlashB', side: 'top' },
     { target: 'ic-f-hdr', title: 'navHdr', body: 'tIcFHdrB', side: 'top' },
     { target: 'ic-f-preview', title: 'navPreview', body: 'tIcFPreviewB', side: 'top' },
+    { target: 'ic-f-shadow', title: 'navShadow', body: 'tIcFShadowB', side: 'top' },
+    { target: 'ic-f-battery', title: 'navBattery', body: 'tIcFBatteryB', side: 'top' },
+    { target: 'ic-f-grain', title: 'navGrain', body: 'tIcFGrainB', side: 'top' },
+    { target: 'ic-f-vaf', title: 'navVideoAf', body: 'tIcFVafB', side: 'top' },
+    { target: 'ic-f-awb', title: 'navAwb', body: 'tIcFAwbB', side: 'top' },
     { target: 'ic-f-adj', title: 'navAdjSlots', body: 'tIcFAdjB', side: 'top' },
     { target: 'ic-f-bright', title: 'navBrightAuto', body: 'tIcFBrightB', side: 'top' },
     step('ic-tabs', 'IcTabs', 'bottom'),
@@ -67,9 +72,13 @@ export const TOURS: Record<TourId, Step[]> = {
     step('ratio-row', 'RatioRow', 'bottom'),
     step('ratio-add', 'RatioAdd', 'bottom'),
     step('ratio-common', 'RatioCommon', 'bottom'),
+    step('ratio-live', 'RatioLive', 'bottom'),
     step('ratio-backdrop', 'RatioBackdrop', 'bottom'),
     step('ratio-frame', 'RatioFrame', 'left'),
     step('write', 'IcWrite', 'top'),
+  ],
+  grid: [
+    { target: 'grid-switch', title: 'navGrid', body: 'tGridB', side: 'bottom' },
   ],
   wall: [
     step(undefined, 'WallMenu'),
@@ -164,7 +173,7 @@ export function beginTour(id: TourId, replay: boolean): boolean {
   startTour(id, steps, replay);
   return true;
 }
-/** Every guide again as on first use: the overview now, each page's guide on its next visit (not skippable). */
+/** Every guide again as on first use: the overview now, each page's guide on its next visit ("Skip guides" ends them all). */
 export function restartTours(): void { resetTours(); }
 /** The help button: the current page's tour again, or the overview while the page has nothing on it. */
 export function replayTour(): void {
@@ -308,8 +317,7 @@ function TourLayer() {
           <span className="tour-count">{tour.index + 1} / {tour.steps.length}</span>
           <span className="grow" />
           {tour.replay && !last && <button type="button" className="btn ghost small" onClick={() => endTour()}>{t('tourSkip')}</button>}
-          {/* fork: a first-run guide can be turned off for good (upstream makes them mandatory) */}
-          {!tour.replay && <button type="button" className="btn ghost small" onClick={() => skipAllTours()}>{t('tourSkipAll')}</button>}
+          {!tour.replay && !last && <button type="button" className="btn ghost small" title={t('tourSkipAllTip')} onClick={() => skipTours()}>{t('tourSkipAll')}</button>}
           {tour.index > 0 && <button type="button" className="btn small" onClick={() => tourStep(-1)}>{t('tourBack')}</button>}
           <button type="button" className="btn primary small" ref={next} onClick={() => tourStep(1)}>{last ? t('tourDone') : t('tourNext')}</button>
         </div>

@@ -182,7 +182,7 @@ describe('guides seen survive an import, and can all be skipped', () => {
     await store.init();
     store.startTour('overview', [0, 1, 2], false);
     expect(store.getState().tour?.id).toBe('overview');
-    store.skipAllTours();
+    store.skipTours(); // upstream 0.8.16 "Skip guides" (the fork's own skip-all is folded into it)
     expect(store.getState().tour).toBeUndefined();
     expect([...store.getState().toursSeen].sort()).toEqual([...store.TOUR_IDS].sort());
     await vi.advanceTimersByTimeAsync(2000);

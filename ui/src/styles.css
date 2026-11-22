@@ -286,6 +286,17 @@ svg { width: 18px; height: 18px; flex: none; }
 .ratio-frame:hover .compare-swap { opacity: 1; }
 .ratio-photo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: cover; }
 .ratio-shade { position: absolute; background: rgba(0, 0, 0, 0.72); pointer-events: none; }
+/* The live-view shade as the camera draws it: black at 50 %, or grey at 25 %. */
+.ratio-frame.live-shade .ratio-shade { background: rgba(0, 0, 0, 0.5); }
+.ratio-frame.live-shade.tone-light .ratio-shade { background: rgba(85, 85, 85, 0.25); }
+/* GR IV 1.20 / 1.21: the level chosen in the camera, previewed */
+.ratio-frame.live-shade.level-100 .ratio-shade { background: rgb(0, 0, 0); }
+.ratio-frame.live-shade.level-75 .ratio-shade { background: rgba(0, 0, 0, 0.75); }
+.ratio-frame.live-shade.level-25 .ratio-shade { background: rgba(0, 0, 0, 0.25); }
+.ratio-frame.live-shade.level-0 .ratio-shade { background: transparent; }
+.ratio-live { flex: none; display: grid; gap: 6px; margin-top: 10px; padding: 8px 8px 0; border-top: 1px solid var(--line); }
+.ratio-live .seg { justify-self: start; }
+.ratio-live p { margin: 0; }
 .ratio-window { position: absolute; box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.92); pointer-events: none; }
 .ratio-out { flex: none; min-height: 24px; margin-top: 12px; }
 .ratio-out.sizes { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); width: min(100cqw, 520px); }
@@ -294,6 +305,22 @@ svg { width: 18px; height: 18px; flex: none; }
 
 /* soft focus switch (Image Control page) */
 .soft-switch { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
+/* Custom grid lines: under their switch, a preview (click a line) and a button per line. */
+.grid-edit { display: grid; gap: 10px; padding: 0 14px 12px 58px; }
+.grid-edit .seg { justify-self: start; }
+.grid-edit-body { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.grid-edit-preview { width: 180px; height: auto; flex: none; border-radius: 4px; display: block; }
+.grid-edit-hit { cursor: pointer; }
+.grid-edit-lines { display: grid; gap: 6px; min-width: 0; }
+.grid-edit-group { display: grid; gap: 3px; }
+.grid-edit .btn.small[aria-pressed='true'] { background: var(--blue-bg); border-color: var(--blue); color: var(--blue); }
+.grid-edit .btn.small[aria-pressed='false'] { border-style: dashed; color: var(--muted); }
+.grid-edit p { margin: 0; }
+/* Custom grid page: the switch, then the editor, dimmed while the switch is off. */
+.grid-page { display: flex; flex-direction: column; gap: 14px; max-width: 900px; }
+.grid-page .grid-edit { padding: 0; }
+.grid-page .grid-edit-preview { width: min(100%, 520px); }
+.grid-page.off .grid-edit { opacity: 0.45; pointer-events: none; }
 .soft-switch .soft-ico { width: 32px; height: 32px; flex: none; }
 .soft-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .soft-text b { font-weight: 600; }
@@ -386,14 +413,9 @@ button.fw-rel:disabled { cursor: default; }
 /* what only shows under the pointer is shown while the tour points at it */
 [data-tour-on] .wall-actions, [data-tour-on] .ratio-x, [data-tour-on] .compare-swap { opacity: 1; }
 
-/* 1.12 bridge firmware */
+/* menus */
 .pop-sep { height: 1px; margin: 4px 6px; background: var(--line); }
 .pop-item:disabled { opacity: 0.45; }
-.bridge-banner { display: flex; align-items: center; gap: 10px; margin: 10px 14px 0; padding: 8px 10px 8px 12px; border-radius: 8px; background: var(--amber-bg); color: var(--amber); font-size: 13px; flex: none; }
-.bridge-banner-ico { display: grid; flex: none; }
-.bridge-banner-ico svg { width: 18px; height: 18px; }
-.bridge-banner-text { flex: 1; min-width: 0; }
-.bridge-banner .btn { flex: none; }
 
 /* added Image Control slots */
 .cards { overflow-y: auto; }

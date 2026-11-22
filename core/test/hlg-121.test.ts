@@ -25,7 +25,7 @@ const slot = (halation: boolean) => ({
 
 for (const [version, path] of files) {
   describe.skipIf(!path || !existsSync(path))(`HLG photo on GR IV ${version}`, () => {
-    const open = async () => Engine.open(new Uint8Array(readFileSync(path!)), { newFirmware: true });
+    const open = async () => Engine.open(new Uint8Array(readFileSync(path!)));
 
     it('is offered, builds with every check passing and reads back', async () => {
       const e = await open();

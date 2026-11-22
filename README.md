@@ -7,8 +7,8 @@ Customize your Ricoh GR with your own Image Control presets, aspect ratios, and 
 > GR Mod is an independent, open-source project. It is not a Ricoh product.
 
 <p align="center">
-  <img src="docs/images/mobile-overview-zh.jpg" width="48%" alt="GR Mod on iPhone, iPad and Android">
-  <img src="docs/images/download-guide-zh.jpg" width="48%" alt="Download GR Mod for desktop and Android from GitHub, or for iPhone and iPad from the App Store">
+  <img src="docs/images/mobile-overview-en.png" width="48%" alt="GR Mod on iPhone, iPad and Android">
+  <img src="docs/images/download-guide-en.png" width="48%" alt="Download GR Mod for desktop and Android from GitHub, or for iPhone and iPad from the App Store">
 </p>
 
 ## Download
@@ -25,6 +25,8 @@ See [Releases](https://github.com/Maxwooow/Ricoh-GRMod/releases) for the latest 
 
 ## Supported cameras and firmware
 
+<!-- BEGIN releases (written by tools/releases/generate.mjs from releases.json) -->
+
 | Camera | Supported firmware |
 | --- | --- |
 | GR IV / GR IV HDF | 1.21, 1.20 or 1.11 |
@@ -32,21 +34,25 @@ See [Releases](https://github.com/Maxwooow/Ricoh-GRMod/releases) for the latest 
 | GR III / GR III HDF | 2.21, 2.20 or 2.10 |
 | GR IIIx / GR IIIx HDF | 1.71, 1.70 or 1.60 |
 
+<!-- END releases -->
+
 Use only firmware intended for your camera model and a base version listed above.
 
 ## Features
 
 - **Image Control presets:** add your own looks from `.cube` LUTs or `.xmp` profiles, adjust their parameters, and reorder or hide looks in the camera menu.
-- **Aspect ratios:** add custom ratios alongside the camera's factory options.
+- **Aspect ratios:** add custom ratios alongside the camera's factory options; on the GR IV (firmware 1.11, 1.20 and 1.21) the live view can also show the whole frame with the outside darkened (on 1.20 / 1.21 how dark is chosen in the camera menu: black, 75 %, 50 %, 25 % or none).
 - **Power-off images:** add your own End Screen pictures and choose between them in the camera.
 - **Soft focus and halation:** create softer images and red or white highlight effects.
 - **Date imprint:** add a shooting date, date and time, and optionally the Image Control name to JPEGs.
 - **Monochrome looks:** use supported GR IV Monochrome looks on colour GR IV models.
-- **Direct Flash:** use guide-number-based flash exposure on supported GR IV firmware.
+- **Flash enhancements:** Direct Flash (guide-number-based flash exposure) and, on GR IV 1.20 / 1.21, pre-flash (TTL) metering for a GF-2 in the two red-eye flash modes.
 - **HDR gain maps:** create JPEGs with brighter highlights on compatible HDR displays.
-- **HLG HDR photo (this fork):** turn the factory HDR Tone look into in-camera BT.2100 HLG capture on GR IV firmware 1.21, 1.20 and 1.11; it cannot be combined with the HDR gain map. The 1.21 version is an address port of the 1.20 one and has not yet been tried on a camera. See [`docs/HLG_PHOTO.md`](docs/HLG_PHOTO.md).
+- **HLG HDR photo (this fork):** turn the factory HDR Tone look into in-camera BT.2100 HLG capture on GR IV firmware 1.21, 1.20 and 1.11; it cannot be combined with the HDR gain map. On 1.21 it is the 1.20 code with 1.21's addresses, and it has been tried on a camera on 1.21. See [`docs/HLG_PHOTO.md`](docs/HLG_PHOTO.md).
 - **More ADJ options:** add ADJ lever slots on supported GR IV firmware.
+- **Battery percentage:** show the charge as a number in steps of 10 % instead of bars, on the GR IV (firmware 1.11, 1.20 and 1.21).
 - **Exposure preview and display options:** access additional preview and automatic screen-brightness settings on supported GR IV firmware.
+- **Custom grid lines:** choose which lines a 3x3 and a 4x4 grid draw, on the GR IV (firmware 1.11, 1.20 and 1.21; on 1.20 / 1.21 they are extra values of the camera's Grid Style list, next to its own).
 
 Features vary by camera model and firmware version. The app only offers options supported by the selected firmware.
 
@@ -84,6 +90,8 @@ You can restore the official firmware from the Image Control page or the firmwar
 - [Desktop shell guide](shell/README.md)
 - [Automatic screen brightness](docs/bright-auto.md)
 - [HLG HDR photo](docs/HLG_PHOTO.md) ([中文](docs/HLG_PHOTO_ZH.md))
+- [Development guide](docs/development.md)—tests, the generated files, adding a firmware release
+- [Releasing](docs/releasing.md)—version numbers, packages, signing, publishing
 - [Technical notes and release archive](docs/technical-notes.md)—implementation details, emulator checks, firmware research, and earlier release notes
 
 GR Mod does not include Ricoh firmware. It reads a firmware file supplied by the user or downloads one from Ricoh's official website under Ricoh's licence terms.
@@ -111,13 +119,16 @@ On macOS and Linux, GR Mod opens in a supported Chromium-based browser when avai
 ### Run tests
 
 ```sh
-npm -w core test
+npm run check        # generated lists, version numbers and firmware ports are in step
+npm run typecheck
+npm test             # core (engine) and ui
 cd shell
+./build.sh dev && ./smoke.sh
 go test ./...
 go test -tags desktop ./...
 ```
 
-Some byte-identity tests require official firmware files in `core/testdata/private/`. Those files are not distributed with this repository.
+The same checks run on GitHub for every push and pull request (`.github/workflows/test.yml`). Some byte-identity tests require official firmware files, which are not distributed with this repository; see the [development guide](docs/development.md).
 
 See the [mobile guide](mobile/README.md) for Android and iOS build instructions.
 

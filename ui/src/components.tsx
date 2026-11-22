@@ -42,7 +42,6 @@ export const Ico = {
   grip: <svg viewBox="0 0 20 20" fill="currentColor"><circle cx="7.4" cy="5.2" r="1.25" /><circle cx="12.6" cy="5.2" r="1.25" /><circle cx="7.4" cy="10" r="1.25" /><circle cx="12.6" cy="10" r="1.25" /><circle cx="7.4" cy="14.8" r="1.25" /><circle cx="12.6" cy="14.8" r="1.25" /></svg>,
   eye: <svg viewBox="0 0 20 20" {...P}><path d="M2.6 10S5.3 5 10 5s7.4 5 7.4 5-2.7 5-7.4 5-7.4-5-7.4-5z" /><circle cx="10" cy="10" r="2.2" /></svg>,
   eyeOff: <svg viewBox="0 0 20 20" {...P}><path d="M8.3 5.2A7.4 7.4 0 0 1 10 5c4.7 0 7.4 5 7.4 5a12.4 12.4 0 0 1-2 2.6M12.3 14.6A6.8 6.8 0 0 1 10 15c-4.7 0-7.4-5-7.4-5a12.6 12.6 0 0 1 3.1-3.6M8.5 8.5a2.2 2.2 0 0 0 3 3M3.6 3.6l12.8 12.8" /></svg>,
-  bridge: <svg viewBox="0 0 20 20" {...P}><path d="M2.5 7.5h15M2.5 13.5h15M4.5 7.5v6M15.5 7.5v6M4.5 7.5c1.6 2.6 3.4 3.9 5.5 3.9s3.9-1.3 5.5-3.9" /></svg>,
   download: <svg viewBox="0 0 20 20" {...P}><path d="M10 3.2v9.6M6 9.2l4 3.8 4-3.8M4 16.2h12" /></svg>,
   info: <svg viewBox="0 0 20 20" {...P}><circle cx="10" cy="10" r="7.2" /><path d="M10 9.2v4.4" /><circle cx="10" cy="6.4" r="0.6" fill="currentColor" /></svg>,
   soft: <svg viewBox="0 0 20 20" {...P}><circle cx="10" cy="10" r="3.3" /><circle cx="10" cy="10" r="7.2" strokeDasharray="1.4 2.35" /></svg>,
@@ -50,6 +49,15 @@ export const Ico = {
   adj: <svg viewBox="0 0 20 20" {...P}><rect x="1.8" y="6.6" width="3.4" height="3.4" rx="0.8" /><rect x="6.4" y="6.6" width="3.4" height="3.4" rx="0.8" /><rect x="11" y="6.6" width="3.4" height="3.4" rx="0.8" /><rect x="15.6" y="6.6" width="2.6" height="3.4" rx="0.8" /><path d="M3.5 13.4h13" /></svg>,
   flash: <svg viewBox="0 0 20 20" {...P}><path d="M11.8 2.6L5.4 11h4.2l-1.8 6.4 6.8-8.8h-4.4l1.6-6z" /></svg>,
   hdr: <svg viewBox="0 0 20 20" {...P}><circle cx="10" cy="10" r="3.2" /><path d="M10 2.2v2.2M10 15.6v2.2M2.2 10h2.2M15.6 10h2.2M4.5 4.5l1.6 1.6M13.9 13.9l1.6 1.6M4.5 15.5l1.6-1.6M13.9 6.1l1.6-1.6" /></svg>,
+  battery: <svg viewBox="0 0 20 20" {...P}><rect x="4.2" y="6" width="13" height="8" rx="1.6" /><path d="M2.6 8.6v2.8" /><path d="M7.4 8.4v3.2M10 8.4h1.8v3.2H10zM14.6 8.4l-1.2 3.2" strokeWidth="1.1" /></svg>,
+  grid: <svg viewBox="0 0 20 20" {...P}><rect x="2.8" y="4.2" width="14.4" height="11.6" rx="1.6" /><path d="M7.6 4.2v11.6M12.4 4.2v11.6M2.8 8.1h14.4M2.8 11.9h14.4" /></svg>,
+  /* a tone curve lifted in the shadows */
+  shadow: <svg viewBox="0 0 20 20" {...P}><rect x="2.8" y="2.8" width="14.4" height="14.4" rx="2" /><path d="M5 15C6.4 9.6 9.6 6.6 15 5" /><path d="M5 15l10-10" strokeDasharray="1.2 2" /></svg>,
+  /* film grain: dots of a few sizes */
+  grain: <svg viewBox="0 0 20 20" {...P}><rect x="2.8" y="2.8" width="14.4" height="14.4" rx="2" /><circle cx="6.6" cy="6.8" r="1" fill="currentColor" stroke="none" /><circle cx="12.2" cy="5.9" r="0.6" fill="currentColor" stroke="none" /><circle cx="9.6" cy="10.2" r="1.4" fill="currentColor" stroke="none" /><circle cx="14" cy="11.4" r="0.8" fill="currentColor" stroke="none" /><circle cx="6.2" cy="13.4" r="0.7" fill="currentColor" stroke="none" /><circle cx="11.6" cy="14.4" r="0.9" fill="currentColor" stroke="none" /></svg>,
+  /* a movie camera with a focus frame */
+  movie: <svg viewBox="0 0 20 20" {...P}><rect x="2" y="5.6" width="11" height="8.8" rx="1.6" /><path d="M13 8.8l4.6-2.4v7.2L13 11.2" /><path d="M5.6 8.4v-.8h.8M9.4 7.6h.8v.8M10.2 11.6v.8h-.8M6.4 12.4h-.8v-.8" /></svg>,
+  wb: <svg viewBox="0 0 20 20" {...P}><circle cx="10" cy="10" r="6.6" /><path d="M10 3.4a6.6 6.6 0 0 0 0 13.2z" fill="currentColor" stroke="none" opacity="0.35" /><path d="M10 3.4v13.2" /></svg>,
   preview: <svg viewBox="0 0 20 20" {...P}><path d="M1.8 10c2.2-3.6 5-5.4 8.2-5.4s6 1.8 8.2 5.4c-2.2 3.6-5 5.4-8.2 5.4S4 13.6 1.8 10z" /><circle cx="10" cy="10" r="2.6" /></svg>,
   mono: <svg viewBox="0 0 20 20" {...P}><circle cx="10" cy="10" r="7.2" /><path d="M10 2.8a7.2 7.2 0 0 1 0 14.4z" fill="currentColor" stroke="none" /></svg>,
   hlg: <svg viewBox="0 0 20 20" {...P}><circle cx="10" cy="10" r="4" /><path d="M10 2.2v2.2M10 15.6v2.2M2.2 10h2.2M15.6 10h2.2M4.5 4.5l1.6 1.6M13.9 13.9l1.6 1.6M4.5 15.5l1.6-1.6M13.9 6.1l1.6-1.6" /></svg>,
