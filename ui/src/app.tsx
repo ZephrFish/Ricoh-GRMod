@@ -9,6 +9,8 @@ import { PushDialog } from './camera';
 import { AndroidUpdate, checkUpdates, isAndroid } from './update-dialog';
 import { haptic, setBackFallback } from './host-android';
 import { t, uiLangPref } from './i18n';
+import { setThemePref, themePref } from './theme';
+import type { ThemePref } from './theme';
 import type { Key } from './i18n';
 import { CopiesPage } from './copies';
 import { FirmwareOnline, FirmwareRow, MODELS, modelLabel } from './firmware';
@@ -18,7 +20,7 @@ import { CropEditor, ExtrasPage, ImageControlPage, RatioPage, WallpaperPage } fr
 import { Tour, replayTour, restartTours } from './tour';
 import { UpdatePill, UpdateWatcher, checkForUpdate, openWhatsNew } from './updates';
 import {
-  getState, isGr3, setExtrasView, backupCopies, extrasOn, copyList, deleteCopies, hasNameErrors, hasRatioErrors, ratioSpecs, revealBackups, writableCopy, writeCopy, menuPictures, outputFirmware, handleShortcut, modKeyName, toast, exportProject, importProject, newProject, openSnapshots, pendingChanges, refreshVolumes, selectVolume, setAppLanguage, setModel, setPage, setShowAll, useStore, wallReady,
+  getState, isGr3, setExtrasView, backupCopies, extrasOn, copyList, deleteCopies, hasNameErrors, hasRatioErrors, ratioSpecs, revealBackups, writableCopy, writeCopy, menuPictures, outputFirmware, handleShortcut, modKeyName, toast, exportProject, importProject, newProject, openSnapshots, pendingChanges, refreshVolumes, scheduleSave, selectVolume, setAppLanguage, setModel, setPage, setShowAll, useStore, wallReady,
 } from './store';
 import type { State } from './store';
 
@@ -46,6 +48,7 @@ function Sidebar() {
           options={MODELS.map((m) => ({ value: m, label: modelLabel(m) }))}
         />
         <AppLanguage />
+        <AppTheme />
       </div>
       <div className="side-foot">
         <button className="about-link" data-tour="version" title={t('wnTitle')} onClick={() => openWhatsNew()}>v{host.info?.version || ''}</button>
@@ -66,6 +69,18 @@ function AppLanguage() {
       variant="row" tour="language" label={t('uiLanguage')} lead={<span className="side-label">{t('uiLanguage')}</span>} value={ui || 'auto'}
       onChange={(v) => { void setAppLanguage(v === 'zh' || v === 'en' ? v : ''); }}
       options={[{ value: 'auto', label: t('followSystem') }, { value: 'zh', label: '简体中文' }, { value: 'en', label: 'English' }]}
+    />
+  );
+}
+
+/** The fork's appearance: follow the system, light or dark (theme.ts). Applied at once; kept with the work. */
+function AppTheme() {
+  const [v, setV] = useState<ThemePref>(themePref);
+  return (
+    <Select<ThemePref>
+      variant="row" label={t('appearance')} lead={<span className="side-label">{t('appearance')}</span>} value={v}
+      onChange={(x) => { setThemePref(x); setV(x); scheduleSave(); }}
+      options={[{ value: 'system', label: t('followSystem') }, { value: 'light', label: t('themeLight') }, { value: 'dark', label: t('themeDark') }]}
     />
   );
 }
@@ -238,6 +253,7 @@ function SettingsBody({ close }: { close?: () => void }) {
           options={MODELS.map((m) => ({ value: m, label: modelLabel(m) }))}
         />
         <AppLanguage />
+        <AppTheme />
       </div>
       <div className="side-props m-props m-help" data-tour="m-help">
         <button type="button" className="m-row" onClick={() => then(replayTour, 480)}>{Ico.help}<span>{t('tourReplay')}</span></button>

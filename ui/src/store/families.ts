@@ -12,6 +12,7 @@ import { encodeWall, menuNameOf, newMenuId, validMenuId } from './wall';
 import { loadPreviewPhoto } from './photo';
 import { refreshVolumes } from './output';
 import { loadBuilds } from './copies';
+import { isThemePref, setThemePref, themePref } from '../theme';
 
 // ------------------------------------------------------------------ camera families
 /**
@@ -194,7 +195,7 @@ export async function saveProject(): Promise<void> {
   familyDocs[familyOf(s.model)] = currentFamilyDoc();
   const doc = {
     ...(familyDocs.gr4 ?? {}),
-    v: 1, page: s.page, model: s.model, lang: s.lang, langAuto: s.langAuto, uiLang: uiLangPref(), fwName: s.fwName, showAll: s.showAll, previewMode: s.previewMode, ratioBackdrop: s.ratioBackdrop,
+    v: 1, page: s.page, model: s.model, lang: s.lang, langAuto: s.langAuto, uiLang: uiLangPref(), theme: themePref(), fwName: s.fwName, showAll: s.showAll, previewMode: s.previewMode, ratioBackdrop: s.ratioBackdrop,
     tours: s.toursSeen, toursV: 2,
     compareWith: s.compareWith,
   };
@@ -248,6 +249,8 @@ export async function init(): Promise<void> {
     if (doc && doc.v === 1) {
       const gr3Raw = await host.storeGet(GR3_PROJECT).catch(() => null);
       await restoreProject(doc, gr3Raw ? JSON.parse(new TextDecoder().decode(gr3Raw)) : null);
+      // The appearance the work was saved with (the page's storage may be gone with its port); start-up only, an import keeps the current one.
+      if (isThemePref(doc.theme) && doc.theme !== themePref()) setThemePref(doc.theme);
     } else {
       const fwRaw = await keptFirmware(fwGroupOf(state.model));
       if (fwRaw) await openFirmware(fwRaw, LEGACY_FW_GROUP_NAME[fwGroupOf(state.model)], false);
