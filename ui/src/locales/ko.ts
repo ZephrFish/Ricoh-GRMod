@@ -5,7 +5,7 @@ import type { Dict } from '../i18n';
 export const ko: Dict = {
   app: 'GR Mod',
   navIC: '화상 컨트롤', navWall: '종료 화면', navCopies: '펌웨어 사본',
-  navExtras: '추가 기능', gridEdit: '그리드 선 편집', brightAutoSub: '야외 모니터 설정이 자동일 때 실내에서 화면을 더 밝게 합니다', monoToExtras: '추가 기능으로 이동',
+  navExtras: '추가 기능', gridEdit: '그리드 선 편집', monoToExtras: '추가 기능으로 이동',
   /** The phone's tab bar with five tabs (GR IV): shorter names where the full ones do not fit. */
   navICTab: '화상', navRatioTab: '화상비율', navExtrasTab: '추가 기능', navWallTab: '종료 화면',
   navRatio: '화상비율', ratioAdd: '비율 추가', ratioFactory: '기본', ratioGray: '회색', ratioMax: '최대 {n}개', ratioLine: '추가한 화상비율 {n}  ·  {l}',
@@ -141,6 +141,8 @@ export const ko: Dict = {
   gridTop: '위', gridMiddle: '가운데', gridBottom: '아래', gridLeft: '왼쪽', gridCentre: '가운데', gridRight: '오른쪽', gridDiagDown: '왼쪽 위 → 오른쪽 아래', gridDiagUp: '왼쪽 아래 → 오른쪽 위',
   gridHint: '미리보기의 선이나 아래 버튼을 클릭하면 해당 선을 표시하거나 숨깁니다. 점선은 숨긴 선입니다. 카메라에서는 기존처럼 9분할 또는 16분할을 선택합니다.', gridLine: '그리드  ·  9분할: {a}  ·  16분할: {b}', gridCameraLines: '카메라와 같음', gridNoLines: '없음', gridLinesN: '선 {n}개', gridChip: '그리드', gridSameAsCamera: '카메라 원래의 그리드 선을 그대로 사용하며 아무것도 추가하지 않습니다. 선을 하나라도 표시하거나 숨기면 사용자 그리드가 됩니다.',
   gridSubMenu: '카메라의 [그리드 종류]에 사용자 그리드를 추가하며, 정품 9분할과 16분할도 그대로 남습니다',
+  frPreset: '격자 {n}', frPreviewAs: '미리보기 화면', frAdd: '추가', frKindFrame: '프레임', frKindGrid: '분할 격자', frKindGolden: '황금 분할', frKindLine: '선', frKindCentre: '중앙 표시', frKindDiagonals: '대각선', frFrame: '프레임 {l}', frRatio: '비율', frCustom: '사용자 지정', frSize: '크기', frMoveX: '가로 위치', frMoveY: '세로 위치', frStyle: '스타일', frBox: '전체 상자', frCorners: '네 모서리', frDashed: '점선', frSolid: '실선', frCorner: '모서리 길이', frMask: '프레임 바깥', frNone: '없음', frColour: '색', frWidth: '선 굵기', frCols: '열', frRows: '행', frWithin: '범위', frPicture: '화면', frLineKind: '선 종류', frAxis: '방향', frHorizontal: '가로선', frVertical: '세로선', frPosition: '위치', frShape: '모양', frCross: '십자', frDot: '점', frPalette: '팔레트', frOpacity: '불투명도', frReset: '카메라 격자로 되돌리기', frRemove: '삭제', frEmpty: '이 격자에는 아무것도 없습니다. 카메라에서 선택하면 선이 표시되지 않습니다.', frTooMany: '그릴 선이 너무 많습니다({n}개, 최대 {m}개). 점선, 격자, 세이프 영역을 줄이세요.', frSame: '카메라의 {g}와 같아서 카메라에 별도의 격자로 나타나지 않습니다.', frHint: '카메라의 [그리드 종류]에서 [사용자 분할 1] 또는 [사용자 분할 2]를 선택합니다. 프레임 라인과 격자는 카메라의 현재 화면 비율에 맞춰집니다.', framingLine: '사용자 격자선  ·  {n}개',
+  frRatioFollow: '범위와 같음', frCustomColour: '사용자 지정', frColoursFull: '두 격자를 합쳐 최대 8가지 색만 쓸 수 있습니다. 이미 쓰고 있는 색을 고르세요', frTemplates: '템플릿', frTplThirds: '삼분할', frTplQuarters: '4×4 + 대각선', frTplCentre: '중앙 + 안전 영역', frTplCinema: '시네마 2.39:1', frTplFlat: '비스타 1.85:1',
   gridHintMenu: '미리보기의 선이나 아래 버튼을 클릭하면 해당 선을 표시하거나 숨깁니다. 점선은 숨긴 선입니다. 카메라의 [그리드 종류]에는 정품 9분할과 16분할 외에 [사용자 9분할]과 [사용자 16분할]이 표시되며(정품과 같은 그리드는 표시하지 않음), 언제든지 전환할 수 있습니다. 추가한 화상비율에서는 그리드 선과 대각선이 사진 범위 안에만 표시됩니다.',
   previewLine: '노출 미리보기  ·  [촬영 설정] › [노출 설정] › [노출 미리보기]와 ADJ(켜짐 / 다이렉트 플래시 시 끄기 / 항상 끄기)',
   previewLineNoFlash: '노출 미리보기  ·  [촬영 설정] › [노출 설정] › [노출 미리보기]와 ADJ(켜짐 / 꺼짐)',
@@ -248,6 +250,11 @@ export const ko: Dict = {
   movieSrSub: '동영상 메뉴의 [Movie SR]이 꺼짐, 기계식(센서 시프트), 전자식의 세 가지로 바뀝니다. 기계식에서는 화면이 크롭되지 않습니다.',
   tIcFMovieSrB: '동영상 메뉴의 [Movie SR]이 "꺼짐 / 켜짐"에서 [꺼짐], [기계식], [전자식]의 세 가지로 바뀝니다. [기계식]은 정지 화상을 촬영할 때처럼 센서를 움직여 화면을 안정시키며 화면을 크롭하지 않습니다. [전자식]은 카메라 본래의 전자식 손떨림 보정으로, 화면의 네 변이 각각 약 5% 크롭됩니다.',
   movieSrLine: '동영상 모드 센서 시프트 손떨림 보정',
+  navUnits: '거리 단위',
+  unitsMetre: '미터 (m)',
+  unitsFeet: '피트 (ft)',
+  tIcFUnitsB: '[피트]를 선택하면 [스냅 촬영 거리]의 값(1ft~16ft, 메뉴·촬영 화면·ADJ 모드 모두)과 MF 시 거리 눈금이 피트로 바뀌고, 근거리 눈금은 인치(in)로 표시됩니다. [미터]는 공식 펌웨어와 같습니다.',
+  unitsLine: '거리 단위  ·  피트(스냅 촬영 거리, MF 거리 눈금)',
   // Placeholders: the fork's texts that upstream has no translation for (English, to be translated).
   closeLabel: 'Close',
   photoFitTitle: 'Fit LUTs to real photos',

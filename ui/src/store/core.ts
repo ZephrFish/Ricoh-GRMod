@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
-import { CAMERA_GRID, card, GR3X_FILM_IDS, GRID_LINE_COUNT, LANGS } from '@grmod/core';
-import type { CameraModel, CustomGrid, FirmwareInfo, FirmwareSummary, LangCode, PresetResult, RatioPreview, ShadeTone, SlotId } from '@grmod/core';
+import { CAMERA_GRID, card, defaultFramingGuides, GR3X_FILM_IDS, GRID_LINE_COUNT, LANGS } from '@grmod/core';
+import type { CameraModel, CustomGrid, FirmwareInfo, FramingGuides, FirmwareSummary, LangCode, PresetResult, RatioPreview, ShadeTone, SlotId } from '@grmod/core';
 
 /** How dark the live-view shade is: black at 50 % or grey at 25 % (core's ShadeTone). */
 export type { ShadeTone };
@@ -104,8 +104,10 @@ export interface State {
   battery: boolean;
   /** GR IV: custom grid lines (`gridLines`) instead of the camera's own grids. */
   customGrid: boolean;
-  /** Which lines the camera's 3x3 and 4x4 grids draw with `customGrid` on (core: CustomGrid). */
+  /** Which lines the camera's 3x3 and 4x4 grids draw with `customGrid` on (core: CustomGrid); GR IV 1.11. */
   gridLines: CustomGrid;
+  /** GR IV 1.20 / 1.21: the framing guides drawn with `customGrid` on, in place of `gridLines` (core: FramingGuides). */
+  framing: FramingGuides;
   /** The learned Auto for Shadow Correction (GR IV 1.11 / 1.20 / 1.21; off by default). */
   shadowLearn: boolean;
   /** GR IV 1.20 / 1.21: GR Mod's film grain in place of the camera's Grain Effect (off by default). */
@@ -126,6 +128,8 @@ export interface State {
   movie4k: boolean;
   /** Shake reduction for movies by sensor shift (GR IV 1.20 / 1.21): Movie SR offers Off / Sensor Shift / Electronic. */
   movieSr: boolean;
+  /** Distances in feet (GR IV 1.20 / 1.21): Snap Focus Distance and the manual focus scale; metres by default. */
+  distanceFeet: boolean;
   /** ADJ lever slots in the build: 5 (the camera's) to 8 (GR IV). */
   adjSlots: number;
   /** GR IV, experimental: .cube presets of added slots get hue sectors of their own (core color/hue.ts). */
@@ -170,7 +174,7 @@ export const emptySlot = (): SlotState => ({ names: {}, icon: { mode: 'keep', te
 export const emptySlots = (): Record<SlotId, SlotState> => Object.fromEntries(SLOT_IDS.map(id => [id, emptySlot()])) as Record<SlotId, SlotState>;
 export let state: State = {
   ready: false, page: 'ic', extrasView: 'list', fwBusy: false, model: 'HDF', lang: cameraLang(), langAuto: uiLangPref() === '',
-  slots: emptySlots(), extras: [], lookOrder: [], lookHidden: [], lookOrder3: [], lookHidden3: [], wall: [], ratios: [], ratioBackdrop: 'photo', brightAuto: false, photoFit: true, soft: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, directFlash: false, hdr: false, exposurePreview: false, filmGrain: false, shadowLearn: false, ratioShade: false, ratioShadeTone: 'dark', shadePreview: '75', battery: false, customGrid: false, gridLines: cameraGrid(), flashTtl: false, videoAf: false, awbLearn: false, movieExposure: false, sensorShift: false, movie4k: false, movieSr: false, constantLight: false, adjSlots: 5, filmCount: 0, previewMode: 'photo', photoRev: 0, activeSlot: 'CY', library: [], compareWith: 'orig', volumes: [],
+  slots: emptySlots(), extras: [], lookOrder: [], lookHidden: [], lookOrder3: [], lookHidden3: [], wall: [], ratios: [], ratioBackdrop: 'photo', brightAuto: false, photoFit: true, soft: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, directFlash: false, hdr: false, exposurePreview: false, filmGrain: false, shadowLearn: false, ratioShade: false, ratioShadeTone: 'dark', shadePreview: '75', battery: false, customGrid: false, gridLines: cameraGrid(), framing: defaultFramingGuides(), flashTtl: false, videoAf: false, awbLearn: false, movieExposure: false, sensorShift: false, movie4k: false, movieSr: false, distanceFeet: false, constantLight: false, adjSlots: 5, filmCount: 0, previewMode: 'photo', photoRev: 0, activeSlot: 'CY', library: [], compareWith: 'orig', volumes: [],
   copySource: 'card', parked: [], backups: [], copySel: [], copyInfo: {}, builds: [], showAll: false, toasts: [], onlineOpen: false, toursSeen: [],
 };
 const listeners = new Set<() => void>();

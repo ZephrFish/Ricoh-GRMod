@@ -5,7 +5,7 @@ import type { Dict } from '../i18n';
 export const zhTW: Dict = {
   app: 'GR Mod',
   navIC: '影像控制', navWall: '結束畫面', navCopies: '韌體副本',
-  navExtras: '附加功能', gridEdit: '編輯網格線', brightAutoSub: '室外顯示設定為自動時，室內光線下螢幕更亮', monoToExtras: '轉到附加功能',
+  navExtras: '附加功能', gridEdit: '編輯網格線', monoToExtras: '轉到附加功能',
   /** The phone's tab bar with five tabs (GR IV): shorter names where the full ones do not fit. */
   navICTab: '影像控制', navRatioTab: '長寬比', navExtrasTab: '附加功能', navWallTab: '結束畫面',
   navRatio: '長寬比', ratioAdd: '新增比例', ratioFactory: '原廠', ratioGray: '灰色', ratioMax: '最多 {n} 個', ratioLine: '新增長寬比 {n}  ·  {l}',
@@ -141,6 +141,8 @@ export const zhTW: Dict = {
   gridTop: '上', gridMiddle: '中', gridBottom: '下', gridLeft: '左', gridCentre: '中', gridRight: '右', gridDiagDown: '左上 → 右下', gridDiagUp: '左下 → 右上',
   gridHint: '按一下預覽中的線或下方按鈕，可顯示或隱藏相應的線；虛線表示已隱藏的線。在相機上仍按原方式選擇 3x3 或 4x4 網格。', gridLine: '網格線  ·  3x3：{a}  ·  4x4：{b}', gridCameraLines: '與相機相同', gridNoLines: '無', gridLinesN: '{n} 條線', gridChip: '網格線', gridSameAsCamera: '使用相機原有的網格線，不新增其他內容。顯示或隱藏任意一條線，即可自定義網格。',
   gridSubMenu: '在相機的[格線種類]中增加自定義網格，並保留原廠的 9網格和 16網格',
+  frPreset: '網格 {n}', frPreviewAs: '預覽畫幅', frAdd: '新增', frKindFrame: '框線', frKindGrid: '等分網格', frKindGolden: '黃金分割', frKindLine: '單條線', frKindCentre: '中心標記', frKindDiagonals: '對角線', frFrame: '框線 {l}', frRatio: '比例', frCustom: '自訂', frSize: '大小', frMoveX: '水平位置', frMoveY: '垂直位置', frStyle: '樣式', frBox: '完整框', frCorners: '四角', frDashed: '虛線', frSolid: '實線', frCorner: '角標長度', frMask: '框外遮罩', frNone: '無', frColour: '顏色', frWidth: '線寬', frCols: '欄數', frRows: '列數', frWithin: '範圍', frPicture: '畫面', frLineKind: '線型', frAxis: '方向', frHorizontal: '橫線', frVertical: '豎線', frPosition: '位置', frShape: '形狀', frCross: '十字', frDot: '點', frPalette: '調色盤', frOpacity: '不透明度', frReset: '恢復為原廠網格', frRemove: '刪除', frEmpty: '這一組沒有元素：在相機中選用它時不顯示任何線。', frTooMany: '這一組要畫的線段太多（{n} 段，最多 {m} 段），請減少虛線、網格或安全框。', frSame: '與相機原廠的{g}相同，不會在相機中單獨出現。', frHint: '在相機的[格線種類]中選擇[自定義網格1]或[自定義網格2]。框線和網格會隨相機目前的畫幅自動適配。', framingLine: '自訂網格線  ·  {n} 組',
+  frRatioFollow: '與範圍相同', frCustomColour: '自訂', frColoursFull: '兩組網格加起來最多只能用 8 種顏色，請改用已用過的顏色', frTemplates: '範本', frTplThirds: '三分法', frTplQuarters: '4×4 + 對角線', frTplCentre: '中心 + 安全框', frTplCinema: '電影 2.39:1', frTplFlat: '遮幅 1.85:1',
   gridHintMenu: '按一下預覽中的線或下方按鈕，可顯示或隱藏相應的線；虛線表示已隱藏的線。在相機[格線種類]中，除原廠的 9網格和 16網格外，還將顯示[自訂9網格]和[自訂16網格]（與原廠相同的網格不顯示），可隨時切換。使用新增長寬比時，網格線和對角線僅顯示在照片範圍內。',
   previewLine: '曝光預覽  ·  [拍攝設定] › [曝光設定] › [曝光預覽]和 ADJ（開啟 / 直閃模式時關閉 / 始終關閉）',
   previewLineNoFlash: '曝光預覽  ·  [拍攝設定] › [曝光設定] › [曝光預覽]和 ADJ（開啟 / 關閉）',
@@ -248,6 +250,11 @@ export const zhTW: Dict = {
   movieSrSub: '影片選單的[Movie SR]變為三個選項：關閉、感測器防手震（選單中寫作「感測器SR」）、電子防手震（「電子SR」）。使用感測器防手震時不裁切畫面。',
   tIcFMovieSrB: '影片選單的[Movie SR]由「關閉 / 開啟」變為三個選項：[關閉]、[感測器SR]和[電子SR]。[感測器SR]像拍攝靜態影像時一樣移動感測器來穩定畫面，不裁切畫面；[電子SR]是相機原有的電子防手震，畫面四周各裁去約 5%。',
   movieSrLine: '影片模式感測器防手震',
+  navUnits: '距離單位',
+  unitsMetre: '公尺 (m)',
+  unitsFeet: '英尺 (ft)',
+  tIcFUnitsB: '選[英尺]時，[快拍對焦距離]的數值（1ft–16ft，選單、拍攝畫面和 ADJ 模式中皆是）和手動對焦時的距離刻度改用英尺，近距離的刻度用英寸（in）。選[公尺]時與原廠相同。',
+  unitsLine: '距離單位  ·  英尺（快拍對焦距離、手動對焦刻度）',
   // Placeholders: the fork's texts that upstream has no translation for (English, to be translated).
   closeLabel: 'Close',
   photoFitTitle: 'Fit LUTs to real photos',

@@ -54,6 +54,8 @@ import { FIRST_ADDED_LOOK, installSettingsGuard } from './guard';
 import { installAdjSlots } from './adjslots';
 import { extendBatteryZeroFill, installBatteryPercent } from './battery';
 import { installCustomGrid, isCameraGrid, validCustomGrid } from './grid';
+import type { FramingGuides } from './framing';
+import { framingProblem, framingValues, installFramingGuides } from './framing';
 import type { CustomGrid } from './grid';
 import { installRatioShade } from './shade';
 import { GRID_SELECT, SHADE_SETTING, installGridStyleMenu, installShadeList, installShadePalette, installTtlFlashNames, installViewAssets, shadeStillLine } from './viewmenu';
@@ -62,6 +64,7 @@ import { installExposurePreviewOff } from './lvpreview';
 import { installMovieExposure } from './movieexp';
 import { MOVIE_4K_BIT, MOVIE_SENSOR_SR_BIT, installMovie4k } from './movie4k';
 import { installMovieSr, installMovieSrAssets } from './moviesr';
+import { installDistanceFeet } from './units';
 import { installShiftAdj, installShiftAssets, installShiftCore, installShiftFn, shiftAdjFunction } from './shift';
 import { FRAME_LOOK, LOOK_STASH, installLookStash, monoLook, monoTable, styleColour } from './lookstash';
 import type { ShutdownPictureSpec } from './shutdown';
@@ -183,6 +186,8 @@ export interface ExtensionFeatures {
   batteryPercent?: boolean;
   /** Which lines the camera's 3x3 and 4x4 grid styles draw, each on or off (see `grid.ts`); never the camera's own grids. */
   customGrid?: CustomGrid;
+  /** Framing guides in place of the camera's 3x3 and 4x4 grid styles (see `framing.ts`); not with `customGrid`; at least one preset not the camera's. */
+  framing?: FramingGuides;
   /**
    * Live view of an added ratio shows the whole 3:2 frame, the part outside the ratio darkened
    * (see `shade.ts`); the photo is cropped as before. Needs at least one added ratio.
@@ -210,6 +215,8 @@ export interface ExtensionFeatures {
   movie4k?: boolean;
   /** Movie SR with Off / Sensor Shift / Electronic (`moviesr.ts`); 1.20 and 1.21. Off unless asked for. */
   movieSr?: boolean;
+  /** Snap Focus Distance and the manual focus scale in feet and inches (`units.ts`); 1.20 and 1.21. Metres unless asked for. */
+  distanceFeet?: boolean;
 }
 
 /** For test builds only: a fixed setting byte (1 short, 3 long style) instead of the camera menu. */
@@ -1129,8 +1136,14 @@ function installExtensionsInner(rtos: Uint8Array, iconbin: Uint8Array, ratios: r
   const shutdown = features.shutdown && features.shutdown.pictures.length > 0 ? features.shutdown : undefined;
   const cinema = (['CY', 'CG'] as const).filter((id) => features.cinemaHalation?.[id] === true);
   const adjSlots = features.adjSlots && features.adjSlots > 5 ? features.adjSlots : 0;
-  const extra = !!features.brightAuto || !!features.exposurePreview || !!features.adjSoftFocus || !!features.dateStamp || !!features.monoUnlock || slots.length > 0 || !!shutdown || !!features.guard || cinema.length > 0 || !!features.directFlash || adjSlots > 0 || !!features.hdrGainMap || !!features.batteryPercent || !!features.customGrid || !!features.ratioShade || !!features.shadowLearn || !!features.filmGrain || !!features.flashTtl || !!features.videoAf || !!features.awbLearn || !!features.movieExposure || !!features.sensorShift || !!features.movie4k || !!features.movieSr || !!features.constantLight || !!features.hlgPhoto;
+  const extra = !!features.brightAuto || !!features.exposurePreview || !!features.adjSoftFocus || !!features.dateStamp || !!features.monoUnlock || slots.length > 0 || !!shutdown || !!features.guard || cinema.length > 0 || !!features.directFlash || adjSlots > 0 || !!features.hdrGainMap || !!features.batteryPercent || !!features.customGrid || !!features.framing || !!features.ratioShade || !!features.shadowLearn || !!features.filmGrain || !!features.flashTtl || !!features.videoAf || !!features.awbLearn || !!features.movieExposure || !!features.sensorShift || !!features.movie4k || !!features.movieSr || !!features.constantLight || !!features.distanceFeet || !!features.hlgPhoto;
   if (features.customGrid && (!validCustomGrid(features.customGrid) || isCameraGrid(features.customGrid))) fail('internal', 'a custom grid must differ from the camera’s');
+  if (features.framing && features.customGrid) fail('internal', 'custom grid lines and framing guides together');
+  if (features.framing) {
+    const problem = framingProblem(features.framing);
+    if (problem) fail('internal', `framing guides: ${problem}`);
+    if (framingValues(features.framing).length === 0) fail('internal', 'framing guides must differ from the camera’s grids');
+  }
   if (features.ratioShade && ratios.length === 0) fail('internal', 'the live-view shade needs an added ratio');
   if (features.ratioShadeTone !== undefined && features.ratioShadeTone !== 'dark') fail('bad-edit', 'the live-view shade is chosen in the camera menu on this firmware');
   // @decision PR #5 port: the HLG photo mode and the HDR gain map are exclusive. HLG writes an HLG
@@ -1155,7 +1168,7 @@ function installExtensionsInner(rtos: Uint8Array, iconbin: Uint8Array, ratios: r
   if (features.awbLearn !== undefined && typeof features.awbLearn !== 'boolean') fail('bad-edit', 'awbLearn must be boolean');
   if (features.movieExposure !== undefined && typeof features.movieExposure !== 'boolean') fail('bad-edit', 'movieExposure must be boolean');
   if (features.constantLight !== undefined && typeof features.constantLight !== 'boolean') fail('bad-edit', 'constantLight must be boolean');
-  for (const name of ['sensorShift', 'movie4k', 'movieSr'] as const) if (features[name] !== undefined && typeof features[name] !== 'boolean') fail('bad-edit', `${name} must be boolean`);
+  for (const name of ['sensorShift', 'movie4k', 'movieSr', 'distanceFeet'] as const) if (features[name] !== undefined && typeof features[name] !== 'boolean') fail('bad-edit', `${name} must be boolean`);
   const patch = new Patch(rtos);
   const ramCopy = new DataView(patch.read(BASE + 0x450, 12).buffer);
   if (ramCopy.getUint32(0, true) !== RAM.source || ramCopy.getUint32(4, true) !== RAM.destination || ramCopy.getUint32(8, true) !== RAM.length) {
@@ -1190,8 +1203,9 @@ function installExtensionsInner(rtos: Uint8Array, iconbin: Uint8Array, ratios: r
   if (features.adjSoftFocus) icons = installAdjSoftFocus(patch, icons, lastAdj);
   // Test 084: the custom grids as values of the Grid Style list (its record in place, before any
   // addition copies the list table), their texts and icons, and the shade's.
-  if (features.customGrid || features.ratioShade) icons = installViewAssets(patch, icons, { ...(features.customGrid ? { grid: features.customGrid } : {}), shade: !!features.ratioShade });
+  if (features.customGrid || features.framing || features.ratioShade) icons = installViewAssets(patch, icons, { ...(features.customGrid ? { grid: features.customGrid } : {}), ...(features.framing ? { framing: features.framing } : {}), shade: !!features.ratioShade });
   if (features.customGrid) installGridStyleMenu(patch, features.customGrid);
+  if (features.framing) installGridStyleMenu(patch, framingValues(features.framing));
   // Before the date imprint's menu, which copies the list table with Flash Mode's records.
   if (features.directFlash) icons = installDirectFlash(patch, icons, !!test.directFlashDiag);
   if (features.monoUnlock) installMonoUnlock(patch);
@@ -1277,6 +1291,7 @@ function installExtensionsInner(rtos: Uint8Array, iconbin: Uint8Array, ratios: r
   if (features.batteryPercent) icons = installBatteryPercent(patch, icons, !!test.batteryDiag);
   // After the ratios: the diagonals take the point setter the grid view's layout calls then.
   if (features.customGrid) installCustomGrid(patch, features.customGrid, GRID_SELECT);
+  if (features.framing) installFramingGuides(patch, features.framing, GRID_SELECT);
   // Last: appended after everything else, so every other addition keeps its place without it.
   if (features.shadowLearn) installShadowLearn(patch);
   // Film grain: last, so that everything appended before it stays where it is in builds without it.
@@ -1299,7 +1314,10 @@ function installExtensionsInner(rtos: Uint8Array, iconbin: Uint8Array, ratios: r
   // Exposure modes for movies: after everything, so that a build with it differs from the one without only by its
   // own words (and the record of the additions).
   if (features.movieExposure) installMovieExposure(patch);
+  // Distances in feet: texts, icons and the scale's words only; last, so that a build with it differs from the one
+  // without only by its own words, texts and icons (and the record of the additions).
+  if (features.distanceFeet) icons = installDistanceFeet(patch, icons);
   if (patch.length % 4 !== 0) fail('internal', 'image length is not a multiple of 4');
   if (BASE + patch.length >= APPEND_LIMIT) fail('too-many-ratios', 'the appended area would reach the RAM area');
-  return { revision, rtos: patch.bytes(), iconbin: icons, ratios: [...ratios], words: patch.words, features: { ...(features.brightAuto ? { brightAuto: features.brightAuto === 'balanced' ? 'balanced' as const : 'bright' as const } : {}), adjSoftFocus: !!features.adjSoftFocus, ...(features.dateStamp ? { dateStamp: true } : {}), ...(features.monoUnlock ? { monoUnlock: true } : {}), ...(slots.length > 0 ? { extraSlots: [...slots] } : {}), ...(shutdown ? { shutdown } : {}), ...(features.guard ? { guard: true } : {}), ...(cinema.length > 0 ? { cinemaHalation: Object.fromEntries(cinema.map((id) => [id, true])) } : {}), ...(features.lookLayout ? { lookLayout: features.lookLayout } : {}), ...(features.directFlash ? { directFlash: true } : {}), ...(features.hdrGainMap ? { hdrGainMap: true } : {}), ...(adjSlots > 0 ? { adjSlots } : {}), ...(features.exposurePreview ? { exposurePreview: true } : {}), ...(features.softFocusMenu ? { softFocusMenu: true } : {}), ...(features.batteryPercent ? { batteryPercent: true } : {}), ...(features.customGrid ? { customGrid: features.customGrid } : {}), ...(features.ratioShade ? { ratioShade: true } : {}), ...(features.shadowLearn ? { shadowLearn: true } : {}), ...(features.filmGrain ? { filmGrain: true } : {}), ...(features.flashTtl ? { flashTtl: true } : {}), ...(features.videoAf ? { videoAf: true } : {}), ...(features.awbLearn ? { awbLearn: true } : {}), ...(features.movieExposure ? { movieExposure: true } : {}), ...(features.sensorShift ? { sensorShift: true } : {}), ...(features.movie4k ? { movie4k: true } : {}), ...(features.movieSr ? { movieSr: true } : {}), ...(features.constantLight ? { constantLight: true } : {}), ...(features.hlgPhoto ? { hlgPhoto: true } : {}) } };
+  return { revision, rtos: patch.bytes(), iconbin: icons, ratios: [...ratios], words: patch.words, features: { ...(features.brightAuto ? { brightAuto: features.brightAuto === 'balanced' ? 'balanced' as const : 'bright' as const } : {}), adjSoftFocus: !!features.adjSoftFocus, ...(features.dateStamp ? { dateStamp: true } : {}), ...(features.monoUnlock ? { monoUnlock: true } : {}), ...(slots.length > 0 ? { extraSlots: [...slots] } : {}), ...(shutdown ? { shutdown } : {}), ...(features.guard ? { guard: true } : {}), ...(cinema.length > 0 ? { cinemaHalation: Object.fromEntries(cinema.map((id) => [id, true])) } : {}), ...(features.lookLayout ? { lookLayout: features.lookLayout } : {}), ...(features.directFlash ? { directFlash: true } : {}), ...(features.hdrGainMap ? { hdrGainMap: true } : {}), ...(adjSlots > 0 ? { adjSlots } : {}), ...(features.exposurePreview ? { exposurePreview: true } : {}), ...(features.softFocusMenu ? { softFocusMenu: true } : {}), ...(features.batteryPercent ? { batteryPercent: true } : {}), ...(features.customGrid ? { customGrid: features.customGrid } : {}), ...(features.framing ? { framing: features.framing } : {}), ...(features.ratioShade ? { ratioShade: true } : {}), ...(features.shadowLearn ? { shadowLearn: true } : {}), ...(features.filmGrain ? { filmGrain: true } : {}), ...(features.flashTtl ? { flashTtl: true } : {}), ...(features.videoAf ? { videoAf: true } : {}), ...(features.awbLearn ? { awbLearn: true } : {}), ...(features.movieExposure ? { movieExposure: true } : {}), ...(features.sensorShift ? { sensorShift: true } : {}), ...(features.movie4k ? { movie4k: true } : {}), ...(features.movieSr ? { movieSr: true } : {}), ...(features.constantLight ? { constantLight: true } : {}), ...(features.distanceFeet ? { distanceFeet: true } : {}), ...(features.hlgPhoto ? { hlgPhoto: true } : {}) } };
 }

@@ -5,7 +5,7 @@ import type { Dict } from '../i18n';
 export const ja: Dict = {
   app: 'GR Mod',
   navIC: 'イメージコントロール', navWall: '終了画面', navCopies: 'ファームウェアのコピー',
-  navExtras: '追加機能', gridEdit: 'グリッド線を編集', brightAutoSub: 'アウトドアモニターがオートのとき、室内で画面を明るくします', monoToExtras: '追加機能へ',
+  navExtras: '追加機能', gridEdit: 'グリッド線を編集', monoToExtras: '追加機能へ',
   /** The phone's tab bar with five tabs (GR IV): shorter names where the full ones do not fit. */
   navICTab: 'イメージ', navRatioTab: 'アスペクト比', navExtrasTab: '追加機能', navWallTab: '終了画面',
   navRatio: 'アスペクト比', ratioAdd: '比率を追加', ratioFactory: '標準', ratioGray: 'グレー', ratioMax: '最大 {n} 個', ratioLine: '追加したアスペクト比 {n}  ·  {l}',
@@ -141,6 +141,8 @@ export const ja: Dict = {
   gridTop: '上', gridMiddle: '中', gridBottom: '下', gridLeft: '左', gridCentre: '中', gridRight: '右', gridDiagDown: '左上 → 右下', gridDiagUp: '左下 → 右上',
   gridHint: 'プレビューの線または下のボタンをクリックすると、その線の表示・非表示を切り替えます。破線は非表示の線です。カメラでは従来どおり 9分割または 16分割を選びます。', gridLine: 'グリッド  ·  9分割：{a}  ·  16分割：{b}', gridCameraLines: 'カメラと同じ', gridNoLines: 'なし', gridLinesN: '{n} 本の線', gridChip: 'グリッド', gridSameAsCamera: 'カメラ本来のグリッド線のままで、何も追加しません。線を 1 本でも表示・非表示にすると、カスタムグリッドになります。',
   gridSubMenu: 'カメラの「グリッドの種類」にカスタムグリッドを追加します。純正の 9分割と 16分割も残ります',
+  frPreset: 'グリッド {n}', frPreviewAs: 'プレビューの画面', frAdd: '追加', frKindFrame: 'フレーム', frKindGrid: '分割グリッド', frKindGolden: '黄金分割', frKindLine: '線', frKindCentre: 'センターマーク', frKindDiagonals: '対角線', frFrame: 'フレーム {l}', frRatio: '比率', frCustom: 'カスタム', frSize: '大きさ', frMoveX: '左右の位置', frMoveY: '上下の位置', frStyle: 'スタイル', frBox: '枠', frCorners: '四隅', frDashed: '破線', frSolid: '実線', frCorner: '四隅の長さ', frMask: 'フレームの外側', frNone: 'なし', frColour: '色', frWidth: '線の太さ', frCols: '列', frRows: '行', frWithin: '範囲', frPicture: '画面', frLineKind: '線の種類', frAxis: '向き', frHorizontal: '横線', frVertical: '縦線', frPosition: '位置', frShape: '形', frCross: '十字', frDot: '点', frPalette: 'パレット', frOpacity: '不透明度', frReset: 'カメラのグリッドに戻す', frRemove: '削除', frEmpty: 'このグリッドには何もありません。カメラで選ぶと線は表示されません。', frTooMany: '描く線の数が多すぎます（{n} 本、最大 {m} 本）。破線、グリッド、セーフエリアを減らしてください。', frSame: 'カメラの{g}と同じため、カメラでは独自のグリッドとして表示されません。', frHint: 'カメラの「グリッドの種類」で「カスタム分割1」または「カスタム分割2」を選びます。フレームラインとグリッドはカメラの画面サイズに合わせて配置されます。', framingLine: 'カスタムグリッド  ·  {n} 個',
+  frRatioFollow: '範囲と同じ', frCustomColour: 'カスタム', frColoursFull: '2つのグリッドで使える色は合計8色までです。使用中の色を選んでください', frTemplates: 'テンプレート', frTplThirds: '三分割', frTplQuarters: '4×4 + 対角線', frTplCentre: '中央 + セーフエリア', frTplCinema: 'シネマ 2.39:1', frTplFlat: 'ビスタ 1.85:1',
   gridHintMenu: 'プレビューの線または下のボタンをクリックすると、その線の表示・非表示を切り替えます。破線は非表示の線です。カメラの「グリッドの種類」には、純正の 9分割と 16分割に加えて「カスタム9分割」と「カスタム16分割」が表示され（純正と同じグリッドは表示しません）、いつでも切り替えられます。追加したアスペクト比では、グリッド線と対角線は写真の範囲内にだけ表示されます。',
   previewLine: '露出プレビュー  ·  「撮影設定」›「露出設定」›「露出プレビュー」と ADJ（オン / ダイレクト発光時オフ / 常にオフ）',
   previewLineNoFlash: '露出プレビュー  ·  「撮影設定」›「露出設定」›「露出プレビュー」と ADJ（オン / オフ）',
@@ -248,6 +250,11 @@ export const ja: Dict = {
   movieSrSub: '動画メニューの「Movie SR」が、オフ・メカ式（センサーシフト）・電子式の 3 つになります。メカ式では画面がクロップされません。',
   tIcFMovieSrB: '動画メニューの「Movie SR」が「オフ / オン」から、「オフ」「メカ式」「電子式」の 3 つに変わります。「メカ式」は静止画と同じようにセンサーを動かして画面を安定させ、クロップしません。「電子式」はカメラ本来の電子手ぶれ補正で、画面の四辺がそれぞれ約 5% クロップされます。',
   movieSrLine: '動画モードのセンサーシフト式手ぶれ補正',
+  navUnits: '距離の単位',
+  unitsMetre: 'メートル (m)',
+  unitsFeet: 'フィート (ft)',
+  tIcFUnitsB: '「フィート」にすると、「スナップ撮影距離」の値（1ft〜16ft。メニュー、撮影画面、ADJ モードのすべて）と MF 時の距離目盛がフィートになり、近距離の目盛はインチ（in）になります。「メートル」は公式ファームウェアと同じです。',
+  unitsLine: '距離の単位  ·  フィート（スナップ撮影距離、MF の距離目盛）',
   // Placeholders: the fork's texts that upstream has no translation for (English, to be translated).
   closeLabel: 'Close',
   photoFitTitle: 'Fit LUTs to real photos',

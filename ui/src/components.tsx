@@ -61,6 +61,8 @@ export const Ico = {
   movie: <svg viewBox="0 0 20 20" {...P}><rect x="2" y="5.6" width="11" height="8.8" rx="1.6" /><path d="M13 8.8l4.6-2.4v7.2L13 11.2" /><path d="M5.6 8.4v-.8h.8M9.4 7.6h.8v.8M10.2 11.6v.8h-.8M6.4 12.4h-.8v-.8" /></svg>,
   movie4k: <svg viewBox="0 0 20 20" {...P}><rect x="2" y="5.6" width="11" height="8.8" rx="1.6" /><path d="M13 8.8l4.6-2.4v7.2L13 11.2" /><path d="M5.9 8.2L4.4 10.6h2.4M6.2 9.6v2.3M8.5 8.2v3.7M10.7 8.2L8.6 10.2l2.2 1.7" strokeWidth="1.15" /></svg>,
   movieSr: <svg viewBox="0 0 20 20" {...P}><rect x="2" y="5.6" width="11" height="8.8" rx="1.6" /><path d="M13 8.8l4.6-2.4v7.2L13 11.2" /><rect x="6" y="8.5" width="3" height="3" rx="0.5" strokeWidth="1.15" /><path d="M4.5 8.3q-.8 1.7 0 3.4M10.5 8.3q.8 1.7 0 3.4" strokeWidth="1.15" /></svg>,
+  /* a tape measure's scale */
+  units: <svg viewBox="0 0 20 20" {...P}><rect x="2" y="6.2" width="16" height="7.6" rx="1.4" /><path d="M5 6.2v3M8 6.2v2M11 6.2v3M14 6.2v2" /></svg>,
   shift: <svg viewBox="0 0 20 20" {...P}><rect x="2.6" y="3.8" width="11.4" height="8.6" rx="1.2" strokeDasharray="1.7 1.7" /><rect x="6" y="7.6" width="11.4" height="8.6" rx="1.2" /></svg>,
   movieExp: <svg viewBox="0 0 20 20" {...P}><rect x="2" y="5.6" width="11" height="8.8" rx="1.6" /><path d="M13 8.8l4.6-2.4v7.2L13 11.2" /><path d="M4.6 10h2.6M5.9 8.7v2.6M8.4 10h2.4" /></svg>,
   wb: <svg viewBox="0 0 20 20" {...P}><circle cx="10" cy="10" r="6.6" /><path d="M10 3.4a6.6 6.6 0 0 0 0 13.2z" fill="currentColor" stroke="none" opacity="0.35" /><path d="M10 3.4v13.2" /></svg>,
@@ -76,9 +78,39 @@ export function Switch({ checked, onChange, label }: { checked: boolean; onChang
   return <button type="button" role="switch" aria-checked={checked} aria-label={label} className={`switch ${checked ? 'on' : ''}`} onClick={() => onChange(!checked)}><i /></button>;
 }
 
-export function Segmented<T extends string>({ value, options, onChange, tour, className }: { value: T; options: { value: T; label: ReactNode; title?: string }[]; onChange: (v: T) => void; tour?: string; className?: string }) {
+/**
+ * A choice of a few values in one row. The chosen one is marked by a pill that slides to it (placed over the
+ * button it marks; without the pill, before the first layout, the button shows the same mark itself). `still`:
+ * the pill jumps (the editing controls of the custom grid's page, where nothing moves).
+ */
+export function Segmented<T extends string>({ value, options, onChange, tour, className, still }: { value: T; options: { value: T; label: ReactNode; title?: string }[]; onChange: (v: T) => void; tour?: string; className?: string; still?: boolean }) {
+  const box = useRef<HTMLDivElement>(null);
+  const pill = useRef<HTMLSpanElement>(null);
+  const place = (): void => {
+    const b = box.current; const p = pill.current;
+    if (!b || !p) return;
+    const on = b.querySelector<HTMLElement>(':scope > button.on');
+    if (!on || !on.offsetWidth) { b.classList.remove('piled'); return; }
+    p.style.width = `${on.offsetWidth}px`;
+    p.style.height = `${on.offsetHeight}px`;
+    p.style.transform = `translate(${on.offsetLeft}px, ${on.offsetTop}px)`;
+    b.classList.add('piled');
+  };
+  useLayoutEffect(place);
+  // without a movement when it is first placed and when the row changes its size (a language, a window)
+  useLayoutEffect(() => {
+    const b = box.current; const p = pill.current;
+    if (!b || !p) return undefined;
+    const fixed = (): void => { p.classList.add('still'); place(); if (!still) requestAnimationFrame(() => p.classList.remove('still')); };
+    const frame = still ? 0 : requestAnimationFrame(() => p.classList.remove('still'));
+    let first = true;
+    const ro = new ResizeObserver(() => { if (first) { first = false; return; } fixed(); });
+    ro.observe(b);
+    return () => { cancelAnimationFrame(frame); ro.disconnect(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <div className={className ? `seg ${className}` : 'seg'} role="tablist" data-tour={tour}>
+    <div className={className ? `seg ${className}` : 'seg'} role="tablist" data-tour={tour} ref={box}>
+      <span className="seg-pill still" ref={pill} aria-hidden />
       {options.map((o) => (
         <button key={o.value} role="tab" aria-selected={o.value === value} title={o.title} aria-label={o.title} className={o.value === value ? 'on' : ''} onClick={() => onChange(o.value)}>{o.label}</button>
       ))}

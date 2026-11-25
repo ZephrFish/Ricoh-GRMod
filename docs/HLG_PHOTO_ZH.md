@@ -248,7 +248,7 @@ export function romVa(va: number): number {
 
 ### 5.3 扩展布局与特征位管理
 HLG Photo 遵循 GRMod 标准扩展特征位管理：
-- **特征位定义**：`FEATURE_HLG_PHOTO = 16`（`0x10`）。
+- **特征位定义**：第四特征字节的第 6 位，`FEATURE4_HLG_PHOTO = 64`（`0x40`）；该字节的第 0 至 5 位属于上游（第 4 位为取景辅助线，第 5 位为英尺距离）。标记位的变更历史见 `DEC-HLG-MARK-004`。
 - **版本标识**：Revision 3（`GRMODAR3`）。
 - **自检白名单机制**：HLG 开启时自动激活 `Patch.grows` 扩展结构，并在 RTOS 末尾元数据中记录特征位。所有修改词与追加范围自动被 `package.ts:grownRanges` 计入合法白名单，100% 严苛通过 `selfCheckGrown` 自检。
 

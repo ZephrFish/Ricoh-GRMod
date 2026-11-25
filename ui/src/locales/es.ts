@@ -5,7 +5,7 @@ import type { Dict } from '../i18n';
 export const es: Dict = {
   app: 'GR Mod',
   navIC: 'Control de imagen', navWall: 'Pantalla final', navCopies: 'Copias de firmware',
-  navExtras: 'Funciones añadidas', gridEdit: 'Editar las líneas', brightAutoSub: 'Con Ajuste vista exterior en Auto, pantalla más brillante en interiores', monoToExtras: 'Ir a Funciones añadidas',
+  navExtras: 'Funciones añadidas', gridEdit: 'Editar las líneas', monoToExtras: 'Ir a Funciones añadidas',
   /** The phone's tab bar with five tabs (GR IV): shorter names where the full ones do not fit. */
   navICTab: 'Imagen', navRatioTab: 'Formato', navExtrasTab: 'Añadidas', navWallTab: 'Pant. final',
   navRatio: 'Formato de imagen', ratioAdd: 'Añadir formato', ratioFactory: 'De fábrica', ratioGray: 'Gris', ratioMax: 'Máximo {n}', ratioLine: 'Formatos añadidos {n}  ·  {l}',
@@ -141,6 +141,8 @@ export const es: Dict = {
   gridTop: 'Arriba', gridMiddle: 'Centro', gridBottom: 'Abajo', gridLeft: 'Izquierda', gridCentre: 'Centro', gridRight: 'Derecha', gridDiagDown: 'De arriba izquierda a abajo derecha', gridDiagUp: 'De abajo izquierda a arriba derecha',
   gridHint: 'Haz clic en una línea de la vista previa, o en su botón, para mostrarla u ocultarla; las líneas discontinuas están ocultas. En la cámara, elige la cuadrícula 3x3 o 4x4 como siempre.', gridLine: 'Cuadrícula propia  ·  3x3: {a}  ·  4x4: {b}', gridCameraLines: 'como la cámara', gridNoLines: 'ninguna', gridLinesN: '{n} líneas', gridChip: 'Cuadrícula', gridSameAsCamera: 'Son las líneas propias de la cámara, así que no se añade nada. Muestra u oculta una línea para crear tu propia cuadrícula.',
   gridSubMenu: 'Añade tus cuadrículas a la lista Tipo de cuadrícula de la cámara; sus cuadrículas 3x3 y 4x4 se mantienen',
+  frPreset: 'Cuadrícula {n}', frPreviewAs: 'Vista previa en', frAdd: 'Añadir', frKindFrame: 'Encuadre', frKindGrid: 'Cuadrícula', frKindGolden: 'Sección áurea', frKindLine: 'Línea', frKindCentre: 'Marca central', frKindDiagonals: 'Diagonales', frFrame: 'Encuadre {l}', frRatio: 'Proporción', frCustom: 'Personalizada', frSize: 'Tamaño', frMoveX: 'Posición horizontal', frMoveY: 'Posición vertical', frStyle: 'Estilo', frBox: 'Recuadro', frCorners: 'Esquinas', frDashed: 'Discontinua', frSolid: 'Continua', frCorner: 'Largo de esquinas', frMask: 'Fuera del encuadre', frNone: 'Ninguno', frColour: 'Color', frWidth: 'Grosor', frCols: 'Columnas', frRows: 'Filas', frWithin: 'Dentro de', frPicture: 'Imagen', frLineKind: 'Línea', frAxis: 'Dirección', frHorizontal: 'Horizontal', frVertical: 'Vertical', frPosition: 'Posición', frShape: 'Forma', frCross: 'Cruz', frDot: 'Punto', frPalette: 'Paleta', frOpacity: 'Opacidad', frReset: 'Volver a la cuadrícula de la cámara', frRemove: 'Quitar', frEmpty: 'No hay nada: con esta cuadrícula, la cámara no muestra líneas.', frTooMany: 'Demasiadas piezas que dibujar ({n}, como máximo {m}): usa menos líneas discontinuas, cuadrículas o zonas seguras.', frSame: 'Igual que la {g} de la cámara: no aparece en la cámara como una cuadrícula propia.', frHint: 'En la cámara, elige Cuadrícula pers. 1 o Cuadrícula pers. 2 en la lista Tipo de cuadrícula. Las líneas de encuadre y las cuadrículas se ajustan a la imagen que muestra la cámara.', framingLine: 'Cuadrículas propias  ·  {n}',
+  frRatioFollow: 'Igual que el área', frCustomColour: 'Personalizado', frColoursFull: 'Entre las dos cuadrículas caben como máximo 8 colores; elige uno ya usado', frTemplates: 'Plantillas', frTplThirds: 'Regla de tercios', frTplQuarters: '4×4 + diagonales', frTplCentre: 'Centro + zona segura', frTplCinema: 'Cine 2.39:1', frTplFlat: 'Panorámico 1.85:1',
   gridHintMenu: 'Haz clic en una línea de la vista previa, o en su botón, para mostrarla u ocultarla; las líneas discontinuas están ocultas. En la lista Tipo de cuadrícula de la cámara, Cuadrícula 3x3 pers. y Cuadrícula 4x4 pers. aparecen después de las 3x3 y 4x4 de la cámara (si una es igual a la de la cámara, no se muestra); puedes cambiar en cualquier momento. Con formatos añadidos, las líneas y diagonales se quedan dentro de la zona de la foto.',
   previewLine: 'Vista previa de exposición  ·  Ajustes de toma › Ajuste de exposición › Vista previa de exposición y ADJ (On / Desact. con flash directo / Siempre desactivado)',
   previewLineNoFlash: 'Vista previa de exposición  ·  Ajustes de toma › Ajuste de exposición › Vista previa de exposición y ADJ (On / Off)',
@@ -248,6 +250,11 @@ export const es: Dict = {
   movieSrSub: 'Movie SR del menú de vídeo ofrece tres ajustes: Off, Sensor y Electrónica. Sensor no recorta la imagen.',
   tIcFMovieSrB: 'Movie SR del menú de vídeo ofrece tres ajustes en lugar de Off / On: Off, Sensor y Electrónica. Sensor estabiliza la imagen moviendo el sensor, como en las fotos, sin recortarla; Electrónica es la reducción de vibraciones electrónica propia de la cámara, que recorta alrededor de un 5 % por cada lado.',
   movieSrLine: 'Estabilización por sensor en modo vídeo',
+  navUnits: 'Unidad de distancia',
+  unitsMetre: 'Metros (m)',
+  unitsFeet: 'Pies (ft)',
+  tIcFUnitsB: 'Con Pies, Distancia enfoque inst. (de 1ft a 16ft, en el menú, en la pantalla de disparo y en el modo ADJ) y la escala de distancia del enfoque manual se muestran en pies, y la escala de corta distancia en pulgadas (in). Con Metros, como en el firmware oficial.',
+  unitsLine: 'Unidad de distancia  ·  pies (Distancia enfoque inst., escala del enfoque manual)',
   // Placeholders: the fork's texts that upstream has no translation for (English, to be translated).
   closeLabel: 'Close',
   photoFitTitle: 'Fit LUTs to real photos',

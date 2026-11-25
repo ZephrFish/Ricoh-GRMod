@@ -5,7 +5,7 @@ import type { Dict } from '../i18n';
 export const de: Dict = {
   app: 'GR Mod',
   navIC: 'Bildsteuerung', navWall: 'Endbildschirm', navCopies: 'Firmware-Kopien',
-  navExtras: 'Zusatzfunktionen', gridEdit: 'Gitterlinien bearbeiten', brightAutoSub: 'Bei „Ansicht draußen“ auf Auto ein helleres Display in Innenräumen', monoToExtras: 'Zu den Zusatzfunktionen',
+  navExtras: 'Zusatzfunktionen', gridEdit: 'Gitterlinien bearbeiten', monoToExtras: 'Zu den Zusatzfunktionen',
   /** The phone's tab bar with five tabs (GR IV): shorter names where the full ones do not fit. */
   navICTab: 'Bild', navRatioTab: 'Format', navExtrasTab: 'Zusätze', navWallTab: 'Endbild',
   navRatio: 'Seitenverhältnis', ratioAdd: 'Format hinzufügen', ratioFactory: 'Werk', ratioGray: 'Grau', ratioMax: 'Höchstens {n}', ratioLine: 'Zusätzliche Seitenverhältnisse {n}  ·  {l}',
@@ -141,6 +141,8 @@ export const de: Dict = {
   gridTop: 'Oben', gridMiddle: 'Mitte', gridBottom: 'Unten', gridLeft: 'Links', gridCentre: 'Mitte', gridRight: 'Rechts', gridDiagDown: 'Von oben links nach unten rechts', gridDiagUp: 'Von unten links nach oben rechts',
   gridHint: 'Eine Linie in der Vorschau oder ihren Knopf anklicken, um sie ein- oder auszublenden; gestrichelte Linien sind ausgeblendet. An der Kamera wie bisher das 3x3- oder 4x4-Gitter wählen.', gridLine: 'Eigene Gitterlinien  ·  3x3: {a}  ·  4x4: {b}', gridCameraLines: 'wie die Kamera', gridNoLines: 'keine', gridLinesN: '{n} Linien', gridChip: 'Gitter', gridSameAsCamera: 'Das sind die kameraeigenen Linien, es wird also nichts hinzugefügt. Eine Linie ein- oder ausblenden, um ein eigenes Gitter zu gestalten.',
   gridSubMenu: 'Fügt der Liste Gitterart der Kamera eigene Gitter hinzu; ihr 3x3- und 4x4-Gitter bleiben',
+  frPreset: 'Gitter {n}', frPreviewAs: 'Vorschau als', frAdd: 'Hinzufügen', frKindFrame: 'Rahmen', frKindGrid: 'Gitter', frKindGolden: 'Goldener Schnitt', frKindLine: 'Linie', frKindCentre: 'Mittelmarke', frKindDiagonals: 'Diagonalen', frFrame: 'Rahmen {l}', frRatio: 'Seitenverhältnis', frCustom: 'Eigenes', frSize: 'Größe', frMoveX: 'Waagerechte Lage', frMoveY: 'Senkrechte Lage', frStyle: 'Stil', frBox: 'Rahmen', frCorners: 'Ecken', frDashed: 'Gestrichelt', frSolid: 'Durchgehend', frCorner: 'Eckenlänge', frMask: 'Außerhalb', frNone: 'Keine', frColour: 'Farbe', frWidth: 'Stärke', frCols: 'Spalten', frRows: 'Zeilen', frWithin: 'Innerhalb', frPicture: 'Bild', frLineKind: 'Linie', frAxis: 'Richtung', frHorizontal: 'Waagerecht', frVertical: 'Senkrecht', frPosition: 'Lage', frShape: 'Form', frCross: 'Kreuz', frDot: 'Punkt', frPalette: 'Palette', frOpacity: 'Deckkraft', frReset: 'Zurück zum Gitter der Kamera', frRemove: 'Entfernen', frEmpty: 'Nichts darin: Mit diesem Gitter zeigt die Kamera keine Linien.', frTooMany: 'Zu viele Teile zu zeichnen ({n}, höchstens {m}): weniger gestrichelte Linien, Gitter oder sichere Bereiche verwenden.', frSame: 'Gleich dem {g} der Kamera: erscheint in der Kamera nicht als eigenes Gitter.', frHint: 'In der Kamera in der Liste Gitterart „Eigenes Gitter 1“ oder „Eigenes Gitter 2“ wählen. Rahmenlinien und Gitter passen sich dem Bild an, das die Kamera zeigt.', framingLine: 'Eigene Gitterlinien  ·  {n}',
+  frRatioFollow: 'Wie Bereich', frCustomColour: 'Eigene', frColoursFull: 'Beide Gitter zusammen können höchstens 8 Farben verwenden; wähle eine bereits benutzte', frTemplates: 'Vorlagen', frTplThirds: 'Drittelregel', frTplQuarters: '4×4 + Diagonalen', frTplCentre: 'Mitte + Sicherheitsbereich', frTplCinema: 'Kino 2.39:1', frTplFlat: 'Breitbild 1.85:1',
   gridHintMenu: 'Eine Linie in der Vorschau oder ihren Knopf anklicken, um sie ein- oder auszublenden; gestrichelte Linien sind ausgeblendet. In der Liste Gitterart der Kamera folgen Eigenes 3x3 Gitter und Eigenes 4x4 Gitter auf das 3x3- und 4x4-Gitter der Kamera (eines, das dem der Kamera gleicht, entfällt); jederzeit umschaltbar. Bei zusätzlichen Formaten bleiben Linien und Diagonalen im Fotobereich.',
   previewLine: 'Belichtungsvorschau  ·  Aufnahmeeinstellungen › Belichtungseinstellung › Belichtungsvorschau und ADJ (An / Aus bei Direktblitz / Immer aus)',
   previewLineNoFlash: 'Belichtungsvorschau  ·  Aufnahmeeinstellungen › Belichtungseinstellung › Belichtungsvorschau und ADJ (An / Aus)',
@@ -248,6 +250,11 @@ export const de: Dict = {
   movieSrSub: 'Movie SR im Videomenü bietet drei Einstellungen: Aus, Sensor-Shift und Elektronisch. Sensor-Shift beschneidet das Bild nicht.',
   tIcFMovieSrB: 'Movie SR im Videomenü bietet statt Aus / An drei Einstellungen: Aus, Sensor-Shift und Elektronisch. Sensor-Shift stabilisiert das Bild durch Bewegen des Sensors, wie bei Fotos, ohne es zu beschneiden; Elektronisch ist die kameraeigene elektronische Shake Reduction, die an jeder Seite etwa 5 % abschneidet.',
   movieSrLine: 'Sensor-Shift-SR im Videomodus',
+  navUnits: 'Entfernungseinheit',
+  unitsMetre: 'Meter (m)',
+  unitsFeet: 'Fuß (ft)',
+  tIcFUnitsB: 'Mit Fuß werden Fixfokus Entfernung (1ft bis 16ft, im Menü, auf dem Aufnahmebildschirm und im ADJ-Modus) und die Entfernungsskala beim manuellen Fokus in Fuß angezeigt, die Skala für kurze Entfernungen in Zoll (in). Mit Meter wie in der offiziellen Firmware.',
+  unitsLine: 'Entfernungseinheit  ·  Fuß (Fixfokus Entfernung, Skala beim manuellen Fokus)',
   // Placeholders: the fork's texts that upstream has no translation for (English, to be translated).
   closeLabel: 'Close',
   photoFitTitle: 'Fit LUTs to real photos',

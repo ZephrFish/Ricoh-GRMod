@@ -7,8 +7,9 @@ Customize your Ricoh GR with your own Image Control presets, aspect ratios, and 
 > GR Mod is an independent, open-source project. It is not a Ricoh product.
 
 <p align="center">
-  <img src="docs/images/mobile-overview-en.png" width="48%" alt="GR Mod on iPhone, iPad and Android">
-  <img src="docs/images/download-guide-en.png" width="48%" alt="Download GR Mod for desktop and Android from GitHub, or for iPhone and iPad from the App Store">
+  <img src="docs/images/mobile-overview-en.png" width="32%" alt="GR Mod on iPhone, iPad and Android">
+  <img src="docs/images/whats-new-0.8.14-0.9.1-en.jpg" width="32%" alt="What's new in GR Mod from 0.8.14 to 0.9.1">
+  <img src="docs/images/download-guide-en.png" width="32%" alt="Download GR Mod for desktop and Android from GitHub, or for iPhone and iPad from the App Store">
 </p>
 
 ## Download
@@ -61,6 +62,7 @@ Use only firmware intended for your camera model and a base version listed above
 - **Learned auto white balance:** Auto, Warmth Priority and White Priority estimate the light with a learned model, on GR IV 1.20 / 1.21.
 - **Constant Light:** keeps the AF assist lamp lit, switched in the shooting menu, in ADJ mode or by an Fn button, on GR IV 1.20 / 1.21.
 - **Sensor Shift:** shift and turn the sensor by hand with the shake reduction unit to fine-tune the framing, from ADJ mode, the Fn button or the held Movie button, on GR IV 1.20 / 1.21.
+- **Distance unit:** Snap Focus Distance and the manual focus scale in feet (and inches) instead of metres, on GR IV 1.20 / 1.21.
 - **Custom grid lines:** choose which lines a 3x3 and a 4x4 grid draw, on the GR IV (firmware 1.11, 1.20 and 1.21; on 1.20 / 1.21 they are extra values of the camera's Grid Style list, next to its own).
 
 Features vary by camera model and firmware version. The app only offers options supported by the selected firmware.

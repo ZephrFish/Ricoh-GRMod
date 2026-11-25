@@ -84,14 +84,18 @@ const FEATURE2_ADJ_SLOTS = 2;
 /** A following byte selects 1 = bright or 2 = balanced. */
 const FEATURE2_BRIGHT_AUTO = 4;
 /**
- * Fourth feature byte, bit 4: the HLG photo mode (`hlg.ts`; this fork). The third byte has no bit left to announce
- * the fourth: it follows the third byte (and the grid's two bytes) only when it is not zero, which the zero padding
- * of the record can never be; a third byte of zero is written, and accepted, only in front of it (as on 1.20).
- * @decision DEC-HLG-MARK-003 (fork): HLG was bit 7 of the third byte since 0.8.16 of the fork; upstream 0.9.0
- * took that bit for the movie exposure modes (1.20 / 1.21), so HLG moved to bit 4 of the fourth byte (the same
- * on 1.11, 1.20 and 1.21). A file the fork wrote before reads back as the movie exposure modes, not HLG.
+ * Fourth feature byte, bit 6: the HLG photo mode (`hlg.ts`; this fork), in the layout of 1.20's fourth byte, whose
+ * bits 0 to 5 are upstream's 1.20 / 1.21 features (1.11 has none of them, so they are refused here). The third
+ * byte has no bit left to announce the fourth: it follows the third byte (and the grid's two bytes) only when it
+ * is not zero, which the zero padding of the record can never be; a third byte of zero is written, and accepted,
+ * only in front of it (as on 1.20).
+ * @decision DEC-HLG-MARK-004 (fork): supersedes DEC-HLG-MARK-003. The fork's HLG marker so far: bit 5 of the
+ * second byte (fork 0.8.12 to 0.8.15), bit 7 of the third byte (from fork 0.8.16; upstream 0.9.0 took it for the
+ * movie exposure modes), bit 4 of the fourth byte (only in the unreleased 0.9.1 sync; upstream 0.9.2 took it for
+ * framing guides and bit 5 for distances in feet), now bit 6 of the fourth byte, the same on 1.11, 1.20 and 1.21.
+ * A file written with an earlier marker reads back as upstream's feature on that bit, not as HLG.
  */
-const FEATURE4_HLG_PHOTO = 16;
+const FEATURE4_HLG_PHOTO = 64;
 /** Second feature byte: bit 5, the learned Auto for Shadow Correction (`shadowml.ts`). */
 const FEATURE2_SHADOW_LEARN = 32;
 /** Second feature byte: bit 7, a third feature byte follows (after the bytes of bits 1 and 2). */

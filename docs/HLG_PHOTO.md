@@ -242,8 +242,8 @@ To ensure the name **"HDR"** appears correctly regardless of whether the camera 
 - Updates `TEXT_CATALOG` (`0x543D4AC0`) rows for Text ID 306 across all 21 languages.
 
 ### 5.3 Grown Layout & Feature Mask
-HLG Photo is registered as a first-class feature in `core/src/fw/aspect/package.ts`:
-- Feature Bit: `FEATURE_HLG_PHOTO = 16` (`0x10`).
+HLG Photo is registered as a first-class feature in `core/src/fw/aspect/package.ts` (1.11) and `core/src/fw/gr4v120/aspect/package.ts` (1.20 / 1.21):
+- Feature Bit: bit 6 of the fourth feature byte, `FEATURE4_HLG_PHOTO = 64` (`0x40`); bits 0 to 5 of that byte are upstream's (bit 4 framing guides, bit 5 distances in feet). The marker's history is in `DEC-HLG-MARK-004`.
 - Build Revision: Revision 3 (`GRMODAR3`).
 - Patcher: `Patch.grows` evaluates to `true` when `hlgPhoto` is enabled, allocating appended space at the end of RTOS and recording `FEATURE_HLG_PHOTO` in the trailer metadata record.
 - Self-check: All modified words and appended ranges are tracked in `patch.words` and whitelist ranges, passing `selfCheckGrown` with zero integrity violations.
