@@ -116,6 +116,16 @@ export interface State {
   videoAf: boolean;
   /** GR IV 1.20 / 1.21: the learned auto white balance for the three Auto modes (off by default). */
   awbLearn: boolean;
+  /** GR IV 1.20 / 1.21: movies in the exposure mode of the mode dial, shutter speed, aperture and ISO adjustable (off by default). */
+  movieExposure: boolean;
+  /** Constant Light (GR IV 1.20 / 1.21): the front lamp kept lit, switched in the camera. */
+  constantLight: boolean;
+  /** Sensor Shift (GR IV 1.20 / 1.21): the picture moved and turned by hand with the shake reduction unit, from ADJ mode or a button. */
+  sensorShift: boolean;
+  /** 4K movies (GR IV 1.20 / 1.21): the movie menu's Frame Rate becomes Frame Rate / Resolution. */
+  movie4k: boolean;
+  /** Shake reduction for movies by sensor shift (GR IV 1.20 / 1.21): Movie SR offers Off / Sensor Shift / Electronic. */
+  movieSr: boolean;
   /** ADJ lever slots in the build: 5 (the camera's) to 8 (GR IV). */
   adjSlots: number;
   /** GR IV, experimental: .cube presets of added slots get hue sectors of their own (core color/hue.ts). */
@@ -160,7 +170,7 @@ export const emptySlot = (): SlotState => ({ names: {}, icon: { mode: 'keep', te
 export const emptySlots = (): Record<SlotId, SlotState> => Object.fromEntries(SLOT_IDS.map(id => [id, emptySlot()])) as Record<SlotId, SlotState>;
 export let state: State = {
   ready: false, page: 'ic', extrasView: 'list', fwBusy: false, model: 'HDF', lang: cameraLang(), langAuto: uiLangPref() === '',
-  slots: emptySlots(), extras: [], lookOrder: [], lookHidden: [], lookOrder3: [], lookHidden3: [], wall: [], ratios: [], ratioBackdrop: 'photo', brightAuto: false, photoFit: true, soft: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, directFlash: false, hdr: false, exposurePreview: false, filmGrain: false, shadowLearn: false, ratioShade: false, ratioShadeTone: 'dark', shadePreview: '75', battery: false, customGrid: false, gridLines: cameraGrid(), flashTtl: false, videoAf: false, awbLearn: false, adjSlots: 5, filmCount: 0, previewMode: 'photo', photoRev: 0, activeSlot: 'CY', library: [], compareWith: 'orig', volumes: [],
+  slots: emptySlots(), extras: [], lookOrder: [], lookHidden: [], lookOrder3: [], lookHidden3: [], wall: [], ratios: [], ratioBackdrop: 'photo', brightAuto: false, photoFit: true, soft: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, directFlash: false, hdr: false, exposurePreview: false, filmGrain: false, shadowLearn: false, ratioShade: false, ratioShadeTone: 'dark', shadePreview: '75', battery: false, customGrid: false, gridLines: cameraGrid(), flashTtl: false, videoAf: false, awbLearn: false, movieExposure: false, sensorShift: false, movie4k: false, movieSr: false, constantLight: false, adjSlots: 5, filmCount: 0, previewMode: 'photo', photoRev: 0, activeSlot: 'CY', library: [], compareWith: 'orig', volumes: [],
   copySource: 'card', parked: [], backups: [], copySel: [], copyInfo: {}, builds: [], showAll: false, toasts: [], onlineOpen: false, toursSeen: [],
 };
 const listeners = new Set<() => void>();
@@ -277,12 +287,12 @@ export function fail(e: unknown): void {
 }
 
 /**
- * The camera language (whose names Image Control changes) follows the app language: 简体中文 → zh-CN, English → en,
- * following the system → the system's language where the camera has it (else English).
+ * The camera language (whose names Image Control changes) follows the app language: 简体中文 → zh-CN, the others → the
+ * camera's same language, following the system → the system's language where the camera has it (else English).
  */
 export function cameraLang(): LangCode {
   const ui = uiLangPref();
-  return ui === 'zh' ? 'zh-CN' as LangCode : ui === 'en' ? 'en' as LangCode : systemCameraLang();
+  return ui === 'zh' ? 'zh-CN' as LangCode : ui ? ui as LangCode : systemCameraLang();
 }
 /** The camera language closest to the phone's own: its first language GR IV has, else English. */
 export function systemCameraLang(): LangCode {

@@ -47,6 +47,7 @@ export const Ico = {
   soft: <svg viewBox="0 0 20 20" {...P}><circle cx="10" cy="10" r="3.3" /><circle cx="10" cy="10" r="7.2" strokeDasharray="1.4 2.35" /></svg>,
   date: <svg viewBox="0 0 20 20" {...P}><rect x="2.8" y="4.4" width="14.4" height="12" rx="2" /><path d="M2.8 8.2h14.4M6.6 2.8v3M13.4 2.8v3M6.4 11.4h1.6M9.2 11.4h1.6M12 11.4h1.6M6.4 13.8h1.6M9.2 13.8h1.6" /></svg>,
   adj: <svg viewBox="0 0 20 20" {...P}><rect x="1.8" y="6.6" width="3.4" height="3.4" rx="0.8" /><rect x="6.4" y="6.6" width="3.4" height="3.4" rx="0.8" /><rect x="11" y="6.6" width="3.4" height="3.4" rx="0.8" /><rect x="15.6" y="6.6" width="2.6" height="3.4" rx="0.8" /><path d="M3.5 13.4h13" /></svg>,
+  lamp: <svg viewBox="0 0 20 20" {...P}><circle cx="10" cy="10" r="3.2" /><path d="M10 2.6v2M10 15.4v2M2.6 10h2M15.4 10h2M4.8 4.8l1.4 1.4M13.8 13.8l1.4 1.4M4.8 15.2l1.4-1.4M13.8 6.2l1.4-1.4" /></svg>,
   flash: <svg viewBox="0 0 20 20" {...P}><path d="M11.8 2.6L5.4 11h4.2l-1.8 6.4 6.8-8.8h-4.4l1.6-6z" /></svg>,
   hdr: <svg viewBox="0 0 20 20" {...P}><circle cx="10" cy="10" r="3.2" /><path d="M10 2.2v2.2M10 15.6v2.2M2.2 10h2.2M15.6 10h2.2M4.5 4.5l1.6 1.6M13.9 13.9l1.6 1.6M4.5 15.5l1.6-1.6M13.9 6.1l1.6-1.6" /></svg>,
   battery: <svg viewBox="0 0 20 20" {...P}><rect x="4.2" y="6" width="13" height="8" rx="1.6" /><path d="M2.6 8.6v2.8" /><path d="M7.4 8.4v3.2M10 8.4h1.8v3.2H10zM14.6 8.4l-1.2 3.2" strokeWidth="1.1" /></svg>,
@@ -58,6 +59,10 @@ export const Ico = {
   grain: <svg viewBox="0 0 20 20" {...P}><rect x="2.8" y="2.8" width="14.4" height="14.4" rx="2" /><circle cx="6.6" cy="6.8" r="1" fill="currentColor" stroke="none" /><circle cx="12.2" cy="5.9" r="0.6" fill="currentColor" stroke="none" /><circle cx="9.6" cy="10.2" r="1.4" fill="currentColor" stroke="none" /><circle cx="14" cy="11.4" r="0.8" fill="currentColor" stroke="none" /><circle cx="6.2" cy="13.4" r="0.7" fill="currentColor" stroke="none" /><circle cx="11.6" cy="14.4" r="0.9" fill="currentColor" stroke="none" /></svg>,
   /* a movie camera with a focus frame */
   movie: <svg viewBox="0 0 20 20" {...P}><rect x="2" y="5.6" width="11" height="8.8" rx="1.6" /><path d="M13 8.8l4.6-2.4v7.2L13 11.2" /><path d="M5.6 8.4v-.8h.8M9.4 7.6h.8v.8M10.2 11.6v.8h-.8M6.4 12.4h-.8v-.8" /></svg>,
+  movie4k: <svg viewBox="0 0 20 20" {...P}><rect x="2" y="5.6" width="11" height="8.8" rx="1.6" /><path d="M13 8.8l4.6-2.4v7.2L13 11.2" /><path d="M5.9 8.2L4.4 10.6h2.4M6.2 9.6v2.3M8.5 8.2v3.7M10.7 8.2L8.6 10.2l2.2 1.7" strokeWidth="1.15" /></svg>,
+  movieSr: <svg viewBox="0 0 20 20" {...P}><rect x="2" y="5.6" width="11" height="8.8" rx="1.6" /><path d="M13 8.8l4.6-2.4v7.2L13 11.2" /><rect x="6" y="8.5" width="3" height="3" rx="0.5" strokeWidth="1.15" /><path d="M4.5 8.3q-.8 1.7 0 3.4M10.5 8.3q.8 1.7 0 3.4" strokeWidth="1.15" /></svg>,
+  shift: <svg viewBox="0 0 20 20" {...P}><rect x="2.6" y="3.8" width="11.4" height="8.6" rx="1.2" strokeDasharray="1.7 1.7" /><rect x="6" y="7.6" width="11.4" height="8.6" rx="1.2" /></svg>,
+  movieExp: <svg viewBox="0 0 20 20" {...P}><rect x="2" y="5.6" width="11" height="8.8" rx="1.6" /><path d="M13 8.8l4.6-2.4v7.2L13 11.2" /><path d="M4.6 10h2.6M5.9 8.7v2.6M8.4 10h2.4" /></svg>,
   wb: <svg viewBox="0 0 20 20" {...P}><circle cx="10" cy="10" r="6.6" /><path d="M10 3.4a6.6 6.6 0 0 0 0 13.2z" fill="currentColor" stroke="none" opacity="0.35" /><path d="M10 3.4v13.2" /></svg>,
   preview: <svg viewBox="0 0 20 20" {...P}><path d="M1.8 10c2.2-3.6 5-5.4 8.2-5.4s6 1.8 8.2 5.4c-2.2 3.6-5 5.4-8.2 5.4S4 13.6 1.8 10z" /><circle cx="10" cy="10" r="2.6" /></svg>,
   mono: <svg viewBox="0 0 20 20" {...P}><circle cx="10" cy="10" r="7.2" /><path d="M10 2.8a7.2 7.2 0 0 1 0 14.4z" fill="currentColor" stroke="none" /></svg>,

@@ -35,8 +35,16 @@ diff --git a/core/src/fw/gr4v120/aspect/adjslots.ts b/core/src/fw/gr4v120/aspect
   *    6..N are kept in a record of their own (appended, never opened) and SubMenuController reads
   *    them there for ADJ Mode Setting (record 10): the line's text, value icon x and value draw in
   *    its list builder (0x531E3E70), the line's controller id on OK (0x531E3AF4). Its list (made once
-@@ -59,11 +60,11 @@
-  * functions are as before.
+@@ -56,14 +57,18 @@
+  *    (the builder's own limit); with seven or eight lines the list scrolls with the cursor, as long
+  *    lists do. Customize Settings is as the camera's.
+  * In the fixed layout (movies) the extra slots are empty and their frames hidden: the five fixed
+- * functions are as before.
++ * functions are as before, and where the camera has them: each time the strip is drawn, the frames
++ * and icons of the five slots are put at the official places (425 + 60 k) in the fixed layout and
++ * at the N-slot places otherwise (View::SetX 0x535ABF2C, the function the selection frame is moved
++ * with), and the selection frame's x is the official one in the fixed layout. (Before test 097 the
++ * five stood at their N-slot places with the room of slots 6..N empty to their right.)
   */
  import { FirmwareError } from '../../types';
 -import { assembleWords, branchTarget, branchWord } from './arm';
@@ -49,7 +57,7 @@ diff --git a/core/src/fw/gr4v120/aspect/adjslots.ts b/core/src/fw/gr4v120/aspect
  
  export const ADJ_SLOTS_MIN = 5;
  export const ADJ_SLOTS_MAX = 8;
-@@ -74,7 +75,7 @@
+@@ -74,7 +79,7 @@
  export const ADJ_MENU_ID = 0x020001c0;
  export const ADJ_LIST_ID = 0x020001c1;
  /** Texts: the lines of slots 6..8 are ADJ_TEXT_ID + 1.. (ADJ_TEXT_ID itself is not used). */
@@ -58,7 +66,17 @@ diff --git a/core/src/fw/gr4v120/aspect/adjslots.ts b/core/src/fw/gr4v120/aspect
  /** The controller's new members and size. */
  export const ADJ_FRAMES = 0x294;
  export const ADJ_ICONS = 0x2b4;
-@@ -146,19 +147,19 @@
+@@ -134,6 +139,9 @@
+ /** SlotFunction's return: sub sp, fp, #0x18; ldm sp, {r4, r5, r6, fp, sp, pc}. */
+ const SLOT_FUNCTION_RETURN = adr(0x531beba0);
+ const DRAW = adr(0x531c0f74);
++const IS_FIXED = adr(0x531be238); // (this) -> 1 in the fixed layout (movies)
++const VIEW_SET_X = adr(0x535abf2c); // (view, x)
++const SELECTION_SET_X = adr(0x531c0930); // bl View::SetX(selection frame, x0 + pitch * slot), slot in r2, this in r4
+ const TOUCHABLE = adr(0x531bebf4);
+ const TAPS = adr(0x531bd078);
+ const TAP_SELECT = adr(0x531c0e84);
+@@ -146,19 +154,19 @@
  
  /** Official words of every place changed, checked first. */
  const OFFICIAL: readonly (readonly [number, number])[] = [
@@ -82,7 +100,7 @@ diff --git a/core/src/fw/gr4v120/aspect/adjslots.ts b/core/src/fw/gr4v120/aspect
    [adr(0x531be238), MOV_IP_SP], [adr(0x531beab8), MOV_IP_SP], [adr(0x535ab874), MOV_IP_SP], [adr(0x539084bc), MOV_IP_SP],
  ];
  
-@@ -254,8 +255,8 @@
+@@ -254,8 +262,8 @@
    return text.slice(0, ascii) + String(digit) + text.slice(ascii + 1);
  }
  
@@ -93,7 +111,7 @@ diff --git a/core/src/fw/gr4v120/aspect/adjslots.ts b/core/src/fw/gr4v120/aspect
  
  /** Texts of row l (every row of the catalog, as the program indexes languages). */
  function installTexts(patch: Patch, entries: readonly { id: number; make: (row: number) => string }[]): void {
-@@ -277,7 +278,7 @@
+@@ -277,7 +285,7 @@
  
  // --- Settings: ADJ Mode Setting's submenu record and lists, SubMenuController's list.
  const ADJ_SUBMENU = 10;
@@ -102,7 +120,7 @@ diff --git a/core/src/fw/gr4v120/aspect/adjslots.ts b/core/src/fw/gr4v120/aspect
  const SELECT_TABLE = adr(0x53dcd470);
  const SELECT_RECORD = 0x4c;
  const ADJ1_COUNT = adr(0x531d0b7c);
-@@ -311,9 +312,31 @@
+@@ -311,9 +319,31 @@
    [adr(0x531e3b34), 0xe5925014],
  ];
  
@@ -127,7 +145,7 @@ diff --git a/core/src/fw/gr4v120/aspect/adjslots.ts b/core/src/fw/gr4v120/aspect
 +  const sites: readonly (readonly [number, number])[] = [[68, 0xe3540014], [172, MOVW_TABLE], [176, 0xe34513dc], [416, MOVW_TABLE], [420, 0xe34513dc]];
 +  for (const [at, word] of sites) if (v.getUint32(at, true) !== word) fail('internal', 'ADJ slots: the module is not the one expected');
 +  const member = table + 0x3c;
-+  v.setUint32(68, 0xe3540015, true);
++  v.setUint32(68, 0xe3540000 | MAX_FUNCTION, true); // cmp r4, #last
 +  for (const at of [172, 416]) {
 +    v.setUint32(at, movWord(1, lo(member)), true);
 +    v.setUint32(at + 4, movWord(1, hi(member), true), true);
@@ -136,7 +154,7 @@ diff --git a/core/src/fw/gr4v120/aspect/adjslots.ts b/core/src/fw/gr4v120/aspect
  
  function installMenu(patch: Patch, n: number): void {
    // --- Checks.
-@@ -340,7 +363,7 @@
+@@ -340,7 +370,7 @@
      const k = 5 + j;
      const set = patch.append((at) => assembleWords(
        `ldr r3, [r0, #0x1a8]; ldr ip, [r0, #0x1ac]; sub ip, ip, r3; cmp r1, ip; bxhs lr
@@ -145,19 +163,21 @@ diff --git a/core/src/fw/gr4v120/aspect/adjslots.ts b/core/src/fw/gr4v120/aspect
         movw r2, #${lo(ADJ_EXTRA_BYTE + j)}; movt r2, #${hi(ADJ_EXTRA_BYTE + j)}
         ldrb r3, [r2]; bic r3, r3, #0x1f; orr r3, r3, r1; strb r3, [r2]; bx lr`, at), 16);
      const current = patch.append((at) => assembleWords(
-@@ -441,7 +464,10 @@
+@@ -441,7 +471,12 @@
   * Install N ADJ slots (6..8; 5 only for the emulator checks, the official layout through the new
   * code). Returns nothing; the ICONBIN data does not change.
   */
 -export function installAdjSlots(patch: Patch, n: number, options: { menu?: boolean } = {}): void {
-+export function installAdjSlots(patch: Patch, n: number, options: { menu?: boolean; functionTable?: number } = {}): void {
++export function installAdjSlots(patch: Patch, n: number, options: { menu?: boolean; functionTable?: number; lastFunction?: number } = {}): void {
 +  // Test 080: the function table copied with function 0x15 (exposure preview, `exposure.ts`).
 +  const functionTable = options.functionTable ?? 0;
-+  MAX_FUNCTION = functionTable ? 0x15 : 0x14;
++  // Constant Light (`lamp.ts`) and Sensor Shift (`shift.ts`) add one more each: `lastFunction`.
++  MAX_FUNCTION = functionTable ? options.lastFunction ?? 0x15 : 0x14;
++  if (!(MAX_FUNCTION >= 0x14 && MAX_FUNCTION <= 0x17)) fail('internal', 'ADJ slots: the last ADJ function');
    if (!(Number.isInteger(n) && n >= ADJ_SLOTS_MIN && n <= ADJ_SLOTS_MAX)) fail('internal', 'ADJ slots: 5 to 8');
    for (const [at, word] of OFFICIAL) expectWord(patch, at, word);
    const officialTable = patch.readMapped(VIEW_TABLE, OFFICIAL_VIEWS * VIEW_ENTRY);
-@@ -456,7 +482,9 @@
+@@ -456,7 +491,9 @@
    }
  
    // --- The module and the view table.
@@ -168,6 +188,44 @@ diff --git a/core/src/fw/gr4v120/aspect/adjslots.ts b/core/src/fw/gr4v120/aspect
    const E = ADJSLOTS_ENTRY;
    const table = patch.append(adjViewTable(officialTable, n), 16);
    const stub = (body: string): number => patch.append((at) => assembleWords(body, at), 16);
+@@ -485,7 +522,36 @@
+     const wrap = stub(`push {r4, lr}; mov r4, r0; bl #${tramp}; mov r0, r4; ${call}; pop {r4, pc}`);
+     patch.setWord(fn, branchWord(fn, wrap), what);
+   };
+-  after(DRAW, `mov r1, #${n}; bl #${module + E.draw_more}`, 'ADJ slots: the strip, slots 6..N');
++  // The five slots' places: the official ones in the fixed layout (movies), the N-slot ones otherwise.
++  expectWord(patch, VIEW_SET_X, MOV_IP_SP);
++  expectWord(patch, SELECTION_SET_X - 0x14, 0xe5d421fc); // ldrb r2, [r4, #0x1fc]
++  expectWord(patch, SELECTION_SET_X, branchWord(SELECTION_SET_X, VIEW_SET_X, 14, true));
++  const layout = stub(
++    `push {r4, r5, r6, r7, r8, lr}
++     mov r4, r0
++     bl #${IS_FIXED}
++     cmp r0, #1
++     movweq r6, #425; moveq r7, #60
++     movwne r6, #${adjFrameX(n, 0)}; movne r7, #${adjPitch(n)}
++     mov r5, #0
++     next: add r8, r4, r5, lsl #2
++     ldr r0, [r8, #${ADJ_FRAMES}]; mov r1, r6; bl #${VIEW_SET_X}
++     ldr r0, [r8, #${ADJ_ICONS}]; add r1, r6, #5; bl #${VIEW_SET_X}
++     add r6, r6, r7
++     add r5, r5, #1
++     cmp r5, #5; blo next
++     pop {r4, r5, r6, r7, r8, pc}`);
++  const selection = stub(
++    `push {r0, r1, r2, lr}
++     mov r0, r4; bl #${IS_FIXED}
++     cmp r0, #1
++     pop {r0, r1, r2, lr}
++     bne #${VIEW_SET_X}
++     mov r1, #60; mul r1, r1, r2
++     movw r3, #425; add r1, r1, r3
++     b #${VIEW_SET_X}`);
++  patch.setWord(SELECTION_SET_X, branchWord(SELECTION_SET_X, selection, 14, true), 'ADJ slots: the selection frame in the fixed layout');
++  after(DRAW, `mov r1, #${n}; bl #${module + E.draw_more}; mov r0, r4; bl #${layout}`, 'ADJ slots: the strip, slots 6..N; the places of slots 1..5');
+   after(TOUCHABLE, `mov r1, #${n}; bl #${module + E.touchable_more}`, 'ADJ slots: icons that can be touched, slots 6..N');
+   const taps = Array.from({ length: n - 5 }, (_, j) => stub(`ldrb r3, [r0, #0x1fc]; cmp r3, #${5 + j}; bxeq lr; mov r1, #${5 + j}; b #${TAP_SELECT}`));
+   const tapTable = patch.append(u32le(taps.length ? taps : [0]), 4);
 diff --git a/core/src/fw/gr4v120/aspect/awb2.ts b/core/src/fw/gr4v120/aspect/awb2.ts
 new file mode 100644
 --- /dev/null
@@ -357,12 +415,13 @@ diff --git a/core/src/fw/gr4v120/aspect/brightauto.ts b/core/src/fw/gr4v120/aspe
 diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/build.ts
 --- a/core/src/fw/gr4v120/aspect/build.ts
 +++ b/core/src/fw/gr4v120/aspect/build.ts
-@@ -32,17 +32,22 @@
+@@ -32,17 +32,23 @@
  import { installDirectFlashMenu } from './directflash-menu';
  import { DATESTAMP_BYTE, installDateStamp, lookNames } from './datestamp';
  import { HDR_SWITCH_BYTE, installHdrGainMap } from './hdrgain';
 -import { hdrTopDraw, installDateStampMenu, installHdrMenu, installHdrStillLine } from './datestamp-menu';
 +import { StillLine, hdrStillLine, hdrTopDraw, installDateStampMenu, installHdrMenu, installStillLines } from './datestamp-menu';
++import { installLampAdj, installLampAssets, installLampCore, installLampFn, installLampList, lampAdjFunction, lampStillLine } from './lamp';
 +import { exposurePreviewStillLines, installExposurePreviewAdj, installExposurePreviewAssets, installExposurePreviewLists, installExposurePreviewLive } from './exposure';
  import { installMonoUnlock } from './monounlock';
  import { installBrightAuto } from './brightauto';
@@ -383,7 +442,7 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
  import { installShutdownMenu } from './shutdown';
  import { FIRST_ADDED_LOOK, installSettingsGuard } from './guard';
  import { installAdjSlots } from './adjslots';
-@@ -50,25 +55,30 @@
+@@ -50,25 +56,34 @@
  import { installCustomGrid, isCameraGrid, validCustomGrid } from './grid';
  import type { CustomGrid } from './grid';
  import { installRatioShade } from './shade';
@@ -391,6 +450,10 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
  import type { ShadeTone } from './shade';
 -import { LOOK_STASH, installLookStash, monoLook, monoTable, styleColour } from './lookstash';
 +import { installExposurePreviewOff } from './lvpreview';
++import { installMovieExposure } from './movieexp';
++import { MOVIE_4K_BIT, MOVIE_SENSOR_SR_BIT, installMovie4k } from './movie4k';
++import { installMovieSr, installMovieSrAssets } from './moviesr';
++import { installShiftAdj, installShiftAssets, installShiftCore, installShiftFn, shiftAdjFunction } from './shift';
 +import { FRAME_LOOK, LOOK_STASH, installLookStash, monoLook, monoTable, styleColour } from './lookstash';
  import type { ShutdownPictureSpec } from './shutdown';
 -import { adr, adrHEX, adrText } from '../target';
@@ -422,7 +485,7 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
  export const LANGUAGES = 21;
  const ROW_STRIDE = TEXT_CAPACITY * 4;
  const NATIVE_ICON_CATALOG = adr(0x55014280);
-@@ -91,10 +101,10 @@
+@@ -91,10 +106,10 @@
    return id;
  }
  
@@ -436,7 +499,7 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
  }
  
  export interface RatioSpec {
-@@ -135,8 +145,6 @@
+@@ -135,8 +150,6 @@
    monoUnlock?: boolean;
    /** Added Image Control slots, 1 to 20 (see `slots.ts`; up to 0.8.1 at most 6). */
    extraSlots?: readonly ExtraSlotSpec[];
@@ -445,7 +508,7 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
    /** Image Control menu order and hidden looks (see `looks.ts`). */
    lookLayout?: LookLayout;
    /**
-@@ -158,12 +166,14 @@
+@@ -158,12 +171,14 @@
    /** ADJ lever slots, 6 to 8 (see `adjslots.ts`); absent or 5: the camera's five. */
    adjSlots?: number;
    /**
@@ -463,7 +526,7 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
    /** The battery icon shows the charge in steps of 10 % instead of the bars (see `battery.ts`). */
    batteryPercent?: boolean;
    /** Which lines the camera's 3x3 and 4x4 grid styles draw, each on or off (see `grid.ts`); never the camera's own grids. */
-@@ -177,13 +187,13 @@
+@@ -177,21 +192,23 @@
    ratioShadeTone?: ShadeTone;
    /** A learned Auto for Shadow Correction (see `shadowml.ts`); GR IV 1.11, 1.20 and 1.21. Off unless asked for. */
    shadowLearn?: boolean;
@@ -479,9 +542,22 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
 -  /** GR IV 1.20 and 1.21 (`fw/gr4v120/aspect/awb2.ts`; not built on 1.11): a learned auto white balance for the three Auto modes. */
 +  /** A learned auto white balance for the three Auto modes (`awb2.ts`); 1.20 and 1.21. Off unless asked for. */
    awbLearn?: boolean;
+-  /** GR IV 1.20 and 1.21 (`fw/gr4v120/aspect/movieexp.ts`; not built on 1.11): movies in the exposure mode of the mode dial. */
++  /** Movies in the exposure mode of the mode dial, with the still mode's ISO setting (`movieexp.ts`); 1.20 and 1.21. Off unless asked for. */
+   movieExposure?: boolean;
+-  /** Not on 1.11 (the engine refuses it there): 1.20 and 1.21 only. */
++  /** The front lamp kept lit, switched in the still menu, on the ADJ lever and by an Fn function (`lamp.ts`); 1.20 and 1.21. */
+   constantLight?: boolean;
+-  /** GR IV 1.20 and 1.21 only (`fw/gr4v120/aspect/shift.ts`, `movie4k.ts`, `moviesr.ts`; the engine refuses them on 1.11). */
++  /** The picture moved and turned by hand with the shake reduction unit (`shift.ts`); 1.20 and 1.21. Off unless asked for. */
+   sensorShift?: boolean;
++  /** 4K movies: Frame Rate / Resolution in the movie menu (`movie4k.ts`); 1.20 and 1.21. Off unless asked for. */
+   movie4k?: boolean;
++  /** Movie SR with Off / Sensor Shift / Electronic (`moviesr.ts`); 1.20 and 1.21. Off unless asked for. */
+   movieSr?: boolean;
  }
  
-@@ -194,11 +204,22 @@
+@@ -202,11 +219,22 @@
    dateStampDiag?: boolean;
    /** Direct Flash diagnostics: the planner records what it saw, the date imprint prints it on the 720x480 picture. */
    directFlashDiag?: boolean;
@@ -505,7 +581,7 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
  
  export interface AspectResult {
    revision: BuildRevision;
-@@ -361,7 +382,7 @@
+@@ -369,7 +397,7 @@
    for (let l = 0; l < LANGUAGES; l++) textRows.push(patch.readMapped(roots.getUint32(l * 4, true), TEXT_COUNT * 4));
    const rowsStart = TEXT_CATALOG + 0x100;
    const end = rowsStart + LANGUAGES * ROW_STRIDE;
@@ -514,7 +590,7 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
    patch.extendTo(end - BASE);
    patch.write(ICON_CATALOG, icons);
    const relocated: number[] = [];
-@@ -373,8 +394,15 @@
+@@ -381,8 +409,15 @@
    // language directory themselves.
    patch.setWord(adr(0x534013f8), movWord(0, ICON_CATALOG & 65535), 'use the extended icon catalog');
    patch.setWord(adr(0x534013fc), movWord(0, ICON_CATALOG >>> 16, true), 'use the extended icon catalog');
@@ -532,7 +608,7 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
    }
    for (const [low, high] of [[adr(0x535967cc), adr(0x535967d0)], [adr(0x53595db4), adr(0x53595dbc)]] as const) {
      patch.setWord(low, movWord(3, TEXT_CATALOG & 65535), 'extended language catalog, low half');
-@@ -405,7 +433,10 @@
+@@ -413,7 +448,10 @@
  // --------------------------------------------------------------------------------------------
  // crop_icons.py
  
@@ -544,7 +620,7 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
  
  function installIcons(patch: Patch, iconbin: Uint8Array, ratios: readonly RatioEntry[]): { iconbin: Uint8Array; ids: Map<number, number> } {
    const parts: Uint8Array[] = [iconbin];
-@@ -497,7 +528,7 @@
+@@ -505,7 +543,7 @@
    // Complete language rows again, now wide enough for the new names; every original entry is kept.
    let priorColumns = TEXT_CAPACITY;
    for (const site of patch.textBoundSites) priorColumns = Math.max(priorColumns, movImmediate(patch.word(site)) + 1);
@@ -553,7 +629,7 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
    for (const id of allIds) upper = Math.max(upper, textId(id));
    const columns = Math.max(priorColumns, upper + 1);
    const catalogs: Uint8Array[] = [];
-@@ -626,7 +657,7 @@
+@@ -634,7 +672,7 @@
    p.hook(adr(0x538b40ec), out);
    out = `push {r0-r3,ip,lr};mov r0,r3;bl #${get};cmp r0,#0;pop {r0-r3,ip,lr};movne r0,r3;bne #${adrHEX(0x538B41CC)};b #${p.target(adr(0x538b41b4))};`;
    p.hook(adr(0x538b41b4), out);
@@ -562,7 +638,7 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
    p.hook(adr(0x53664430), out);
    // Both callers select the cropped window only for their original 2..5 range; a computed window
    // is invisible if selector 0 copies the untouched full canvas instead.
-@@ -689,7 +720,7 @@
+@@ -697,7 +735,7 @@
    out = '';
    for (const row of rows) out += `cmp r2,#${row.id};beq ratio${row.id};`;
    out += adrText('cmp r2,#5;beq #0x5367298C;b #0x536728E8;');
@@ -571,7 +647,7 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
    p.hook(adr(0x536728e4), out);
    out = '';
    for (const row of rows) out += `cmp r2,#${row.id};beq ratio${row.id};`;
-@@ -710,8 +741,8 @@
+@@ -718,8 +756,8 @@
      out = '';
      for (const row of rows) out += `cmp ip,#${row.id};beq custom;`;
      out += `bic ip,ip,#4;b #${resume};custom:`;
@@ -582,7 +658,7 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
      out += adrText('ldr lr,[ip];str lr,[r1];ldr lr,[ip,#4];str lr,[r1,#4];b #0x53672668;');
      p.hook(entry, out);
    }
-@@ -797,7 +828,7 @@
+@@ -805,7 +843,7 @@
    const get = p.emit(lookup + 'mov r0,#0;bx lr;');
    // The native code at 0x53726698 divides s15 by the crop magnification; the other branch writes
    // it directly. Both contracts are kept.
@@ -591,7 +667,7 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
    p.hook(adr(0x537266e8), code);
    // r8 / sb are the source dimensions: exact known sizes first, then fit the ratio for anything else.
    code = `push {r0,r4-r7,r10,ip,lr};mov r0,r3;bl #${get};cmp r0,#0;beq old;mov r4,r0;mov r5,r8;mov r6,sb;`;
-@@ -931,7 +962,7 @@
+@@ -939,7 +977,7 @@
  function installState(patch: Patch, ratios: readonly RatioEntry[], activeBitmap: number): void {
    const priorSave = branchTarget(adr(0x533f3674), patch.word(adr(0x533f3674)));
    const priorLoad = branchTarget(adr(0x533f3254), patch.word(adr(0x533f3254)));
@@ -600,7 +676,7 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
    expectWord(patch, adr(0x5381d6bc), 0xe1a0c00d);
    // {identity, magnification (float bits), rectangle[4]} for the photo-info display.
    const rects: Uint8Array[] = [];
-@@ -1069,13 +1100,24 @@
+@@ -1077,13 +1115,24 @@
   * features this is `installRatios`, byte for byte. With features the revision is 3.
   */
  export function installExtensions(rtos: Uint8Array, iconbin: Uint8Array, ratios: readonly RatioEntry[], features: ExtensionFeatures, revision: BuildRevision = BUILD_REVISION, test: TestOptions = {}): AspectResult {
@@ -619,14 +695,14 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
    const cinema = (['CY', 'CG'] as const).filter((id) => features.cinemaHalation?.[id] === true);
    const adjSlots = features.adjSlots && features.adjSlots > 5 ? features.adjSlots : 0;
 -  const extra = !!features.brightAuto || !!features.adjSoftFocus || !!features.dateStamp || !!features.monoUnlock || slots.length > 0 || !!shutdown || !!features.guard || cinema.length > 0 || !!features.directFlash || adjSlots > 0 || !!features.hdrGainMap || !!features.hlgPhoto || !!features.batteryPercent || !!features.customGrid || !!features.ratioShade || !!features.shadowLearn;
-+  const extra = !!features.brightAuto || !!features.exposurePreview || !!features.adjSoftFocus || !!features.dateStamp || !!features.monoUnlock || slots.length > 0 || !!shutdown || !!features.guard || cinema.length > 0 || !!features.directFlash || adjSlots > 0 || !!features.hdrGainMap || !!features.hlgPhoto || !!features.batteryPercent || !!features.customGrid || !!features.ratioShade || !!features.shadowLearn || !!features.filmGrain || !!features.flashTtl || !!features.videoAf || !!features.awbLearn;
++  const extra = !!features.brightAuto || !!features.exposurePreview || !!features.adjSoftFocus || !!features.dateStamp || !!features.monoUnlock || slots.length > 0 || !!shutdown || !!features.guard || cinema.length > 0 || !!features.directFlash || adjSlots > 0 || !!features.hdrGainMap || !!features.batteryPercent || !!features.customGrid || !!features.ratioShade || !!features.shadowLearn || !!features.filmGrain || !!features.flashTtl || !!features.videoAf || !!features.awbLearn || !!features.movieExposure || !!features.sensorShift || !!features.movie4k || !!features.movieSr || !!features.constantLight || !!features.hlgPhoto;
    if (features.customGrid && (!validCustomGrid(features.customGrid) || isCameraGrid(features.customGrid))) fail('internal', 'a custom grid must differ from the camera’s');
    if (features.ratioShade && ratios.length === 0) fail('internal', 'the live-view shade needs an added ratio');
 +  if (features.ratioShadeTone !== undefined && features.ratioShadeTone !== 'dark') fail('bad-edit', 'the live-view shade is chosen in the camera menu on this firmware');
    // @decision PR #5 port: the HLG photo mode and the HDR gain map are exclusive. HLG writes an HLG
    // (BT.2100) primary image tagged by an APP2 ICC profile; the gain map assumes an SDR base image and
    // rewrites the same JPEG writer's header blocks. Together they would make a JPEG no viewer reads right.
-@@ -1090,8 +1132,12 @@
+@@ -1098,8 +1147,15 @@
    });
    if (features.brightAuto !== undefined && ![true, false, 'bright', 'balanced'].includes(features.brightAuto)) fail('bad-edit', 'brightAuto must be boolean, bright or balanced');
    if (features.shadowLearn !== undefined && typeof features.shadowLearn !== 'boolean') fail('bad-edit', 'shadowLearn must be boolean');
@@ -638,10 +714,13 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
 +  if (features.flashTtl !== undefined && typeof features.flashTtl !== 'boolean') fail('bad-edit', 'flashTtl must be boolean');
 +  if (features.videoAf !== undefined && typeof features.videoAf !== 'boolean') fail('bad-edit', 'videoAf must be boolean');
 +  if (features.awbLearn !== undefined && typeof features.awbLearn !== 'boolean') fail('bad-edit', 'awbLearn must be boolean');
++  if (features.movieExposure !== undefined && typeof features.movieExposure !== 'boolean') fail('bad-edit', 'movieExposure must be boolean');
++  if (features.constantLight !== undefined && typeof features.constantLight !== 'boolean') fail('bad-edit', 'constantLight must be boolean');
++  for (const name of ['sensorShift', 'movie4k', 'movieSr'] as const) if (features[name] !== undefined && typeof features[name] !== 'boolean') fail('bad-edit', `${name} must be boolean`);
    const patch = new Patch(rtos);
    const ramCopy = new DataView(patch.read(BASE + 0x450, 12).buffer);
    if (ramCopy.getUint32(0, true) !== RAM.source || ramCopy.getUint32(4, true) !== RAM.destination || ramCopy.getUint32(8, true) !== RAM.length) {
-@@ -1105,27 +1151,50 @@
+@@ -1113,27 +1169,62 @@
      const menu = installMenu(patch, ratios, installed.ids);
      const { p, get, scale } = buildGeometry(patch, ratios);
      installDevelop(p, scale, ratios);
@@ -663,7 +742,9 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
 +  const lineOpts = features.exposurePreview || features.softFocusMenu ? { exposurePreview: !!features.exposurePreview, directFlash: !!features.directFlash, softFocus: !!features.softFocusMenu } : null;
 +  const ep = features.exposurePreview ? lineOpts : null;
 +  if (ep && test.exposurePreviewOff) fail('internal', 'exposure preview: the setting or always off, not both');
-+  if (features.adjSoftFocus) icons = installAdjSoftFocus(patch, icons, ep ? 0x15 : 0x14);
++  // The last ADJ lever function: the camera's 0x14, then exposure preview's, Constant Light's and Sensor Shift's.
++  const lastAdj = 0x14 + (ep ? 1 : 0) + (features.constantLight ? 1 : 0) + (features.sensorShift ? 1 : 0);
++  if (features.adjSoftFocus) icons = installAdjSoftFocus(patch, icons, lastAdj);
 +  // Test 084: the custom grids as values of the Grid Style list (its record in place, before any
 +  // addition copies the list table), their texts and icons, and the shade's.
 +  if (features.customGrid || features.ratioShade) icons = installViewAssets(patch, icons, { ...(features.customGrid ? { grid: features.customGrid } : {}), shade: !!features.ratioShade });
@@ -680,6 +761,16 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
 +  }
 +  if (features.hlgPhoto) icons = installHlgPhoto(patch, icons);
 +  if (features.ratioShade) stillLines.push(shadeStillLine(patch));
++  // Constant Light: the lamp's code, then its line (after AF Assist Light), name and icon.
++  const lamp = features.constantLight ? installLampCore(patch) : null;
++  if (lamp) {
++    icons = installLampAssets(patch, icons);
++    stillLines.push(lampStillLine(patch));
++  }
++  // Sensor Shift: the module and the shooting screen's hooks, its texts and icon.
++  const shift = features.sensorShift ? installShiftCore(patch) : null;
++  if (shift) icons = installShiftAssets(patch, icons);
++  if (features.movieSr) icons = installMovieSrAssets(patch, icons);
    if (features.dateStamp) {
      const fixed = test.dateStampFixed;
      // From 0.8.2 (builds with the guard) the imprint goes by the picture's look.
@@ -693,11 +784,11 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
      if (look && slots.length === 0) installLookStash(patch);
    }
 -  if (hdrDraw && (!features.dateStamp || test.dateStampFixed)) installHdrStillLine(patch, hdrDraw);
-+  if (stillLines.length && (!features.dateStamp || test.dateStampFixed)) installStillLines(patch, stillLines, lineOpts ? 'exposure preview and soft focus' : hdrDraw ? 'HDR gain map' : 'live-view shade');
++  if (stillLines.length && (!features.dateStamp || test.dateStampFixed)) installStillLines(patch, stillLines, lineOpts ? 'exposure preview and soft focus' : hdrDraw ? 'HDR gain map' : features.ratioShade ? 'live-view shade' : 'constant light');
    // Halation: added slots that have it, Cinema slots with a preset that are asked to.
    const halation: HalationLook[] = [];
    slots.forEach((x, k) => {
-@@ -1138,7 +1207,6 @@
+@@ -1146,7 +1237,6 @@
      const colour = styleColour(patch, style);
      halation.push({ style, light: colour.ownCurves ? halationLight(colour.curves, colour.postQ9) : halationLight() });
    }
@@ -705,23 +796,33 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
    // Last: the added slots compose with the monochrome looks' visibility check.
    if (slots.length > 0) icons = installExtraSlots(patch, icons, slots, { stashLook: (!!features.dateStamp && !!features.guard) || halation.length > 0, layout: features.lookLayout });
    else if (features.lookLayout) {
-@@ -1154,19 +1222,41 @@
+@@ -1162,19 +1252,54 @@
    if (features.directFlash) icons = installDirectFlashMenu(patch, icons);
    // The HDR line's list: after the additions that copy the list table first.
    if (features.hdrGainMap) installHdrMenu(patch, HDR_SWITCH_BYTE);
 +  if (lineOpts) installExposurePreviewLists(patch, lineOpts);
 +  if (features.ratioShade) installShadeList(patch);
++  if (lamp) installLampList(patch, lamp);
 +  // Exposure preview on the ADJ lever: the function table copied with a 22nd function (after soft
 +  // focus and Direct Flash, which change its records in place; before the ADJ slots' module, which reads it).
-+  const adjTable = ep ? installExposurePreviewAdj(patch, ep) : 0;
++  const epTable = ep ? installExposurePreviewAdj(patch, ep) : 0;
++  // Constant Light on the ADJ lever (one more function, after exposure preview's) and as an Fn function.
++  const lampTable = lamp ? installLampAdj(patch, lamp, lampAdjFunction(!!ep)) : epTable;
++  if (lamp) installLampFn(patch, lamp);
++  // Sensor Shift on the ADJ lever (one more function, the last) and as an Fn function (after Constant Light's, which copies the lists first).
++  const adjTable = shift ? installShiftAdj(patch, shift, shiftAdjFunction(!!ep, !!lamp)) : lampTable;
++  if (shift) installShiftFn(patch, shift);
++  // The movie menu: Movie SR's three values; Frame Rate / Resolution (a submenu and a list more, after the others).
++  if (features.movieSr) installMovieSr(patch, shift);
++  if (features.movie4k) installMovie4k(patch);
    // ADJ lever slots: after the other additions that copy the submenu or list table (it adds records the same way).
 -  if (adjSlots > 0) installAdjSlots(patch, adjSlots);
-+  if (adjSlots > 0) installAdjSlots(patch, adjSlots, adjTable ? { functionTable: adjTable } : {});
++  if (adjSlots > 0) installAdjSlots(patch, adjSlots, adjTable ? { functionTable: adjTable, lastFunction: lastAdj } : {});
 +  if (ep) installExposurePreviewLive(patch, ep);
 +  else if (test.exposurePreviewOff) installExposurePreviewOff(patch);
    // Last: wraps every other settings save/load and user-mode recall hook.
 -  if (features.guard) installSettingsGuard(patch, { slots: slots.length, ratios: ratios.length > 0, adjSoftFocus: !!features.adjSoftFocus, ...(features.lookLayout ? { hiddenLooks: features.lookLayout.hidden } : {}), ...(adjSlots > 0 ? { adjSlots } : {}), ...(features.hdrGainMap ? { hdr: true } : {}) });
-+  if (features.guard) installSettingsGuard(patch, { slots: slots.length, ratios: ratios.length > 0, adjSoftFocus: !!features.adjSoftFocus, ...(features.lookLayout ? { hiddenLooks: features.lookLayout.hidden } : {}), ...(adjSlots > 0 ? { adjSlots } : {}), ...(features.hdrGainMap ? { hdr: true } : {}), ...(ep ? { exposurePreview: true } : {}) });
++  if (features.guard) installSettingsGuard(patch, { slots: slots.length, ratios: ratios.length > 0, adjSoftFocus: !!features.adjSoftFocus, ...(features.lookLayout ? { hiddenLooks: features.lookLayout.hidden } : {}), ...(adjSlots > 0 ? { adjSlots } : {}), ...(features.hdrGainMap ? { hdr: true } : {}), ...(ep ? { exposurePreview: true } : {}), ...(lamp || shift ? { lastAdjFunction: lastAdj } : {}), ...(features.movieSr || features.movie4k ? { movieBits: (features.movieSr ? MOVIE_SENSOR_SR_BIT : 0) | (features.movie4k ? MOVIE_4K_BIT : 0) } : {}) });
    if (features.brightAuto) installBrightAuto(patch, features.brightAuto === 'balanced' ? 'balanced' : 'bright');
    if (features.batteryPercent) icons = installBatteryPercent(patch, icons, !!test.batteryDiag);
    // After the ratios: the diagonals take the point setter the grid view's layout calls then.
@@ -746,12 +847,15 @@ diff --git a/core/src/fw/gr4v120/aspect/build.ts b/core/src/fw/gr4v120/aspect/bu
    // Very last: the zero fill over the sbrk arena; the additions above expect it at 0x55839040 or its official end.
 -  if (features.batteryPercent) extendBatteryZeroFill(patch);
 +  // (Movie AF and the learned white balance keep their state pointers in the arena: they need the zero fill there too.)
-+  if (features.batteryPercent || features.videoAf || features.awbLearn) extendBatteryZeroFill(patch);
++  if (features.batteryPercent || features.videoAf || features.awbLearn || features.constantLight || features.sensorShift || features.movieSr || features.movie4k) extendBatteryZeroFill(patch);
++  // Exposure modes for movies: after everything, so that a build with it differs from the one without only by its
++  // own words (and the record of the additions).
++  if (features.movieExposure) installMovieExposure(patch);
    if (patch.length % 4 !== 0) fail('internal', 'image length is not a multiple of 4');
    if (BASE + patch.length >= APPEND_LIMIT) fail('too-many-ratios', 'the appended area would reach the RAM area');
 -  return { revision, rtos: patch.bytes(), iconbin: icons, ratios: [...ratios], words: patch.words, features: { ...(features.brightAuto ? { brightAuto: features.brightAuto === 'balanced' ? 'balanced' as const : 'bright' as const } : {}), adjSoftFocus: !!features.adjSoftFocus, ...(features.dateStamp ? { dateStamp: true } : {}), ...(features.monoUnlock ? { monoUnlock: true } : {}), ...(features.hlgPhoto ? { hlgPhoto: true } : {}), ...(slots.length > 0 ? { extraSlots: [...slots] } : {}), ...(shutdown ? { shutdown } : {}), ...(features.guard ? { guard: true } : {}), ...(cinema.length > 0 ? { cinemaHalation: Object.fromEntries(cinema.map((id) => [id, true])) } : {}), ...(features.lookLayout ? { lookLayout: features.lookLayout } : {}), ...(features.directFlash ? { directFlash: true } : {}), ...(features.hdrGainMap ? { hdrGainMap: true } : {}), ...(adjSlots > 0 ? { adjSlots } : {}), ...(features.batteryPercent ? { batteryPercent: true } : {}), ...(features.customGrid ? { customGrid: features.customGrid } : {}), ...(features.ratioShade ? { ratioShade: true, ...(features.ratioShadeTone && features.ratioShadeTone !== 'dark' ? { ratioShadeTone: features.ratioShadeTone } : {}) } : {}), ...(features.shadowLearn ? { shadowLearn: true } : {}) } };
 -}
-+  return { revision, rtos: patch.bytes(), iconbin: icons, ratios: [...ratios], words: patch.words, features: { ...(features.brightAuto ? { brightAuto: features.brightAuto === 'balanced' ? 'balanced' as const : 'bright' as const } : {}), adjSoftFocus: !!features.adjSoftFocus, ...(features.dateStamp ? { dateStamp: true } : {}), ...(features.monoUnlock ? { monoUnlock: true } : {}), ...(features.hlgPhoto ? { hlgPhoto: true } : {}), ...(slots.length > 0 ? { extraSlots: [...slots] } : {}), ...(shutdown ? { shutdown } : {}), ...(features.guard ? { guard: true } : {}), ...(cinema.length > 0 ? { cinemaHalation: Object.fromEntries(cinema.map((id) => [id, true])) } : {}), ...(features.lookLayout ? { lookLayout: features.lookLayout } : {}), ...(features.directFlash ? { directFlash: true } : {}), ...(features.hdrGainMap ? { hdrGainMap: true } : {}), ...(adjSlots > 0 ? { adjSlots } : {}), ...(features.exposurePreview ? { exposurePreview: true } : {}), ...(features.softFocusMenu ? { softFocusMenu: true } : {}), ...(features.batteryPercent ? { batteryPercent: true } : {}), ...(features.customGrid ? { customGrid: features.customGrid } : {}), ...(features.ratioShade ? { ratioShade: true } : {}), ...(features.shadowLearn ? { shadowLearn: true } : {}), ...(features.filmGrain ? { filmGrain: true } : {}), ...(features.flashTtl ? { flashTtl: true } : {}), ...(features.videoAf ? { videoAf: true } : {}), ...(features.awbLearn ? { awbLearn: true } : {}) } };
++  return { revision, rtos: patch.bytes(), iconbin: icons, ratios: [...ratios], words: patch.words, features: { ...(features.brightAuto ? { brightAuto: features.brightAuto === 'balanced' ? 'balanced' as const : 'bright' as const } : {}), adjSoftFocus: !!features.adjSoftFocus, ...(features.dateStamp ? { dateStamp: true } : {}), ...(features.monoUnlock ? { monoUnlock: true } : {}), ...(slots.length > 0 ? { extraSlots: [...slots] } : {}), ...(shutdown ? { shutdown } : {}), ...(features.guard ? { guard: true } : {}), ...(cinema.length > 0 ? { cinemaHalation: Object.fromEntries(cinema.map((id) => [id, true])) } : {}), ...(features.lookLayout ? { lookLayout: features.lookLayout } : {}), ...(features.directFlash ? { directFlash: true } : {}), ...(features.hdrGainMap ? { hdrGainMap: true } : {}), ...(adjSlots > 0 ? { adjSlots } : {}), ...(features.exposurePreview ? { exposurePreview: true } : {}), ...(features.softFocusMenu ? { softFocusMenu: true } : {}), ...(features.batteryPercent ? { batteryPercent: true } : {}), ...(features.customGrid ? { customGrid: features.customGrid } : {}), ...(features.ratioShade ? { ratioShade: true } : {}), ...(features.shadowLearn ? { shadowLearn: true } : {}), ...(features.filmGrain ? { filmGrain: true } : {}), ...(features.flashTtl ? { flashTtl: true } : {}), ...(features.videoAf ? { videoAf: true } : {}), ...(features.awbLearn ? { awbLearn: true } : {}), ...(features.movieExposure ? { movieExposure: true } : {}), ...(features.sensorShift ? { sensorShift: true } : {}), ...(features.movie4k ? { movie4k: true } : {}), ...(features.movieSr ? { movieSr: true } : {}), ...(features.constantLight ? { constantLight: true } : {}), ...(features.hlgPhoto ? { hlgPhoto: true } : {}) } };
 +}
 diff --git a/core/src/fw/gr4v120/aspect/datestamp-menu.ts b/core/src/fw/gr4v120/aspect/datestamp-menu.ts
 --- a/core/src/fw/gr4v120/aspect/datestamp-menu.ts
@@ -844,16 +948,53 @@ diff --git a/core/src/fw/gr4v120/aspect/datestamp-menu.ts b/core/src/fw/gr4v120/
    const roots = new DataView(patch.readMapped(NATIVE_TEXT_ROOTS, LANGUAGES * 4).buffer);
    const order: number[] = [];
    const seen = new Set<number>();
-@@ -345,7 +347,7 @@
+@@ -311,6 +313,25 @@
+     upper = Math.max(upper, id);
+   }
+   for (const site of patch.textBoundSites) patch.setWord(site, movWord(3, Math.max(upper, movImmediate(patch.word(site)))), 'text upper bound');
++}
++
++/** A text of the catalog in every language, in `LANGS` order (the camera's own, or one installed before). */
++export function readTexts(patch: Patch, id: number): string[] {
++  const roots = new DataView(patch.readMapped(NATIVE_TEXT_ROOTS, LANGUAGES * 4).buffer);
++  const out = new Array<string>(LANGUAGES).fill('');
++  for (let l = 0; l < LANGUAGES; l++) {
++    const k = (roots.getUint32(l * 4, true) + 4 - FIRST_TABLE_RAM) / TABLE_STRIDE;
++    if (!(Number.isInteger(k) && k >= 0 && k < LANGUAGES)) fail('unexpected-layout', 'language tables are not where they were expected');
++    const descriptor = patch.word(patch.word(TEXT_CATALOG + l * 4) + id * 4);
++    if (descriptor === 0) fail('unexpected-layout', 'text is not in the catalog');
++    const d = patch.readMapped(descriptor, 8);
++    const units = d[0];
++    const text = patch.readMapped((d[4] | (d[5] << 8) | (d[6] << 16) | (d[7] << 24)) >>> 0, units * 2);
++    let s = '';
++    for (let i = 0; i + 1 < units; i++) s += String.fromCharCode(text[i * 2] | (text[i * 2 + 1] << 8));
++    out[k] = s;
++  }
++  return out;
+ }
+ 
+ function installIcons(patch: Patch, iconbin: Uint8Array): Uint8Array {
+@@ -345,7 +366,18 @@
  // Shared with other camera-menu additions (`shutdown.ts`)
  
  export { FACTORY as CONTROLLER_FACTORY, D_RANGE_ID as SUBMENU_CONTROLLER_ID, HORIZON_ID as LIST_CONTROLLER_ID };
 -export { SUB_SET_ICON, LIST_SET_ITEM, SUB_RECORD };
 +export { SUB_SET_ICON, LIST_SET_ITEM, SUB_RECORD, TOP_SET_TITLE, ICON_OFF, ICON_ON, TEXT_OFF, TEXT_ON };
++
++/** Where the list table (SelectMenuController records, 0x4c bytes) is now: the official one or its latest copy. */
++export function listTable(patch: Patch): number {
++  const at = SELECT_SITES.map(([low, high, r]) => {
++    const a = patch.word(low), b = patch.word(high);
++    if (a !== movWord(r, movImmediate(a)) || b !== movWord(r, movImmediate(b), true)) fail('unexpected-layout', 'list table site is not a MOVW/MOVT pair');
++    return (movImmediate(a) | (movImmediate(b) << 16)) >>> 0;
++  });
++  if (at.some((t) => t !== at[0]) || (at[0] === SELECT_TABLE) !== (patch.listRecords === 0)) fail('unexpected-layout', 'list table is not where it was expected');
++  return at[0];
++}
  
  /** Where the submenu table (SubMenuController records, 0x64 bytes) is now: the official one or its latest copy. */
  export function submenuTable(patch: Patch): number {
-@@ -362,7 +364,7 @@
+@@ -362,7 +394,7 @@
  export function listTemplate(patch: Patch): Uint8Array {
    const r = patch.read(SELECT_TABLE + HORIZON_RECORD * SELECT_RECORD, SELECT_RECORD);
    const v = new DataView(r.buffer);
@@ -862,7 +1003,7 @@ diff --git a/core/src/fw/gr4v120/aspect/datestamp-menu.ts b/core/src/fw/gr4v120/
      fail('unexpected-layout', 'Horizon Correction list record is not as expected');
    }
    return r;
-@@ -371,7 +373,7 @@
+@@ -371,7 +403,7 @@
  /**
   * Add list records (SelectMenuController, 0x4C bytes each), record i shown for controller id
   * `entries[i].id`: the list table is copied (once more) with the records at its end, the
@@ -871,7 +1012,7 @@ diff --git a/core/src/fw/gr4v120/aspect/datestamp-menu.ts b/core/src/fw/gr4v120/
   * to its record (before what was there: the official code, or an earlier addition's mapping). The
   * controller factory must hand out the list controller for the ids (`hookControllerFactory`).
   * Returns the record numbers.
-@@ -407,7 +409,7 @@
+@@ -407,7 +439,7 @@
  export function submenuTemplate(patch: Patch): Uint8Array {
    const r = patch.read(SUB_TABLE + 17 * SUB_RECORD, SUB_RECORD);
    const v = new DataView(r.buffer);
@@ -880,7 +1021,7 @@ diff --git a/core/src/fw/gr4v120/aspect/datestamp-menu.ts b/core/src/fw/gr4v120/
      fail('unexpected-layout', 'Reset submenu record is not as expected');
    }
    return r;
-@@ -484,7 +486,7 @@
+@@ -484,7 +516,7 @@
   * Install the menu entry. `patch` must already hold the scaffold of `build.ts` (relocated
   * catalogs) and the imprint itself. Returns the ICONBIN data with the four style icons appended.
   */
@@ -889,7 +1030,7 @@ diff --git a/core/src/fw/gr4v120/aspect/datestamp-menu.ts b/core/src/fw/gr4v120/
    // --- Checks of the official code and data this relies on.
    expectWord(patch, BUILDER, 0xe1a0c00d); // mov ip, sp
    expectWord(patch, BUILDER + 4, movWord(3, lo(MENU_TABLE)));
-@@ -495,7 +497,7 @@
+@@ -495,7 +527,7 @@
    expectWord(patch, SUB_SET_CURRENT, 0xe28134fe); // add r3, r1, #0xfe000000
    expectWord(patch, SELECT_SET_CURRENT, 0xe28134fe);
    expectWord(patch, adr(0x531e445c), 0xe3a02012); // the submenu constructor starts at record 18
@@ -898,7 +1039,7 @@ diff --git a/core/src/fw/gr4v120/aspect/datestamp-menu.ts b/core/src/fw/gr4v120/
    for (const f of [APP, SPEC_MODEL, TOP_SET_TWO_ICONS, TOP_SET_TITLE, SUB_SET_ICON, LIST_SET_ITEM, LABEL_SET_RECT]) expectWord(patch, f, 0xe1a0c00d);
    expectWord(patch, ROW_VTABLE_LITERAL, ROW_VTABLE);
    expectWord(patch, LABEL_VTABLE_LITERAL, LABEL_VTABLE);
-@@ -517,10 +519,10 @@
+@@ -517,10 +549,10 @@
  
    const subTemplate = patch.read(SUB_TABLE + D_RANGE_RECORD * SUB_RECORD, SUB_RECORD);
    const sv = new DataView(subTemplate.buffer);
@@ -911,7 +1052,7 @@ diff --git a/core/src/fw/gr4v120/aspect/datestamp-menu.ts b/core/src/fw/gr4v120/
      fail('unexpected-layout', 'Horizon Correction list record is not as expected');
    }
  
-@@ -701,9 +703,9 @@
+@@ -701,9 +733,9 @@
    relocateTable(patch, SUB_TABLE, SUB_RECORD, SUB_RECORDS + 1, [subRecord], SUB_SITES, 'date imprint: submenu records');
    patch.submenuRecords = SUB_RECORD_NUMBER + 1;
  
@@ -924,7 +1065,7 @@ diff --git a/core/src/fw/gr4v120/aspect/datestamp-menu.ts b/core/src/fw/gr4v120/
    } else {
      const descriptor = (keep: number): Uint8Array => {
        const d = still.slice();
-@@ -790,7 +792,7 @@
+@@ -790,7 +822,7 @@
  
  /** The list's controller id (not used by the firmware) and the line / list title. */
  export const HDR_LIST_ID = 0x020001d0;
@@ -933,7 +1074,7 @@ diff --git a/core/src/fw/gr4v120/aspect/datestamp-menu.ts b/core/src/fw/gr4v120/
  /** Color Space: the HDR line follows it. */
  const COLOR_SPACE_ID = 0x0200008d;
  /** The item only the GR IV (not HDF, not Monochrome) shows, and its visibility function. */
-@@ -822,46 +824,69 @@
+@@ -822,46 +854,69 @@
       pop {r4, lr}; b #${TOP_SET_TITLE}`, at), 16);
  }
  
@@ -950,14 +1091,13 @@ diff --git a/core/src/fw/gr4v120/aspect/datestamp-menu.ts b/core/src/fw/gr4v120/
 - * HDF's), each without the model-specific items that model does not show, with the HDR line after
 - * Color Space and (when `dateDraw`) the date imprint's line at the end; the builder stores the
 - * model's at 0x55001E78 before it builds the menus (it is the only reader of that table).
-- */
--function stillMenuForModels(patch: Patch, still: Uint8Array, dateDraw: number, hdrDraw: number, what: string): void {
 + * HDF's), each without the model-specific items that model does not show, with the added `lines`
 + * after their official items (HDR after Color Space) and (when `dateDraw`) the date imprint's line
 + * at the end; the builder stores the model's at 0x55001E78 before it builds the menus (it is the
 + * only reader of that table). Up to 38 lines in the official layout; more (test 080: soft focus and
 + * exposure preview) in the wide layout of `menuwide.ts`, for all five tabs.
-+ */
+  */
+-function stillMenuForModels(patch: Patch, still: Uint8Array, dateDraw: number, hdrDraw: number, what: string): void {
 +function stillMenuForModels(patch: Patch, still: Uint8Array, dateDraw: number, lines: readonly StillLine[], what: string): void {
    const dv = new DataView(still.buffer, still.byteOffset, still.byteLength);
    const id = (i: number): number => dv.getUint32(D_ID + i * 4, true);
@@ -1025,7 +1165,7 @@ diff --git a/core/src/fw/gr4v120/aspect/datestamp-menu.ts b/core/src/fw/gr4v120/
        }
      }
      // Pages start at the same official items (none of them is dropped).
-@@ -871,9 +896,14 @@
+@@ -871,9 +926,14 @@
      d[D_COUNT] = order.length;
      return d;
    };
@@ -1043,7 +1183,7 @@ diff --git a/core/src/fw/gr4v120/aspect/datestamp-menu.ts b/core/src/fw/gr4v120/
    const builder = patch.append((at) => assembleWords(
      `push {r0, r1, r2, r3, ip, lr}
       bl #${APP}; bl #${SPEC_MODEL}; bl #${MODEL_NUMBER}
-@@ -890,8 +920,8 @@
+@@ -890,8 +950,8 @@
    patch.setWord(BUILDER, branchWord(BUILDER, builder), `${what}: still menu for this model`);
  }
  
@@ -1054,7 +1194,7 @@ diff --git a/core/src/fw/gr4v120/aspect/datestamp-menu.ts b/core/src/fw/gr4v120/
    expectWord(patch, BUILDER, 0xe1a0c00d); // mov ip, sp
    expectWord(patch, BUILDER + 4, movWord(3, lo(MENU_TABLE)));
    expectWord(patch, BUILDER + 0x10, movWord(3, hi(MENU_TABLE), true));
-@@ -904,7 +934,7 @@
+@@ -904,7 +964,7 @@
    const firsts = [...still.subarray(D_FIRST, D_FIRST + 6)];
    if (still[D_PAGES] !== 6 || firsts.join() !== '0,10,18,24,30,35' || still[D_COUNT] !== MAX_ITEMS) fail('unexpected-layout', 'still menu pages are not the official ones');
    if (dv.getUint32(D_ID + HDF_ITEM * 4, true) !== 0x02000133 || dv.getUint32(D_ID + RED_FILTER_ITEM * 4, true) !== 0x02000135) fail('unexpected-layout', 'HDF and Red Filter items are not the official ones');
@@ -2273,16 +2413,17 @@ diff --git a/core/src/fw/gr4v120/aspect/guard.ts b/core/src/fw/gr4v120/aspect/gu
   *    it is hidden. Both lists are built without hidden looks (0x533DE1E8 and 0x5338409C, through
   *    the visibility check 0x533DE144), so a hidden look could only be selected by settings an
   *    earlier firmware left; this way the lists always hold the selected look. The custom sets'
-@@ -34,7 +34,7 @@
+@@ -34,7 +34,8 @@
  import { assembleWords, branchTarget, branchWord } from './arm';
  import { FirmwareError } from '../../types';
  import { Patch, expectWord } from './build';
 -import { adr } from '../target';
++import { MOVIE_BYTE_OFFSET } from './movie4k';
 +import { adr, byRelease } from '../target';
  
  function fail(code: string, message: string): never {
    throw new FirmwareError(code, message);
-@@ -52,10 +52,12 @@
+@@ -52,10 +53,12 @@
  const RATIO = 0x49f;
  const ADJ_SLOTS = [0x920, 0x921, 0x922, 0x923, 0x924];
  export const STANDARD = 11;
@@ -2297,7 +2438,7 @@ diff --git a/core/src/fw/gr4v120/aspect/guard.ts b/core/src/fw/gr4v120/aspect/gu
    slots: number;
    /** Added ratios are installed (their module resets the ratio). */
    ratios: boolean;
-@@ -67,6 +69,11 @@
+@@ -67,6 +70,15 @@
    adjSlots?: number;
    /** 0.8.9: the HDR gain map's menu switch is installed (`hdrgain.ts`, byte 0x10A of the settings: 0 On, 1 Off). */
    hdr?: boolean;
@@ -2306,10 +2447,14 @@ diff --git a/core/src/fw/gr4v120/aspect/guard.ts b/core/src/fw/gr4v120/aspect/gu
 +   * is the ADJ lever function 0x15 (so slots may hold it).
 +   */
 +  exposurePreview?: boolean;
++  /** Bits of the movie options' byte (`movie4k.ts`: 0x775 of the settings object) that mean something in this build; the others are cleared. */
++  movieBits?: number;
++  /** The last ADJ lever function when Constant Light (`lamp.ts`) or Sensor Shift (`shift.ts`) adds one: 0x15 .. 0x17. */
++  lastAdjFunction?: number;
  }
  
  /** Slots 6..8 (`adjslots.ts`): bytes 0x48D..0x48F of the user settings object, bits 0..4 the function, bits 5..7 of the first the slot last used (1..3: slot 6..8). */
-@@ -74,6 +81,8 @@
+@@ -74,6 +86,8 @@
  const ADJ_STILL_POSITION = 0x91e;
  /** The HDR gain map's switch (`HDR_SWITCH_BYTE`): byte 0x10E of the user settings object; 0 or 1. */
  const HDR_SWITCH = 0x10e;
@@ -2318,7 +2463,7 @@ diff --git a/core/src/fw/gr4v120/aspect/guard.ts b/core/src/fw/gr4v120/aspect/gu
  
  /** The standard photo and movie sets' looks (the others are custom sets' looks). */
  const CURRENT_LOOKS = [0x153, 0x515];
-@@ -83,21 +92,23 @@
+@@ -83,21 +97,24 @@
  function fixSource(o: GuardOptions): string {
    const lines: string[] = ['cmp r0,#0', 'bxeq lr', 'sub r0,r0,r1'];
    LOOKS.forEach((off, i) => {
@@ -2337,7 +2482,8 @@ diff --git a/core/src/fw/gr4v120/aspect/guard.ts b/core/src/fw/gr4v120/aspect/gu
    });
    if (!o.ratios) lines.push(`ldrb r2,[r0,#${RATIO}]`, 'cmp r2,#3', 'movhi r2,#0', `strbhi r2,[r0,#${RATIO}]`);
 +  // The last ADJ function: 0x14, 0x15 with exposure preview on the ADJ lever.
-+  const last = o.exposurePreview ? 21 : 20;
++  const last = o.lastAdjFunction ?? (o.exposurePreview ? 21 : 20);
++  if (!(last >= 20 && last <= 23)) fail('internal', 'guard: the last ADJ function');
    if (!o.adjSoftFocus) {
      ADJ_SLOTS.forEach((off, i) => {
 -      lines.push(`ldrb r2,[r0,#${off}]`, 'cmp r2,#10', `beq adjbad${i}`, 'cmp r2,#20', `bls adj${i}`, `adjbad${i}:`, 'mov r2,#0', `strb r2,[r0,#${off}]`, `adj${i}:`);
@@ -2345,7 +2491,7 @@ diff --git a/core/src/fw/gr4v120/aspect/guard.ts b/core/src/fw/gr4v120/aspect/gu
      });
    }
    const n = o.adjSlots ?? 5;
-@@ -111,7 +122,7 @@
+@@ -111,7 +128,7 @@
          lines.push('mov r2,#0');
        } else {
          // the function: 0..0x14, soft focus (0x0A) only with soft focus on the ADJ lever
@@ -2354,15 +2500,19 @@ diff --git a/core/src/fw/gr4v120/aspect/guard.ts b/core/src/fw/gr4v120/aspect/gu
          if (!o.adjSoftFocus) lines.push('cmp r3,#10', `beq xbad${j}`);
          lines.push(`b xok${j}`, `xbad${j}:`, 'bic r2,r2,#0x1f', `xok${j}:`);
          // the slot last used (first byte only): slots 6..n
-@@ -122,6 +133,7 @@
+@@ -122,6 +139,11 @@
      });
    }
    if (o.hdr) lines.push(`ldrb r2,[r0,#${HDR_SWITCH}]`, 'cmp r2,#1', 'movhi r2,#0', `strbhi r2,[r0,#${HDR_SWITCH}]`);
 +  if (o.exposurePreview) lines.push(`ldrb r2,[r0,#${EXPOSURE_PREVIEW}]`, 'cmp r2,#2', 'movhi r2,#0', `strbhi r2,[r0,#${EXPOSURE_PREVIEW}]`);
++  if (o.movieBits !== undefined) {
++    if (!(Number.isInteger(o.movieBits) && o.movieBits > 0 && o.movieBits < 4)) fail('internal', 'guard: the movie options');
++    lines.push(`ldrb r2,[r0,#${MOVIE_BYTE_OFFSET}]`, `and r2,r2,#${o.movieBits}`, `strb r2,[r0,#${MOVIE_BYTE_OFFSET}]`);
++  }
    lines.push('bx lr');
    return lines.join(';');
  }
-@@ -138,7 +150,7 @@
+@@ -138,7 +160,7 @@
    const recallWord = p.word(RECALL);
    if (recallWord >>> 24 !== 0xeb) fail('unexpected-layout', 'user-mode recall is not a call');
    const priorRecall = branchTarget(RECALL, recallWord);
@@ -2892,6 +3042,533 @@ diff --git a/core/src/fw/gr4v120/aspect/index.ts b/core/src/fw/gr4v120/aspect/in
  } from './adjslots';
 -export { HOOK_SITE as HLG_HOOK_SITE, TARGET_TEXT_ID as HLG_TEXT_ID, TARGET_TONE_ID as HLG_TONE_ID, installHlgPhoto } from './hlg';
 +export { HDR_SCALE_ICON_ID, installHlgPhoto } from './hlg';
+diff --git a/core/src/fw/gr4v120/aspect/lamp.ts b/core/src/fw/gr4v120/aspect/lamp.ts
+new file mode 100644
+--- /dev/null
++++ b/core/src/fw/gr4v120/aspect/lamp.ts
+@@ -0,0 +1,522 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/**
++ * The lamp on the front of the camera (AF assist light and self-timer lamp, one LED) kept lit:
++ * "Constant Light", Off / On (GR IV firmware 1.20 and 1.21).
++ *
++ * Where it can be switched:
++ *  - a line of the still shooting menu, "Constant Light", after AF Assist Light, opening a list
++ *    Off / On (controller id LAMP_LIST_ID, Horizon Correction's list controller, as HDR's);
++ *  - an ADJ lever function (the next number after the camera's 0x14 and exposure preview's 0x15),
++ *    offered by ADJ Mode Setting, with the values Off / On;
++ *  - an Fn function, 0x29, offered for the Fn, ISO, Drive and White Balance / Image Control
++ *    buttons (the list those four share) and for the Movie button, pressed and held (a list
++ *    each): each press, or hold, switches the lamp on or off.
++ * It is not a setting: the lamp is off when the camera starts, and is switched off when the camera
++ * shuts down. Nothing is kept in the user settings.
++ *
++ * Everything below was found by reading the official 1.20 code, starting from the class names and
++ * the texts of its LED code ("SelfAfAssistCommonLed", "AfAssistLed", "AF LED  ON").
++ *
++ * The lamp. LedControlFactory (one object, 0x5396783C returns it; its fields are set by its build
++ * function 0x53967678) keeps the LED objects. +0xC is the lamp itself: a 0x14-byte object (vtable
++ * 0x54335C78; constructor 0x53966EEC) with "lit" at +4, "initialised" at +5, a mutex at +8 and the
++ * device at +0x10 (+0xC on another board). Its on (0x53966C48) and off (0x53966A78) are reached
++ * through its vtable only, by the two small objects through which the self-timer (+0x10, SelfLed)
++ * and the auto focus (+0x14, AfAssistLed) ask for the lamp: each takes the mutex, sets its own flag
++ * at +8 and calls on; its off calls off, gives the mutex back and clears the flag.
++ * (+8 of the factory is another LED, a 0x74-byte StatusLed with its own task and a device handle
++ * at +0x60: test 095 took that one for the lamp, read past the lamp's 0x14 bytes and the camera
++ * lost power the moment Constant Light was switched on.)
++ *
++ * What is changed:
++ *  - LAMP_WORD (a word of the unused sbrk arena before the heap, zero at start-up, see
++ *    `battery.ts`) holds the lamp object's address while Constant Light is on, else 0;
++ *  - the lamp's off (0x53966A78), at its entry: nothing while LAMP_WORD is set. So the camera's own
++ *    uses of the lamp (AF assist, the self-timer) run as they do, with their mutex and flags, and
++ *    leave the lamp lit;
++ *  - `set` (appended): on = LAMP_WORD and the lamp's on; off = LAMP_WORD 0 and, unless the
++ *    self-timer or the auto focus has the lamp just now (their flags), the lamp's off. Nothing
++ *    when the lamp object is not there or not initialised. Neither takes the mutex;
++ *  - the shutdown model's handler of the preparation state (0x5325F81C, AppShutDownModel.cpp), at
++ *    its entry: Constant Light off;
++ *  - the menus: a list record and the still-menu line (`datestamp-menu.ts`), the ADJ function
++ *    table copied with one more record (as `exposure.ts` does for 0x15; after it when both are in
++ *    the build), the function's name and icon;
++ *  - the Fn functions: 0x29 is a number the camera does not use. 0x26..0x29 share the name and the
++ *    icon of Preview, but only 0x26 is in a list (the held Movie button's) and has a case; 0x27..0x29
++ *    are in no list and go to the default of both function switches (0x533990E0, 0x53397A70), so
++ *    no button can hold them. The list of the functions the four
++ *    buttons offer (39 bytes at 0x53DE50C4, read by 0x531DCAFC into the list controller's vector
++ *    +0x1B4) is copied with 0x29 at its end; name (0x5338FBAC) and icon (0x533914BC) get a case at
++ *    their entries; the function switch gets a case before its bounds check (0x5339910C): on a
++ *    press (r6 = 0, as the camera's own cases) the lamp is switched over, then the switch's common
++ *    end (0x5339927C). The Movie button has its own lists (pressed: 35 bytes at 0x53DE515C, vector
++ *    +0x1C0; held: 37 bytes at 0x53DE52BC, vector +0x1CC), copied the same way, and its own switch
++ *    0x53397A70 (this, shared pointer, event): event 2 takes the pressed function, 3 the held one,
++ *    both to the jump table at 0x53397BD8, which gets the case before its bounds check (the lamp
++ *    switched over, then the switch's end 0x53397AD0, where function 0 goes); event 4 has a table of
++ *    its own for the held function (0x53397CA0: nothing but for Preview, an assertion for the
++ *    functions the held list does not offer), where 0x29 gets the entry of the functions that do
++ *    nothing.
++ *
++ * Going back to a firmware without this: an Fn button left on 0x29 does nothing there (the
++ * official switch logs it and returns); an ADJ slot left on the added function must be set to
++ * something else first, as for exposure preview (the settings guard of a GR Mod build does it).
++ */
++import { FirmwareError } from '../../types';
++import { assembleWords, branchTarget, branchWord, movImmediate, movWord } from './arm';
++import { ICON_CATALOG, LANGUAGES, LOOKUP_BOUNDS, Patch, concat, expectWord, u16le, u32le, widenTextRows } from './build';
++import { ICON_OFF, ICON_ON, LIST_CONTROLLER_ID, LIST_SET_ITEM, StillLine, TEXT_OFF, TEXT_ON, TOP_SET_TITLE, addListRecords, hookControllerFactory, installTexts, listTemplate } from './datestamp-menu';
++import { adr } from '../target';
++
++/** The lamp object's address while Constant Light is on, else 0 (the sbrk arena, 0x55839040..0x55839080: `battery.ts`). */
++export const LAMP_WORD = adr(0x55839074);
++export const LAMP_TEXT_ID = 1040;
++/** Identity 22 of the ratio icon numbers, never given out (as 734..737, `exposure.ts`). */
++export const LAMP_ICON_ID = 738;
++export const LAMP_LIST_ID = 0x020001d4;
++/** The Fn function: a number the camera does not use (in no list, no case in its function switches). */
++export const FN_LAMP = 0x29;
++/** AF Assist Light, the still-menu line the new one follows. */
++export const AF_ASSIST_LINE_ID = 0x02000075;
++
++const FACTORY_GET = adr(0x5396783c); // LedControlFactory: the one object
++const FACTORY_BUILD = adr(0x53967678); // makes the LED objects
++const LAMP_VTABLE = adr(0x54335c78);
++const LAMP_CONSTRUCTOR = adr(0x53966eec);
++const LAMP_ON = adr(0x53966c48); // (lamp object)
++const LAMP_OFF = adr(0x53966a78); // (lamp object)
++const SHUTDOWN_PREPARATION = adr(0x5325f81c); // AppShutDownModel: the preparation state's handler
++const TOP_SET_ICON = adr(0x5359d6f4); // (menu line, icon)
++const LIST_ITEM = adr(0x53593d64); // (list, index) -> item (the ADJ controller's list view)
++const ITEM_SET_TEXT = adr(0x535a1138); // (item, text number)
++
++const ADJ_TABLE = adr(0x53dc9dfc);
++const ADJ_RECORD = 0x5c;
++const ADJ_OFFICIAL_FUNCTIONS = 21;
++const CROP = 0x13;
++const H_DRAW = 0x18;
++const H_IS_CURRENT = 0x20;
++const H_SET = 0x28;
++const H_COUNT = 0x30;
++/** Every MOVW / MOVT pair that loads the ADJ function table's address: [movw, movt, register] (as `exposure.ts`). */
++const ADJ_TABLE_SITES: readonly (readonly [number, number, number])[] = [
++  [adr(0x531bd4c4), adr(0x531bd4d4), 4], [adr(0x531bee8c), adr(0x531bee94), 2], [adr(0x531bf028), adr(0x531bf030), 3], [adr(0x531bf0c4), adr(0x531bf0cc), 2],
++  [adr(0x531bf5c0), adr(0x531bf5c8), 2], [adr(0x531bffd4), adr(0x531bffdc), 2], [adr(0x531c0030), adr(0x531c0038), 2], [adr(0x531c0128), adr(0x531c0130), 2],
++  [adr(0x531c01b4), adr(0x531c01bc), 2], [adr(0x531c0240), adr(0x531c0248), 2], [adr(0x531c02e8), adr(0x531c02f0), 7], [adr(0x531c0434), adr(0x531c043c), 2],
++  [adr(0x531c05d4), adr(0x531c05dc), 2], [adr(0x531c06d0), adr(0x531c06e8), 4], [adr(0x531c09dc), adr(0x531c09e4), 6], [adr(0x531c0ae8), adr(0x531c0af0), 2],
++  [adr(0x531c0b94), adr(0x531c0b9c), 2], [adr(0x531c0bfc), adr(0x531c0c0c), 7], [adr(0x531c0cb8), adr(0x531c0cc8), 7], [adr(0x531c0e9c), adr(0x531c0ea4), 2],
++  [adr(0x531c1060), adr(0x531c1064), 3], [adr(0x531c1220), adr(0x531c1228), 2],
++];
++const ADJ_TABLE_END = adr(0x531bd600); // the initialiser's end of the table (a literal word)
++const ADJ_NAME_OF = adr(0x5338f484); // (resources, function) -> text: cmp r1, #0 first
++const ADJ_ICON_OF = adr(0x53390e40); // (resources, function, variant) -> icon: cmp r1, #0 first
++const ADJ_LIST_LOW = adr(0x531dc834); // movw r4, #lo(list)
++const ADJ_LIST_HIGH = adr(0x531dc844); // movt r4, #hi(list)
++const ADJ_LIST_LENGTH = adr(0x531dc860); // add r6, r4, #length
++
++const FN_NAME_OF = adr(0x5338fbac); // (resources, function) -> text: cmp r1, #0 first
++const FN_ICON_OF = adr(0x533914bc); // (resources, function, variant) -> icon: cmp r1, #0 first
++const FN_LIST_OFFICIAL = [
++  0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16,
++  0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x2d, 0x2c, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x2b, 0x23, 0x24,
++];
++const FN_LIST_LOW = adr(0x531dcb04); // movw r4, #lo(list)
++const FN_LIST_HIGH = adr(0x531dcb08); // movt r4, #hi(list)
++const FN_LIST_LENGTH = adr(0x531dcb18); // add r6, r4, #length
++const FN_AVAILABLE = adr(0x531d75d8); // (function) -> offered on this model: only 0x19..0x2d have cases, 0x29 none
++const FN_SWITCH = adr(0x533990e0); // (this, shared pointer, function, released, key)
++const FN_SWITCH_BOUND = adr(0x5339910c); // cmp r2, #0x2d
++const FN_SWITCH_END = adr(0x5339927c); // the cases' common end
++const FN_SWITCH_DEFAULT = adr(0x5339b0d4);
++/** The Movie button's lists: [list, its official bytes, movw r4, movt r4, add r6 r4 #length]. */
++const MOVIE_LIST_PRESSED = [
++  0x00, 0x01, 0x02, 0x03, 0x04, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16,
++  0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x2d, 0x2c, 0x1e, 0x1f, 0x20, 0x22, 0x2b, 0x23, 0x24,
++];
++const FN_LISTS: readonly (readonly [number, readonly number[], number, number, number, string])[] = [
++  [adr(0x53de50c4), FN_LIST_OFFICIAL, FN_LIST_LOW, FN_LIST_HIGH, FN_LIST_LENGTH, 'Fn'],
++  [adr(0x53de515c), MOVIE_LIST_PRESSED, adr(0x531dcb88), adr(0x531dcb8c), adr(0x531dcb9c), 'Movie button'],
++  [adr(0x53de52bc), [...MOVIE_LIST_PRESSED, 0x25, 0x26], adr(0x531dcc0c), adr(0x531dcc10), adr(0x531dcc20), 'held Movie button'],
++];
++const MOVIE_SWITCH = adr(0x53397a70); // (this, shared pointer, event 2 / 3 / 4)
++const MOVIE_SWITCH_BOUND = adr(0x53397bd8); // cmp sl, #0x2d (events 2 and 3: the function in sl)
++const MOVIE_SWITCH_END = adr(0x53397ad0); // the stack check and the return
++const MOVIE_SWITCH_DEFAULT = adr(0x533990a4);
++const MOVIE_HELD_BOUND = adr(0x53397ca0); // cmp r0, #0x2d (event 4: the held function)
++const MOVIE_HELD_DEFAULT = adr(0x53397e3c);
++
++/** In `LANGS` order (cs da en fi fr de el hu it ja ko nl pl pt ru zh-CN es sv th zh-TW tr). */
++export const LAMP_NAMES: readonly string[] = [
++  'Trvalé světlo', 'Konstant lys', 'Constant Light', 'Jatkuva valo', 'Lumière continue', 'Dauerlicht', 'Συνεχές φως', 'Folyamatos fény',
++  'Luce continua', '補助光常時点灯', '보조광 상시 점등', 'Continu licht', 'Światło ciągłe', 'Luz contínua', 'Постоянный свет', '辅助灯常亮',
++  'Luz continua', 'Konstant ljus', 'ไฟส่องต่อเนื่อง', '輔助燈常亮', 'Sürekli ışık',
++];
++
++function fail(code: string, message: string): never {
++  throw new FirmwareError(code, message);
++}
++const lo = (v: number): number => v & 0xffff;
++const hi = (v: number): number => v >>> 16;
++
++/** The ADJ lever function's number: after the camera's 21 and, with exposure preview on the ADJ lever, its 0x15. */
++export function lampAdjFunction(exposurePreview: boolean): number {
++  return ADJ_OFFICIAL_FUNCTIONS + (exposurePreview ? 1 : 0);
++}
++
++/** The 40x40 icon: a lamp (a disc with eight rays) on the tile of the camera's ADJ and Fn icons. */
++export function drawLampIcon(): Uint8Array {
++  const px = new Uint8Array(40 * 40 * 4);
++  const cover = (x: number, y: number): number => {
++    const dx = x - 20, dy = y - 20;
++    const r = Math.hypot(dx, dy);
++    if (r <= 6.5) return 1;
++    if (r < 9.5 || r > 15) return 0;
++    // eight rays, 2.4 px wide
++    const a = Math.atan2(dy, dx);
++    const nearest = Math.round(a / (Math.PI / 4)) * (Math.PI / 4);
++    return Math.abs(r * Math.sin(a - nearest)) <= 1.2 ? 1 : 0;
++  };
++  for (let y = 0; y < 40; y++) {
++    for (let x = 0; x < 40; x++) {
++      const i = (y * 40 + x) * 4;
++      if (x < 1 || y < 1 || x > 38 || y > 38) px.set([255, 255, 255, 0], i);
++      else if (x === 1 || y === 1 || x === 38 || y === 38) px.set([128, 128, 128, 255], i);
++      else {
++        let sum = 0;
++        for (let sy = 0; sy < 4; sy++) for (let sx = 0; sx < 4; sx++) sum += cover(x + (sx + 0.5) / 4, y + (sy + 0.5) / 4);
++        const v = sum / 16;
++        px.set([Math.round(53 + (255 - 53) * v), Math.round(53 + (255 - 53) * v), Math.round(54 + (255 - 54) * v), 255], i);
++      }
++    }
++  }
++  return px;
++}
++
++/** The name and the icon (once, before the menus use them). Returns ICONBIN with the icon appended. */
++export function installLampAssets(patch: Patch, iconbin: Uint8Array): Uint8Array {
++  if (LAMP_NAMES.length !== LANGUAGES) fail('internal', 'constant light: texts');
++  widenTextRows(patch, LAMP_TEXT_ID);
++  installTexts(patch, [{ id: LAMP_TEXT_ID, names: LAMP_NAMES }]);
++  if (patch.word(ICON_CATALOG + LAMP_ICON_ID * 4) !== 0) fail('unexpected-layout', 'icon number already in use');
++  const pad = (4 - (iconbin.length % 4)) % 4;
++  const offset = iconbin.length + pad;
++  const descriptor = patch.append(concat([u16le([1, 40, 40, 0]), u32le([offset / 4])]), 16);
++  patch.write(ICON_CATALOG + LAMP_ICON_ID * 4, u32le([descriptor]));
++  for (const [site, register] of LOOKUP_BOUNDS) {
++    if ((patch.word(site) & 0xfff0f000) >>> 0 !== (0xe3000000 | (register << 12)) >>> 0) fail('unexpected-layout', 'icon bound is not a MOVW');
++    patch.setWord(site, movWord(register, Math.max(LAMP_ICON_ID, movImmediate(patch.word(site)))), 'icon upper bound');
++  }
++  return concat([iconbin, new Uint8Array(pad), drawLampIcon()]);
++}
++
++export interface LampCode {
++  /** (on: 0 / 1): Constant Light off / on. */
++  set: number;
++  /** (): the other of the two. */
++  toggle: number;
++}
++
++/**
++ * The lamp itself: `set`, the off function's redirection and the shutdown. Before the menus, which
++ * call `set`.
++ */
++export function installLampCore(patch: Patch): LampCode {
++  expectWord(patch, FACTORY_GET, 0xe1a0c00d); // mov ip, sp
++  // The factory's build function: the lamp (0x14 bytes, its constructor) into +0xC, SelfLed (made with the lamp) into +0x10, AfAssistLed into +0x14.
++  expectWord(patch, FACTORY_BUILD + 0xb8, 0xe3a00014); // mov r0, #0x14
++  expectWord(patch, FACTORY_BUILD + 0xc4, branchWord(FACTORY_BUILD + 0xc4, LAMP_CONSTRUCTOR, 14, true));
++  expectWord(patch, FACTORY_BUILD + 0xd8, 0xe584800c); // str r8, [r4, #0xc]
++  expectWord(patch, FACTORY_BUILD + 0x10c, 0xe594100c); // ldr r1, [r4, #0xc]
++  expectWord(patch, FACTORY_BUILD + 0x128, 0xe5848010); // str r8, [r4, #0x10]
++  expectWord(patch, FACTORY_BUILD + 0x160, 0xe594100c);
++  expectWord(patch, FACTORY_BUILD + 0x17c, 0xe5848014); // str r8, [r4, #0x14]
++  // The lamp's constructor and vtable: on at +8, off at +0xc.
++  expectWord(patch, LAMP_CONSTRUCTOR + 0x24, LAMP_VTABLE);
++  expectWord(patch, LAMP_VTABLE + 8, LAMP_ON);
++  expectWord(patch, LAMP_VTABLE + 0xc, LAMP_OFF);
++  // on: initialised (+5), the device (+0xc or +0x10), lit (+4).
++  expectWord(patch, LAMP_ON, 0xe1a0c00d);
++  expectWord(patch, LAMP_ON + 0xc, 0xe5d03005); // ldrb r3, [r0, #5]
++  expectWord(patch, LAMP_ON + 0x1c, 0xe590000c); // ldr r0, [r0, #0xc]
++  expectWord(patch, LAMP_ON + 0x34, 0xe5c43004); // strb r3, [r4, #4]
++  expectWord(patch, LAMP_ON + 0x3c, 0xe5940010); // ldr r0, [r4, #0x10]
++  expectWord(patch, LAMP_ON + 0x44, 0xe5933058); // ldr r3, [r3, #0x58]
++  expectWord(patch, LAMP_OFF, 0xe1a0c00d);
++  expectWord(patch, LAMP_OFF + 4, 0xe92dd818); // push {r3, r4, fp, ip, lr, pc}
++  expectWord(patch, LAMP_OFF + 0x38, 0xe5933054); // ldr r3, [r3, #0x54]
++  // SelfLed and AfAssistLed: the lamp at +4, "has the lamp" at +8 (AfAssistLed's off-if-on, 0x53967430).
++  expectWord(patch, adr(0x53967430), 0xe5d03008); // ldrb r3, [r0, #8]
++  expectWord(patch, adr(0x53966f14) + 8, 0xe5801004); // SelfLed's constructor: str r1, [r0, #4]
++  expectWord(patch, adr(0x53966f14) + 0x10, 0xe5c02008); // strb r2, [r0, #8]
++  expectWord(patch, adr(0x53967390) + 8, 0xe5801004); // AfAssistLed's constructor
++  expectWord(patch, adr(0x53967390) + 0x10, 0xe5c02008);
++  expectWord(patch, SHUTDOWN_PREPARATION, 0xe1a0c00d);
++  expectWord(patch, SHUTDOWN_PREPARATION + 4, 0xe92dd830);
++
++  const set = patch.append((at) => assembleWords(
++    `push {r4, r5, r6, lr}
++     mov r5, r0
++     bl #${FACTORY_GET}
++     mov r6, r0
++     ldr r4, [r6, #0xc]
++     cmp r4, #0; beq out
++     ldrb r1, [r4, #5]
++     cmp r1, #0; beq out
++     movw r2, #${lo(LAMP_WORD)}; movt r2, #${hi(LAMP_WORD)}
++     cmp r5, #0; beq off
++     str r4, [r2]
++     mov r0, r4
++     pop {r4, r5, r6, lr}
++     b #${LAMP_ON}
++     off: mov r1, #0; str r1, [r2]
++     ldr r1, [r6, #0x10]
++     cmp r1, #0; ldrbne r1, [r1, #8]
++     cmp r1, #0; bne out
++     ldr r1, [r6, #0x14]
++     cmp r1, #0; ldrbne r1, [r1, #8]
++     cmp r1, #0; bne out
++     mov r0, r4
++     pop {r4, r5, r6, lr}
++     b #${LAMP_OFF}
++     out: pop {r4, r5, r6, pc}`, at), 16);
++  const toggle = patch.append((at) => assembleWords(
++    `movw r0, #${lo(LAMP_WORD)}; movt r0, #${hi(LAMP_WORD)}; ldr r0, [r0]
++     cmp r0, #0; moveq r0, #1; movne r0, #0
++     b #${set}`, at), 16);
++  // The lamp's off: nothing while Constant Light is on.
++  const off = patch.append((at) => assembleWords(
++    `movw ip, #${lo(LAMP_WORD)}; movt ip, #${hi(LAMP_WORD)}; ldr ip, [ip]
++     cmp ip, #0; bxne lr
++     mov ip, sp
++     b #${LAMP_OFF + 4}`, at), 16);
++  patch.setWord(LAMP_OFF, branchWord(LAMP_OFF, off), 'constant light: the lamp is not switched off while it is on');
++  // Shutdown: off (every register kept; the handler's own first instruction, then on).
++  const shutdown = patch.append((at) => assembleWords(
++    `movw ip, #${lo(LAMP_WORD)}; movt ip, #${hi(LAMP_WORD)}; ldr ip, [ip]
++     cmp ip, #0; beq native
++     push {r0, r1, r2, r3, ip, lr}
++     mov r0, #0; bl #${set}
++     pop {r0, r1, r2, r3, ip, lr}
++     native: mov ip, sp
++     b #${SHUTDOWN_PREPARATION + 4}`, at), 16);
++  patch.setWord(SHUTDOWN_PREPARATION, branchWord(SHUTDOWN_PREPARATION, shutdown), 'constant light: off when the camera shuts down');
++  return { set, toggle };
++}
++
++/** r3 = 1 while Constant Light is on, else 0. */
++const LOAD = `movw r3, #${lo(LAMP_WORD)}; movt r3, #${hi(LAMP_WORD)}; ldr r3, [r3]
++    cmp r3, #0; movne r3, #1`;
++
++/** The still-menu line (its draw function; before the still menu is built). */
++export function lampStillLine(patch: Patch): StillLine {
++  expectWord(patch, TOP_SET_ICON, 0xe1a0c00d);
++  expectWord(patch, TOP_SET_TITLE, 0xe1a0c00d);
++  const draw = patch.append((at) => assembleWords(
++    `push {r4, lr}
++     mov r4, r1
++     ${LOAD}
++     cmp r3, #0; movweq r1, #${ICON_OFF}; movwne r1, #${ICON_ON}
++     mov r0, r4; bl #${TOP_SET_ICON}
++     mov r0, r4; movw r1, #${LAMP_TEXT_ID}
++     pop {r4, lr}; b #${TOP_SET_TITLE}`, at), 16);
++  return { draw, id: LAMP_LIST_ID, after: AF_ASSIST_LINE_ID };
++}
++
++/** The list the line opens (after the additions that copy the list table first). */
++export function installLampList(patch: Patch, code: LampCode): void {
++  expectWord(patch, LIST_SET_ITEM, 0xe1a0c00d);
++  // Count (this = r0), draw (item = r1, value i = r2), set and is current (value i = r1): Off, On.
++  const count = patch.append((at) => assembleWords('mov r0, #2; bx lr', at), 16);
++  const draw = patch.append((at) => assembleWords(
++    `cmp r2, #1; bxhi lr
++     mov r0, r1
++     movweq r1, #${ICON_ON}; movweq r2, #${TEXT_ON}
++     movwne r1, #${ICON_OFF}; movwne r2, #${TEXT_OFF}
++     b #${LIST_SET_ITEM}`, at), 16);
++  const set = patch.append((at) => assembleWords(
++    `cmp r1, #1; bxhi lr
++     mov r0, r1
++     b #${code.set}`, at), 16);
++  const current = patch.append((at) => assembleWords(
++    `${LOAD}
++     cmp r3, r1; moveq r0, #1; movne r0, #0; bx lr`, at), 16);
++  const record = listTemplate(patch);
++  const v = new DataView(record.buffer);
++  v.setUint16(4, LAMP_TEXT_ID, true);
++  v.setUint32(0x0c, count, true);
++  v.setUint32(0x14, draw, true);
++  v.setUint32(0x24, set, true);
++  v.setUint32(0x2c, current, true);
++  for (const off of [0x10, 0x18, 0x28, 0x30]) v.setUint32(off, 0, true);
++  addListRecords(patch, [{ id: LAMP_LIST_ID, record }], 'constant light');
++  hookControllerFactory(patch, `movw ip, #${lo(LAMP_LIST_ID)}; movt ip, #${hi(LAMP_LIST_ID)}
++     cmp r1, ip; bne prior
++     movw r1, #${lo(LIST_CONTROLLER_ID)}; movt r1, #${hi(LIST_CONTROLLER_ID)}`, 'constant light: the list controller');
++}
++
++/** What the word at `at` (the entry of a lookup: `cmp r1, #0`, or an earlier addition's branch) goes on to. */
++function entryTail(patch: Patch, at: number): string {
++  const first = patch.word(at);
++  if (first === 0xe3510000) return `cmp r1, #0; b #${at + 4}`;
++  if (first >>> 24 === 0xea) return `b #${branchTarget(at, first)}`;
++  return fail('unexpected-layout', 'constant light: a lookup does not start as expected');
++}
++
++/**
++ * The ADJ lever function (after every addition that changes the function table's records in place
++ * or copies it: soft focus, Direct Flash, exposure preview). `fn` is its number, `lampAdjFunction`.
++ * Returns the table's new address.
++ */
++export function installLampAdj(patch: Patch, code: LampCode, fn: number): number {
++  const at = ADJ_TABLE_SITES.map(([low, high, r]) => {
++    const a = patch.word(low), b = patch.word(high);
++    if (a !== movWord(r, movImmediate(a)) || b !== movWord(r, movImmediate(b), true)) fail('unexpected-layout', 'ADJ function table site is not a MOVW/MOVT pair');
++    return (movImmediate(a) | (movImmediate(b) << 16)) >>> 0;
++  });
++  const old = at[0];
++  if (at.some((t) => t !== old)) fail('unexpected-layout', 'ADJ function table is not where it was expected');
++  const functions = (patch.word(ADJ_TABLE_END) - old) / ADJ_RECORD;
++  if (functions !== fn || (fn !== ADJ_OFFICIAL_FUNCTIONS && fn !== ADJ_OFFICIAL_FUNCTIONS + 1) || (old === ADJ_TABLE) !== (fn === ADJ_OFFICIAL_FUNCTIONS)) fail('unexpected-layout', 'ADJ function table does not have the functions expected');
++  const crop = patch.read(old + CROP * ADJ_RECORD, ADJ_RECORD);
++  const cv = new DataView(crop.buffer);
++  if (cv.getUint32(0x10, true) !== adr(0x531bb654) || cv.getUint32(0x38, true) !== 0 || cv.getUint32(0x3c, true) !== adr(0x531bdf1c) || cv.getUint32(0x40, true) !== 0) fail('unexpected-layout', 'Crop record of the ADJ table is not as expected');
++  for (const off of [H_DRAW, H_IS_CURRENT, H_SET, H_COUNT]) if (cv.getUint32(off, true) === 0 || cv.getUint32(off + 4, true) !== 0) fail('unexpected-layout', 'Crop record of the ADJ table is not as expected');
++
++  // --- Handlers (this = r0, value index = r1), as soft focus's: Off, On.
++  const draw = patch.append((a) => assembleWords(
++    `push {r4, r5, r6, lr}
++     mov r5, r0; mov r4, r1; mov r6, #0
++     cmp r4, #0; movweq r6, #${TEXT_OFF}
++     cmp r4, #1; movweq r6, #${TEXT_ON}
++     ldr r0, [r5, #0x1f8]; uxtb r1, r4; bl #${LIST_ITEM}
++     mov r1, r6; pop {r4, r5, r6, lr}; b #${ITEM_SET_TEXT}`, a), 16);
++  const current = patch.append((a) => assembleWords(
++    `${LOAD}
++     cmp r3, r1; moveq r0, #1; movne r0, #0; bx lr`, a), 16);
++  const set = patch.append((a) => assembleWords(
++    `cmp r1, #1; bxhi lr
++     mov r0, r1
++     b #${code.set}`, a), 16);
++  const count = patch.append((a) => assembleWords('mov r0, #2; bx lr', a), 16);
++  const record = crop.slice();
++  const rv = new DataView(record.buffer);
++  rv.setUint32(H_DRAW, draw, true);
++  rv.setUint32(H_IS_CURRENT, current, true);
++  rv.setUint32(H_SET, set, true);
++  rv.setUint32(H_COUNT, count, true);
++  rv.setUint32(0x3c, 0, true); // no "disabled" check (Crop's would disable it with Crop)
++
++  // --- The table, copied with the record; every reference moved.
++  const table = patch.append(concat([patch.read(old, fn * ADJ_RECORD), record]), 16);
++  for (const [low, high, r] of ADJ_TABLE_SITES) {
++    patch.setWord(low, movWord(r, lo(table)), 'constant light: ADJ function table, low half');
++    patch.setWord(high, movWord(r, hi(table), true), 'constant light: ADJ function table, high half');
++  }
++  patch.setWord(ADJ_TABLE_END, table + (fn + 1) * ADJ_RECORD, 'constant light: end of the ADJ function table');
++
++  // --- Name and icon (before the camera's own cases, or an earlier addition's).
++  const nameTail = entryTail(patch, ADJ_NAME_OF);
++  const name = patch.append((a) => assembleWords(
++    `cmp r1, #${fn}; movweq r0, #${LAMP_TEXT_ID}; bxeq lr
++     ${nameTail}`, a), 16);
++  patch.setWord(ADJ_NAME_OF, branchWord(ADJ_NAME_OF, name), 'constant light: ADJ function name');
++  const iconTail = entryTail(patch, ADJ_ICON_OF);
++  const icon = patch.append((a) => assembleWords(
++    `cmp r1, #${fn}; bne other
++     cmp r2, #0; movne r0, #0; movweq r0, #${LAMP_ICON_ID}; bx lr
++     other: ${iconTail}`, a), 16);
++  patch.setWord(ADJ_ICON_OF, branchWord(ADJ_ICON_OF, icon), 'constant light: ADJ function icon');
++
++  // --- ADJ Mode Setting: the functions offered, the new one last.
++  const listAt = (movImmediate(patch.word(ADJ_LIST_LOW)) | (movImmediate(patch.word(ADJ_LIST_HIGH)) << 16)) >>> 0;
++  expectWord(patch, ADJ_LIST_LOW, movWord(4, lo(listAt)));
++  expectWord(patch, ADJ_LIST_HIGH, movWord(4, hi(listAt), true));
++  const lengthWord = patch.word(ADJ_LIST_LENGTH);
++  if ((lengthWord & 0xffffff00) >>> 0 !== 0xe2846000) fail('unexpected-layout', 'ADJ function list length is not as expected');
++  const list = [...patch.read(listAt, lengthWord & 0xff)];
++  if (list.includes(fn) || list.some((f) => f >= fn)) fail('unexpected-layout', 'ADJ function list is not as expected');
++  list.push(fn);
++  const newList = patch.append(Uint8Array.from(list), 16);
++  patch.setWord(ADJ_LIST_LOW, movWord(4, lo(newList)), 'constant light: ADJ function list, low half');
++  patch.setWord(ADJ_LIST_HIGH, movWord(4, hi(newList), true), 'constant light: ADJ function list, high half');
++  patch.setWord(ADJ_LIST_LENGTH, 0xe2846000 | list.length, 'constant light: ADJ function list length');
++  return table;
++}
++
++/** The Fn function 0x29: the four buttons that share the first function list, and the Movie button (pressed, held). */
++export function installLampFn(patch: Patch, code: LampCode): void {
++  expectWord(patch, FN_NAME_OF, 0xe3510000); // cmp r1, #0
++  expectWord(patch, FN_NAME_OF + 4, 0x1a000001); // bne 0x5338FBBC
++  expectWord(patch, FN_ICON_OF, 0xe3510000); // cmp r1, #0
++  expectWord(patch, FN_ICON_OF + 4, 0x1a000003); // bne 0x533914D4
++  for (const [at, bytes, low, high, length] of FN_LISTS) {
++    expectWord(patch, low, movWord(4, lo(at)));
++    expectWord(patch, high, movWord(4, hi(at), true));
++    expectWord(patch, length, 0xe2846000 | bytes.length); // add r6, r4, #length
++    const official = patch.read(at, bytes.length);
++    if (!bytes.every((v, i) => official[i] === v) || bytes.includes(FN_LAMP)) fail('unexpected-layout', 'Fn function list is not the official one');
++  }
++  // The Movie button's switch: the function in sl for events 2 and 3; 0x29 goes to the defaults.
++  expectWord(patch, MOVIE_SWITCH, 0xe1a0c00d);
++  expectWord(patch, MOVIE_SWITCH_BOUND, 0xe35a002d); // cmp sl, #0x2d
++  expectWord(patch, MOVIE_SWITCH_BOUND + 4, 0x979ff10a); // ldrls pc, [pc, sl, lsl #2]
++  expectWord(patch, MOVIE_SWITCH_BOUND + 12, MOVIE_SWITCH_END); // function 0 (none): the end
++  expectWord(patch, MOVIE_SWITCH_BOUND + 12 + FN_LAMP * 4, MOVIE_SWITCH_DEFAULT);
++  expectWord(patch, MOVIE_SWITCH_END, 0xe51b2030); // ldr r2, [fp, #-0x30]
++  expectWord(patch, MOVIE_HELD_BOUND, 0xe350002d); // cmp r0, #0x2d
++  expectWord(patch, MOVIE_HELD_BOUND + 4, 0x979ff100); // ldrls pc, [pc, r0, lsl #2]
++  expectWord(patch, MOVIE_HELD_BOUND + 12, MOVIE_SWITCH_END);
++  expectWord(patch, MOVIE_HELD_BOUND + 12 + FN_LAMP * 4, MOVIE_HELD_DEFAULT);
++  // "Offered on this model": cases for 0x19..0x2d only, 0x29 with those that are always offered.
++  expectWord(patch, FN_AVAILABLE, 0xe2400019); // sub r0, r0, #0x19
++  expectWord(patch, FN_AVAILABLE + 0x10, 0xe3500014); // cmp r0, #0x14
++  expectWord(patch, FN_AVAILABLE + 0x1c + (FN_LAMP - 0x19) * 4, FN_AVAILABLE + 0xd0); // mov r0, #1
++  expectWord(patch, FN_AVAILABLE + 0xd0, 0xe3a00001);
++  // The function switch: r5 = the shared pointer's address, r6 = released, the guard stored; 0x29 goes to the default.
++  expectWord(patch, FN_SWITCH + 0x1c, 0xe1a05001); // mov r5, r1
++  expectWord(patch, FN_SWITCH + 0x24, 0xe1a06003); // mov r6, r3
++  expectWord(patch, FN_SWITCH_BOUND, 0xe352002d); // cmp r2, #0x2d
++  expectWord(patch, FN_SWITCH_BOUND + 4, 0x979ff102); // ldrls pc, [pc, r2, lsl #2]
++  expectWord(patch, FN_SWITCH_BOUND + 12 + FN_LAMP * 4, FN_SWITCH_DEFAULT);
++  expectWord(patch, FN_SWITCH_BOUND + 12, FN_SWITCH_END); // function 0 (none): the common end
++  expectWord(patch, FN_SWITCH_END, 0xe3560000); // cmp r6, #0
++
++  const name = patch.append((a) => assembleWords(
++    `cmp r1, #${FN_LAMP}; movweq r0, #${LAMP_TEXT_ID}; bxeq lr
++     cmp r1, #0; b #${FN_NAME_OF + 4}`, a), 16);
++  patch.setWord(FN_NAME_OF, branchWord(FN_NAME_OF, name), 'constant light: Fn function name');
++  const icon = patch.append((a) => assembleWords(
++    `cmp r1, #${FN_LAMP}; bne other
++     cmp r2, #0; movne r0, #0; movweq r0, #${LAMP_ICON_ID}; bx lr
++     other: cmp r1, #0; b #${FN_ICON_OF + 4}`, a), 16);
++  patch.setWord(FN_ICON_OF, branchWord(FN_ICON_OF, icon), 'constant light: Fn function icon');
++
++  for (const [, bytes, low, high, length, name] of FN_LISTS) {
++    const list = patch.append(Uint8Array.from([...bytes, FN_LAMP]), 16);
++    patch.setWord(low, movWord(4, lo(list)), `constant light: ${name} function list, low half`);
++    patch.setWord(high, movWord(4, hi(list), true), `constant light: ${name} function list, high half`);
++    patch.setWord(length, 0xe2846000 | (bytes.length + 1), `constant light: ${name} function list length`);
++  }
++
++  // The switch: on a press (r6 = 0) the lamp is switched over; then the common end, as function 0.
++  const press = patch.append((a) => assembleWords(
++    `cmp r2, #${FN_LAMP}; bne native
++     cmp r6, #0; bne #${FN_SWITCH_END}
++     bl #${code.toggle}
++     b #${FN_SWITCH_END}
++     native: cmp r2, #0x2d
++     b #${FN_SWITCH_BOUND + 4}`, a), 16);
++  patch.setWord(FN_SWITCH_BOUND, branchWord(FN_SWITCH_BOUND, press), 'constant light: Fn function');
++
++  // The Movie button, pressed (event 2) or held (event 3): the lamp switched over, then the end.
++  const movie = patch.append((a) => assembleWords(
++    `cmp sl, #${FN_LAMP}; bne native
++     bl #${code.toggle}
++     b #${MOVIE_SWITCH_END}
++     native: cmp sl, #0x2d
++     b #${MOVIE_SWITCH_BOUND + 4}`, a), 16);
++  patch.setWord(MOVIE_SWITCH_BOUND, branchWord(MOVIE_SWITCH_BOUND, movie), 'constant light: the Movie button');
++  // Event 4 of the held function: nothing, as for the functions the held list offers.
++  patch.setWord(MOVIE_HELD_BOUND + 12 + FN_LAMP * 4, MOVIE_SWITCH_END, 'constant light: the held Movie button, event 4');
++}
 diff --git a/core/src/fw/gr4v120/aspect/looks.ts b/core/src/fw/gr4v120/aspect/looks.ts
 --- a/core/src/fw/gr4v120/aspect/looks.ts
 +++ b/core/src/fw/gr4v120/aspect/looks.ts
@@ -3455,6 +4132,809 @@ diff --git a/core/src/fw/gr4v120/aspect/monounlock.ts b/core/src/fw/gr4v120/aspe
    for (const at of LOOK_FLAGS) {
      const word = patch.word(at & ~3);
      const shift = (at & 3) * 8;
+diff --git a/core/src/fw/gr4v120/aspect/movie4k.ts b/core/src/fw/gr4v120/aspect/movie4k.ts
+new file mode 100644
+--- /dev/null
++++ b/core/src/fw/gr4v120/aspect/movie4k.ts
+@@ -0,0 +1,277 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/**
++ * 4K movies (GR IV firmware 1.20 and 1.21): the movie menu's Frame Rate line becomes
++ * "Frame Rate / Resolution", a submenu with the camera's Frame Rate list (60p / 30p / 24p) and a
++ * new list, Resolution: FHD / 4K.
++ *
++ * What the firmware has. A complete 4K path, behind a switch that always answers no (0x538AD500:
++ * `mov r0, #0; bx lr`; one of its callers logs "[LVC] for Debug 4K Movie!"). Asked when the live
++ * view of a movie is set up:
++ *  - the sensor's drive mode (0x536568D4): 60p is mode 4 whatever the answer; 30p is mode 3, or 6
++ *    with the switch; 24p is mode 2, or 5 with it (a 4592 x 2584 read-out, 1.35x narrower than the
++ *    FHD picture);
++ *  - the size recorded (0x538B376C): FHD, or 3840 x 2160 at 30p and 24p with the switch;
++ *  - the buffers of the live view (0x53652DBC), at 30p.
++ * Camera tests 094 to 097 (hand-patched test firmware, the switch answering yes) on a GR IV 1.21.
++ *
++ * What is changed:
++ *  - the switch answers bit 1 of MOVIE_BYTE, a byte of the user settings that nothing in the
++ *    firmware uses (alignment padding before a word; the factory-defaults initialiser, run in an
++ *    emulator on all 30 default records of 1.20 and of 1.21, never writes 0x771..0x773). It is
++ *    kept with the settings and copied with the user modes; every camera has 0 there: FHD;
++ *  - the movie menu's item 12 (Frame Rate): its line shows "4K 30p" / "4K 24p" or the camera's
++ *    60p / 30p / 24p under the title "Frame Rate / Resolution", and opens a submenu record of two
++ *    lines (as Setup's End Screen in `shutdown.ts`): Frame Rate, which opens the camera's own list
++ *    under its own number, and Resolution, a list record made from Frame Rate's;
++ *  - the two settings cannot disagree: choosing 4K at 60p sets 30p (the camera's own setter);
++ *    choosing 60p sets FHD. The Frame Rate list sets the row under the cursor at once and, left
++ *    without OK, the row that was current again; only OK (the record's set function) clears the
++ *    bit, so passing over 60p does not lose 4K. The Resolution list has no such functions: its
++ *    row is set by OK. Wherever the bit is still set at 60p (the list left another way), it
++ *    counts as FHD: the camera's own code records 60p in FHD whatever the switch says, and the
++ *    menu shows it so.
++ *  - one answer for as long as a live view runs. The switch is asked again later (the size recorded
++ *    is set again by 0x5365B8E4, which the live view's sequences call), while the drive mode and
++ *    the buffers are those of the live view's start; a setting changed in between would give a 4K
++ *    recording from the FHD read-out or the other way round. So the setting is copied into a byte
++ *    of the sbrk arena (`battery.ts`) where the live view is started (the call of 0x538B376C at
++ *    0x5365BA0C, in 0x5365B9A8, before any of the other three questions), and the switch answers
++ *    that byte: zero from start-up until the first live view.
++ * After the resolution is changed the camera therefore takes it at the next start of the live
++ * view (the shooting mode changed, or the camera switched on).
++ *
++ * Going back to a firmware without this: the bit means nothing there.
++ */
++import { FirmwareError } from '../../types';
++import { assembleWords, branchWord } from './arm';
++import { LANGUAGES, Patch, expectWord, widenTextRows } from './build';
++import { LIST_CONTROLLER_ID, SUBMENU_CONTROLLER_ID, TOP_SET_TITLE, addListRecords, addSubmenuRecord, hookControllerFactory, installTexts, listTable, readTexts, submenuTemplate } from './datestamp-menu';
++import { menuItemWords } from './menuwide';
++import { adr } from '../target';
++
++/** Byte 0x771 of the user settings (0x775 of the settings object): bit 0 the movie shake reduction by sensor shift (`moviesr.ts`), bit 1 4K. */
++export const MOVIE_BYTE = adr(0x550832a8) + 4 + 0x771;
++export const MOVIE_BYTE_OFFSET = 0x775;
++export const MOVIE_SENSOR_SR_BIT = 1;
++export const MOVIE_4K_BIT = 2;
++export const MOVIE4K_TEXT_IDS = { title: 1044, resolution: 1045, fhd: 1046, uhd: 1047, uhd30: 1048, uhd24: 1049 } as const;
++export const FRAME_RATE_MENU_ID = 0x020001e0;
++export const RESOLUTION_LIST_ID = 0x020001e1;
++
++const SWITCH = adr(0x538ad500); // the "debug 4K movie" switch
++const SWITCH_CALLS = [adr(0x53652dd8), adr(0x53656934), adr(0x53656a20), adr(0x538b3788)] as const;
++const MOVIE_SIZE = adr(0x538b376c); // (movie settings object): the size recorded, by the switch and the frame rate
++const START_SIZE_CALL = adr(0x5365ba0c); // bl MOVIE_SIZE where the live view is started (0x5365B9A8)
++/** "4K in this live view": the byte after the movie shake reduction's (`moviesr.ts`, 0x55839044) in the sbrk arena, zero at start-up. */
++export const MOVIE4K_LATCH = adr(0x55839044) + 1;
++const SETTINGS = adr(0x550832a8);
++const FRAME_RATE = 0x772; // the Frame Rate setting: 0 60p, 1 30p, 2 24p
++const FRAME_RATE_SET = adr(0x53332cb0); // (settings, value)
++const APP = adr(0x532406a4);
++const RESOURCES = adr(0x53240f98);
++const GET_SETTINGS = adr(0x53240c38);
++const FRAME_RATE_TEXT = adr(0x5338f348); // (resources + 4, frame rate) -> text 301..303
++const LINE_VALUE_TEXT = adr(0x5359d740); // (menu line, text)
++const SUBMENU_LINE_TEXT = adr(0x535a64b4); // (submenu line, text)
++const LIST_TEXT_ROW = adr(0x5359e0ac); // (list item, text)
++const LIST_AFTER_SET = adr(0x531daa64);
++const MOVIE_MENU = adr(0x53dc7bd0);
++const MOVIE_ITEM = 12;
++const FRAME_RATE_LIST_ID = 0x020000a0;
++const FRAME_RATE_LINE_DRAW = adr(0x531b2a0c);
++const FRAME_RATE_TITLE = 299;
++/** Frame Rate's list record (57 of the list table) and its handlers. */
++const FRAME_RATE_RECORD = 57;
++const LIST_RECORD = 0x4c;
++const FR_COUNT = adr(0x531d0b24);
++const FR_DRAW = adr(0x531d2b80);
++const FR_SET = adr(0x531d4d08);
++const FR_CURRENT = adr(0x531d66ec);
++const FR_SET_CLOSE = adr(0x531dc390); // +0x34: set, then LIST_AFTER_SET
++const FR_SET_KEPT = adr(0x531d4d38); // +0x3c: set with the row kept at +0x1a6
++
++/** "Resolution", in `LANGS` order (cs da en fi fr de el hu it ja ko nl pl pt ru zh-CN es sv th zh-TW tr). */
++export const RESOLUTION_NAMES: readonly string[] = [
++  'Rozlišení', 'Opløsning', 'Resolution', 'Tarkkuus', 'Résolution', 'Auflösung', 'Ανάλυση', 'Felbontás',
++  'Risoluzione', '解像度', '해상도', 'Resolutie', 'Rozdzielczość', 'Resolução', 'Разрешение', '分辨率',
++  'Resolución', 'Upplösning', 'ความละเอียด', '解析度', 'Çözünürlük',
++];
++
++function fail(code: string, message: string): never {
++  throw new FirmwareError(code, message);
++}
++const lo = (v: number): number => v & 0xffff;
++const hi = (v: number): number => v >>> 16;
++const BYTE = `movw r3, #${lo(MOVIE_BYTE)}; movt r3, #${hi(MOVIE_BYTE)}`;
++const RATE = `movw r2, #${lo(SETTINGS + FRAME_RATE)}; movt r2, #${hi(SETTINGS + FRAME_RATE)}; ldrb r2, [r2]`;
++
++/** The texts (before the menus use them): the title is the camera's own "Frame Rate" of each language, " / " and "Resolution". */
++export function movie4kTitles(patch: Patch): string[] {
++  return readTexts(patch, FRAME_RATE_TITLE).map((rate, k) => `${rate} / ${RESOLUTION_NAMES[k]}`);
++}
++
++/**
++ * The switch, the texts, the menu line, its submenu and the Resolution list. After every other
++ * addition that copies the submenu or the list table (it adds records the same way), and after the
++ * menus are made wide when they are (`menuItemWords` then names the copy the camera reads).
++ */
++export function installMovie4k(patch: Patch): void {
++  if (RESOLUTION_NAMES.length !== LANGUAGES) fail('internal', '4K movies: texts');
++  // --- The switch and its four callers.
++  expectWord(patch, SWITCH, 0xe3a00000); // mov r0, #0
++  expectWord(patch, SWITCH + 4, 0xe12fff1e); // bx lr
++  for (const call of SWITCH_CALLS) expectWord(patch, call, branchWord(call, SWITCH, 14, true));
++  expectWord(patch, MOVIE_SIZE, 0xe1a0c00d);
++  expectWord(patch, START_SIZE_CALL - 4, 0xe5c65740); // strb r5, [r6, #0x740]
++  expectWord(patch, START_SIZE_CALL, branchWord(START_SIZE_CALL, MOVIE_SIZE, 14, true));
++  expectWord(patch, START_SIZE_CALL + 4, 0xe3580001); // cmp r8, #1
++  // --- The Frame Rate setting and its line.
++  expectWord(patch, FRAME_RATE_SET, 0xe1a0c00d);
++  expectWord(patch, FRAME_RATE_LINE_DRAW, 0xe1a0c00d);
++  expectWord(patch, FRAME_RATE_LINE_DRAW + 0x30, branchWord(FRAME_RATE_LINE_DRAW + 0x30, FRAME_RATE_TEXT, 14, true));
++  expectWord(patch, FRAME_RATE_LINE_DRAW + 0x3c, branchWord(FRAME_RATE_LINE_DRAW + 0x3c, LINE_VALUE_TEXT, 14, true));
++  expectWord(patch, FRAME_RATE_LINE_DRAW + 0x44, 0xe300112b); // movw r1, #299
++  expectWord(patch, FRAME_RATE_LINE_DRAW + 0x50, branchWord(FRAME_RATE_LINE_DRAW + 0x50, TOP_SET_TITLE));
++  expectWord(patch, FRAME_RATE_TEXT, 0xe3510000); // cmp r1, #0
++  expectWord(patch, FRAME_RATE_TEXT + 8, 0xe300012d); // movw r0, #301 ("60p")
++  // --- Frame Rate's list record: text rows, the set function reached three ways.
++  const table = listTable(patch);
++  const official = patch.read(table + FRAME_RATE_RECORD * LIST_RECORD, LIST_RECORD);
++  const ov = new DataView(official.buffer);
++  if (ov.getUint32(0, true) !== 0x00010200 || ov.getUint32(4, true) !== 0 || ov.getUint32(0x0c, true) !== FR_COUNT || ov.getUint32(0x14, true) !== FR_DRAW || ov.getUint32(0x24, true) !== FR_SET
++    || ov.getUint32(0x2c, true) !== FR_CURRENT || ov.getUint32(0x34, true) !== FR_SET_CLOSE || ov.getUint32(0x3c, true) !== FR_SET_KEPT || [0x10, 0x18, 0x1c, 0x20, 0x28, 0x30, 0x38, 0x40, 0x44, 0x48].some((off) => ov.getUint32(off, true) !== 0)) {
++    fail('unexpected-layout', 'Frame Rate list record is not as expected');
++  }
++  expectWord(patch, FR_DRAW + 0x40, branchWord(FR_DRAW + 0x40, LIST_TEXT_ROW));
++  expectWord(patch, FR_SET, 0xe1a0c00d);
++  expectWord(patch, FR_SET + 4, 0xe92dd818); // push {r3, r4, fp, ip, lr, pc}
++  expectWord(patch, FR_SET + 0x2c, branchWord(FR_SET + 0x2c, FRAME_RATE_SET));
++  expectWord(patch, FR_SET_CLOSE + 0x10, branchWord(FR_SET_CLOSE + 0x10, FR_SET, 14, true));
++  expectWord(patch, FR_SET_CLOSE + 0x20, branchWord(FR_SET_CLOSE + 0x20, LIST_AFTER_SET));
++  expectWord(patch, FR_SET_KEPT, 0xe5d011a6); // ldrb r1, [r0, #0x1a6]
++  expectWord(patch, FR_SET_KEPT + 4, branchWord(FR_SET_KEPT + 4, FR_SET));
++
++  // --- Texts.
++  const T = MOVIE4K_TEXT_IDS;
++  const same = (text: string): string[] => new Array<string>(LANGUAGES).fill(text);
++  widenTextRows(patch, T.uhd24);
++  installTexts(patch, [{ id: T.title, names: movie4kTitles(patch) }, { id: T.resolution, names: RESOLUTION_NAMES }, { id: T.fhd, names: same('FHD') }, { id: T.uhd, names: same('4K') },
++    { id: T.uhd30, names: same('4K 30p') }, { id: T.uhd24, names: same('4K 24p') }]);
++
++  // --- The switch: 4K chosen, as it was when this live view was started (the call there has only r0 for the function).
++  const latch = patch.append((at) => assembleWords(
++    `${BYTE}; ldrb r3, [r3]
++     ands r3, r3, #${MOVIE_4K_BIT}; movne r3, #1
++     movw ip, #${lo(MOVIE4K_LATCH)}; movt ip, #${hi(MOVIE4K_LATCH)}; strb r3, [ip]
++     b #${MOVIE_SIZE}`, at), 16);
++  patch.setWord(START_SIZE_CALL, branchWord(START_SIZE_CALL, latch, 14, true), '4K movies: the Resolution setting is taken when the live view is started');
++  const answer = patch.append((at) => assembleWords(
++    `movw r0, #${lo(MOVIE4K_LATCH)}; movt r0, #${hi(MOVIE4K_LATCH)}; ldrb r0, [r0]
++     and r0, r0, #1
++     bx lr`, at), 16);
++  patch.setWord(SWITCH, branchWord(SWITCH, answer), '4K movies: the switch answers the Resolution setting of this live view');
++
++  // --- 60p confirmed in the Frame Rate list (row 0): FHD. Only the record's own set function, which the list's OK calls:
++  // the row under the cursor is set while the list is open (+0x34) and the row that was current is set again when the list
++  // is left without OK (+0x3c), both by calling 0x531D4D08 directly, and neither must lose the Resolution.
++  const rate = patch.append((at) => assembleWords(
++    `cmp r1, #0; bne #${FR_SET}
++     ${BYTE}; ldrb ip, [r3]; bic ip, ip, #${MOVIE_4K_BIT}; strb ip, [r3]
++     b #${FR_SET}`, at), 16);
++
++  // --- The Resolution list: FHD, 4K (this = r0; draw: item = r1, row = r2; set, current: row = r1).
++  const count = patch.append((at) => assembleWords('mov r0, #2; bx lr', at), 16);
++  const draw = patch.append((at) => assembleWords(
++    `cmp r2, #1; bxhi lr
++     mov r0, r1
++     movweq r1, #${T.uhd}; movwne r1, #${T.fhd}
++     b #${LIST_TEXT_ROW}`, at), 16);
++  const set = patch.append((at) => assembleWords(
++    `cmp r1, #1; bxhi lr
++     ${BYTE}; ldrb ip, [r3]; bic ip, ip, #${MOVIE_4K_BIT}; orreq ip, ip, #${MOVIE_4K_BIT}; strb ip, [r3]
++     bxne lr
++     ${RATE}; cmp r2, #0; bxne lr
++     push {r4, lr}
++     bl #${APP}; bl #${GET_SETTINGS}
++     mov r1, #1
++     pop {r4, lr}
++     b #${FRAME_RATE_SET}`, at), 16);
++  // current: 4K only with the setting and a frame rate that has it (as the line and the submenu show it).
++  const current = patch.append((at) => assembleWords(
++    `${BYTE}; ldrb r3, [r3]; ${RATE}
++     tst r3, #${MOVIE_4K_BIT}; cmpne r2, #0
++     movne r3, #1; moveq r3, #0
++     cmp r3, r1; moveq r0, #1; movne r0, #0; bx lr`, at), 16);
++  // The record: Frame Rate's (rows of text), without its two functions that set a row before OK: the row is set by OK alone.
++  const record = official.slice();
++  const rv = new DataView(record.buffer);
++  rv.setUint32(0x0c, count, true);
++  rv.setUint32(0x14, draw, true);
++  rv.setUint32(0x24, set, true);
++  rv.setUint32(0x2c, current, true);
++  rv.setUint32(0x34, 0, true);
++  rv.setUint32(0x3c, 0, true);
++  addListRecords(patch, [{ id: RESOLUTION_LIST_ID, record }], '4K movies');
++  // Frame Rate's record, in the table the camera reads now.
++  const rateRecord = listTable(patch) + FRAME_RATE_RECORD * LIST_RECORD;
++  expectWord(patch, rateRecord + 0x24, FR_SET);
++  patch.setWord(rateRecord + 0x24, rate, '4K movies: 60p confirmed sets FHD');
++
++  // --- The submenu: Frame Rate (the camera's list, its value as the line showed it), Resolution.
++  const lineRate = patch.append((at) => assembleWords(
++    `push {r4, r5, r6, lr}
++     mov r4, r1
++     bl #${APP}; bl #${RESOURCES}
++     ${RATE}; mov r1, r2
++     add r0, r0, #4; bl #${FRAME_RATE_TEXT}
++     mov r1, r0; mov r0, r4
++     pop {r4, r5, r6, lr}
++     b #${SUBMENU_LINE_TEXT}`, at), 16);
++  const lineResolution = patch.append((at) => assembleWords(
++    `mov r0, r1
++     ${BYTE}; ldrb r3, [r3]; ${RATE}
++     tst r3, #${MOVIE_4K_BIT}; cmpne r2, #0
++     movwne r1, #${T.uhd}; movweq r1, #${T.fhd}
++     b #${SUBMENU_LINE_TEXT}`, at), 16);
++  const sub = submenuTemplate(patch);
++  {
++    const r = new DataView(sub.buffer);
++    r.setUint16(2, T.title, true);
++    r.setUint16(8, FRAME_RATE_TITLE, true);
++    r.setUint16(10, T.resolution, true);
++    r.setUint32(0x14, FRAME_RATE_LIST_ID, true);
++    r.setUint32(0x18, RESOLUTION_LIST_ID, true);
++    r.setUint32(0x3c, lineRate, true);
++    r.setUint32(0x40, 0, true);
++    r.setUint32(0x44, lineResolution, true);
++    r.setUint32(0x48, 0, true);
++  }
++  addSubmenuRecord(patch, FRAME_RATE_MENU_ID, sub, '4K movies');
++  hookControllerFactory(patch, `movw ip, #${lo(FRAME_RATE_MENU_ID)}; movt ip, #${hi(FRAME_RATE_MENU_ID)}
++     cmp r1, ip; bne list
++     movw r1, #${lo(SUBMENU_CONTROLLER_ID)}; movt r1, #${hi(SUBMENU_CONTROLLER_ID)}; b prior
++     list: add ip, ip, #${RESOLUTION_LIST_ID - FRAME_RATE_MENU_ID}; cmp r1, ip; bne prior
++     movw r1, #${lo(LIST_CONTROLLER_ID)}; movt r1, #${hi(LIST_CONTROLLER_ID)}`, '4K movies: the submenu and the Resolution list');
++
++  // --- The movie menu's line: the value (4K with the frame rate, or the frame rate), the title; it opens the submenu.
++  const line = patch.append((at) => assembleWords(
++    `push {r4, r5, r6, lr}
++     mov r4, r1
++     ${BYTE}; ldrb r3, [r3]; ${RATE}
++     tst r3, #${MOVIE_4K_BIT}; beq plain
++     cmp r2, #1; movweq r1, #${T.uhd30}; beq have
++     cmp r2, #2; movweq r1, #${T.uhd24}; beq have
++     plain: mov r5, r2
++     bl #${APP}; bl #${RESOURCES}
++     mov r1, r5; add r0, r0, #4; bl #${FRAME_RATE_TEXT}
++     mov r1, r0
++     have: mov r0, r4; bl #${LINE_VALUE_TEXT}
++     mov r0, r4; movw r1, #${T.title}
++     pop {r4, r5, r6, lr}
++     b #${TOP_SET_TITLE}`, at), 16);
++  for (const at of menuItemWords(patch, MOVIE_MENU, MOVIE_ITEM)) {
++    if (patch.word(at.id) !== FRAME_RATE_LIST_ID || patch.word(at.draw) !== FRAME_RATE_LINE_DRAW) fail('unexpected-layout', 'movie menu > Frame Rate line is not the official one');
++    patch.setWord(at.draw, line, '4K movies: Frame Rate / Resolution, line of a submenu');
++    patch.setWord(at.id, FRAME_RATE_MENU_ID, '4K movies: Frame Rate / Resolution opens the submenu');
++  }
++}
+diff --git a/core/src/fw/gr4v120/aspect/movieexp.ts b/core/src/fw/gr4v120/aspect/movieexp.ts
+new file mode 100644
+--- /dev/null
++++ b/core/src/fw/gr4v120/aspect/movieexp.ts
+@@ -0,0 +1,246 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/**
++ * Exposure modes for movies (build option `movieExposure`, off unless asked for; GR IV 1.20 and
++ * 1.21): movies are recorded in the exposure mode of the mode dial (P, Av, Tv, M, the user modes),
++ * with the ISO setting of the still mode, instead of always in P with ISO auto; the movie screen
++ * shows shutter speed, aperture and ISO, and the dials and the ISO button work as for stills.
++ * There is no camera menu: it is in the firmware or not. Camera tests 089 to 089d (GR IV 1.21);
++ * the emulator checks are tools/movieexp/check.py.
++ *
++ * What the camera does. The exposure mode handed to the auto exposure is worked out in one place,
++ * the update of the shooting mode at 0x532599DC (1.20 addresses), from the mode dial:
++ *
++ *   base mode      0x53258D1C  dial position -> 0 P, 1 Tv, 2 Av, 5 M, 7 Sn, the user mode's own
++ *   virtual mode   0x53258DF0  still: the base mode (M with ISO auto -> 4; Sn by its settings)
++ *                              movie (settings +0xB76 == 1): always 0, P        <-- (1)
++ *   auto flags     0x53258E7C  Tv / Av / ISO chosen by the camera, from the virtual mode; for
++ *                              P, Tv, Av and Sn the ISO is auto only when the ISO setting is
++ *                              AUTO (+0xC3F), a check that is skipped for movies            <-- (2)
++ *   exposure mode  0x53258F58  from the flags: 0 P, 1 Tv, 2 Av, 3..7 the same with a fixed ISO
++ *                              and the two M; M with the shutter speed at B / T: 9 bulb, 10 time
++ *                              (0 when +0xB74 is 1 or 2)                                      <-- (3)
++ *
++ * The auto exposure itself (the library behind AeLiveViewExposure) is not limited to P for movies:
++ * it has program lines of its own for a movie in Tv, Av, M with ISO auto and M (0x5368FBB8: the
++ * lines 0x11, 6, 0x0A and 0x0B when the record's movie flag is set), and several places that treat
++ * "movie and M" apart. Only the three places above keep a movie in P.
++ *
++ * The changes:
++ *  (1) the movie branch of the virtual mode is not taken: a movie gets the virtual mode a still
++ *      would get;
++ *  (2) the ISO setting is looked at for movies too;
++ *  (3) for a movie, the bulb / time modes are never chosen (M with the shutter speed at B or T
++ *      records in P): the value read from +0xB74 for that decision reads 1 for a movie. It is used
++ *      for nothing else.
++ * With the mode dial at P and the ISO at AUTO the exposure is as in the official firmware.
++ *
++ * The screen and the ISO button (test 089b; in 089 the mode icon followed the dial, but no value
++ * was shown and the ISO button did nothing):
++ *  (4) The shooting screen's items are a table: 47 items, each with an "exists" byte per still /
++ *      movie (0x53DC08E0, two rows of 0x30) and a position per layout (0x53DBF9BC, four layouts of
++ *      0x30 x/y pairs: still, movie, and the two for the 1280x720 output). Shutter speed (item
++ *      30), aperture (31) and ISO (32) do not exist for movies and have no position in the movie
++ *      layouts. They now exist there, at the still layouts' positions (the bottom line is the
++ *      same in both: mode icon, then these three, exposure compensation, battery). Their update
++ *      functions (0x5318C218, 0x5318C410, 0x5318C654) do not look at still / movie themselves.
++ *  (5) The ISO function of the buttons (0x53396344: sends command 0x47, the ISO setting) returns
++ *      without doing anything for a movie; that branch is not taken any more.
++ *
++ * The dials and the values (test 089c; in 089b the three items stayed empty, the dials did nothing
++ * and the ISO setting opened by the ISO button showed no value; the exposure did follow the mode
++ * and the values set for stills):
++ *  (6) What a dial does comes from 0x533F7844: the function set for the effective shooting mode,
++ *      and for a movie (as the auto exposure sees it, 0x5377CAB8) everything but exposure
++ *      compensation is made "nothing". That is not done any more: the three dial handlers
++ *      (CaptureReadySwitchFunctionModel, 0x53392BC8 and its two siblings) then send the same
++ *      commands as for a still (0x39..0x40: Tv, Av, ISO, exposure compensation up / down), which
++ *      the shooting-mode controller carries out without a look at still / movie.
++ *  (7) CaptureReadyModel's texts for the shutter speed (0x533A8270), the aperture (0x533A8688),
++ *      the ISO icon (0x533A88FC) and the ISO value (0x533A89E0) take a "movie" argument and give
++ *      an empty text (no icon) when it is set. The shooting screen's three items and the
++ *      exposure-setting view (0x531BF1F8, the ISO setting among it) now pass 0: seven places, the
++ *      argument loaded right before each call.
++ *
++ * Bulb from the dial (test 089d; 089c works: values shown, dials and ISO setting as for stills, and
++ * the camera itself keeps the shutter speed within the movie's range, 1/60 at 60p, in Tv):
++ *  (8) In M with a fixed ISO, one step slower than the slowest shutter speed is B (then T, B+T):
++ *      the shutter-speed step (0x5325A958) sets the bulb state when the dial goes slower at the
++ *      limit, unless the ISO is auto (0x53258B68). For a movie that limit is the movie's, so one
++ *      step past 1/60 went to B, which (3) records in P. For a movie the step now answers the
++ *      "ISO auto" question with yes: the shutter speed stops at the limit as in Tv. A B / T set
++ *      for stills before changing to movie is still recorded in P, and the dial leads out of it.
++ */
++import { FirmwareError } from '../../types';
++import { assembleWords, branchTarget, branchWord } from './arm';
++import { ICON_CATALOG, Patch, expectWord } from './build';
++import { adr } from '../target';
++
++/** `ldrb r0, [r0, #0xb76]; bx lr`: 0 still, 1 movie. */
++const STILL_MOVIE_GETTER = adr(0x5329b310);
++/** `ldrb r0, [r0, #0xb74]; bx lr`: 1 or 2 keeps M out of bulb / time. */
++const BULB_GATE_GETTER = adr(0x5329b300);
++/** (1) `bne <movie: P>` after `bl STILL_MOVIE_GETTER; cmp r0, #0` in the virtual mode. */
++const VIRTUAL_MODE_MOVIE = adr(0x53258e14);
++/** (2) `ldmne sp, {r4-r9, fp, sp, pc}` (movie: return) after `bl STILL_MOVIE_GETTER; cmp r0, #0` in the auto flags. */
++const ISO_SETTING_MOVIE = adr(0x53258f3c);
++/** (3) `bl BULB_GATE_GETTER` in the update of the shooting mode (r0 = the settings). */
++const BULB_GATE_SITE = adr(0x53259aec);
++
++/** (4) "exists" bytes of the shooting screen's items: row 0 still, row 1 movie, 0x30 bytes each. */
++const SCREEN_ITEMS = adr(0x53dc08e0);
++/** (4) positions: four layouts (still, movie, still 1280x720, movie 1280x720) of 0x30 (x, y) pairs of words. */
++const SCREEN_POSITIONS = adr(0x53dbf9bc);
++const ITEM_ROW = 0x30;
++const LAYOUT = 0x180;
++/** Shutter speed, aperture, ISO: x in the two still layouts; y is 440 (720x480) and 680 (1280x720). */
++const EXPOSURE_ITEMS = [{ item: 30, x: 40 }, { item: 31, x: 200 }, { item: 32, x: 330 }] as const;
++const LAYOUT_Y = [440, 440, 680, 680] as const;
++/** (5) `beq <return>` after `bl STILL_MOVIE_GETTER; cmp r0, #1` in the buttons' ISO function. */
++const ISO_BUTTON_MOVIE = adr(0x53396400);
++
++/** The auto exposure's "movie" (`bl` target of the places below). */
++const AE_IS_MOVIE = adr(0x5377cab8);
++/** (6) `bne <keep>` after `bl AE_IS_MOVIE; cmp r0, #1`; then `cmp r4, #3; movne r4, #0`. */
++const DIAL_FUNCTION_MOVIE = adr(0x533f7888);
++/** (7) The texts' functions, and the places that load their "movie" argument (r2): [place, the word there, the call's distance, the function]. */
++const TEXT_TV = adr(0x533a8270);
++const TEXT_AV = adr(0x533a8688);
++const ICON_ISO = adr(0x533a88fc);
++const TEXT_ISO = adr(0x533a89e0);
++const MOV_R2_R5 = 0xe1a02005;
++const MOV_R2_R0 = 0xe1a02000;
++const LDRB_R2_R3_980 = 0xe5d32980;
++const LDRB_R2_IP_980 = 0xe5dc2980;
++const MOVIE_ARGUMENTS: readonly { at: number; word: number; call: number; link: boolean; to: number; what: string }[] = [
++  { at: adr(0x533a841c), word: MOV_R2_R5, call: 0x0c, link: false, to: TEXT_TV, what: 'shutter speed text' },
++  { at: adr(0x5318c344), word: LDRB_R2_R3_980, call: 0x0c, link: true, to: TEXT_AV, what: 'aperture text, shooting screen' },
++  { at: adr(0x531bd80c), word: MOV_R2_R0, call: 0x10, link: true, to: TEXT_AV, what: 'aperture text, exposure setting' },
++  { at: adr(0x5318c514), word: LDRB_R2_R3_980, call: 0x04, link: true, to: ICON_ISO, what: 'ISO icon, shooting screen' },
++  { at: adr(0x533a89c8), word: MOV_R2_R0, call: 0x14, link: false, to: ICON_ISO, what: 'ISO icon, exposure setting' },
++  { at: adr(0x5318c57c), word: LDRB_R2_IP_980, call: 0x18, link: true, to: TEXT_ISO, what: 'ISO text, shooting screen' },
++  { at: adr(0x533a8b10), word: MOV_R2_R5, call: 0x08, link: true, to: TEXT_ISO, what: 'ISO text, exposure setting' },
++];
++const MOV_R2_0 = 0xe3a02000;
++/** (8) `bl ISO_AUTO_NOW` in the shutter-speed step (r5 = the settings, r0 = the controller); then `cmp r0, #0; bne <plain step>`. */
++const BULB_STEP_SITE = adr(0x5325aa78);
++const ISO_AUTO_NOW = adr(0x53258b68);
++const BULB_STATE_SETTER = adr(0x532b63f0);
++
++const NOP = 0xe1a00000;
++const BX_LR = 0xe12fff1e;
++const CMP_R0_0 = 0xe3500000;
++
++function fail(message: string): never {
++  throw new FirmwareError('internal', `movie exposure: ${message}`);
++}
++
++export function installMovieExposure(patch: Patch): void {
++  expectWord(patch, STILL_MOVIE_GETTER, 0xe5d00b76);
++  expectWord(patch, STILL_MOVIE_GETTER + 4, BX_LR);
++  expectWord(patch, BULB_GATE_GETTER, 0xe5d00b74);
++  expectWord(patch, BULB_GATE_GETTER + 4, BX_LR);
++  // (1) mov r5, r0; bl getter; cmp r0, #0; bne movie
++  expectWord(patch, VIRTUAL_MODE_MOVIE - 8, branchWord(VIRTUAL_MODE_MOVIE - 8, STILL_MOVIE_GETTER, 14, true));
++  expectWord(patch, VIRTUAL_MODE_MOVIE - 4, CMP_R0_0);
++  expectWord(patch, VIRTUAL_MODE_MOVIE, 0x1a00000a);
++  expectWord(patch, VIRTUAL_MODE_MOVIE + 4, 0xe3540007); // cmp r4, #7: the still's path
++  // (2) mov r0, r8; bl getter; cmp r0, #0; ldmne (return)
++  expectWord(patch, ISO_SETTING_MOVIE - 8, branchWord(ISO_SETTING_MOVIE - 8, STILL_MOVIE_GETTER, 14, true));
++  expectWord(patch, ISO_SETTING_MOVIE - 4, CMP_R0_0);
++  expectWord(patch, ISO_SETTING_MOVIE, 0x189dabf0);
++  expectWord(patch, ISO_SETTING_MOVIE + 4, 0xe1a00008); // mov r0, r8: the still's path
++  // (3) mov r0, r5; bl getter; mov sb, r0
++  expectWord(patch, BULB_GATE_SITE - 4, 0xe1a00005);
++  expectWord(patch, BULB_GATE_SITE, branchWord(BULB_GATE_SITE, BULB_GATE_GETTER, 14, true));
++  expectWord(patch, BULB_GATE_SITE + 4, 0xe1a09000);
++
++  // As the getter (r0 = the settings; returns in r0), r1 also changes: the caller sets r1 anew
++  // before it is read (mov r1, r6 at +0x20), as after any call.
++  const gate = patch.append((at) => assembleWords(
++    `ldrb r1, [r0, #0xb76]
++     ldrb r0, [r0, #0xb74]
++     cmp r1, #1
++     moveq r0, #1
++     bx lr`, at), 4);
++  if (gate % 4 !== 0) fail('unaligned code');
++  patch.setWord(VIRTUAL_MODE_MOVIE, NOP, 'movie exposure: virtual shooting mode as for a still');
++  patch.setWord(ISO_SETTING_MOVIE, NOP, 'movie exposure: the ISO setting also for movies');
++  patch.setWord(BULB_GATE_SITE, branchWord(BULB_GATE_SITE, gate, 14, true), 'movie exposure: no bulb / time for a movie');
++
++  // (4) The items: rows as in the official tables (still: all three exist; movie: none of them,
++  // exposure compensation (33) and the battery (34) do), positions only in the still layouts.
++  const movieRow = SCREEN_ITEMS + ITEM_ROW;
++  expectWord(patch, SCREEN_ITEMS + 28, 0x01010101);
++  expectWord(patch, SCREEN_ITEMS + 32, 0x01010101);
++  expectWord(patch, movieRow + 28, 0x00000000);
++  expectWord(patch, movieRow + 32, 0x00010100);
++  for (const { item, x } of EXPOSURE_ITEMS) {
++    for (const layout of [0, 1, 2, 3]) {
++      const at = SCREEN_POSITIONS + layout * LAYOUT + item * 8;
++      const still = layout % 2 === 0;
++      expectWord(patch, at, still ? x : 0);
++      expectWord(patch, at + 4, still ? LAYOUT_Y[layout] : 0);
++    }
++  }
++  patch.setWord(movieRow + 28, 0x01010000, 'movie exposure: shutter speed and aperture on the movie screen');
++  patch.setWord(movieRow + 32, 0x00010101, 'movie exposure: ISO on the movie screen');
++  for (const { item, x } of EXPOSURE_ITEMS) {
++    for (const layout of [1, 3]) {
++      const at = SCREEN_POSITIONS + layout * LAYOUT + item * 8;
++      patch.setWord(at, x, 'movie exposure: position on the movie screen');
++      patch.setWord(at + 4, LAYOUT_Y[layout], 'movie exposure: position on the movie screen');
++    }
++  }
++
++  // (5) bl getter; cmp r0, #1; beq return; ...; mov r1, #0x47
++  expectWord(patch, ISO_BUTTON_MOVIE - 8, branchWord(ISO_BUTTON_MOVIE - 8, STILL_MOVIE_GETTER, 14, true));
++  expectWord(patch, ISO_BUTTON_MOVIE - 4, 0xe3500001);
++  expectWord(patch, ISO_BUTTON_MOVIE, 0x0affffdf);
++  expectWord(patch, ISO_BUTTON_MOVIE + 0x14, 0xe3a01047);
++  patch.setWord(ISO_BUTTON_MOVIE, NOP, 'movie exposure: the ISO button also for movies');
++
++  // (6) bl AE_IS_MOVIE; cmp r0, #1; bne keep; cmp r4, #3; movne r4, #0; keep: mov r0, r4
++  expectWord(patch, DIAL_FUNCTION_MOVIE - 8, branchWord(DIAL_FUNCTION_MOVIE - 8, AE_IS_MOVIE, 14, true));
++  expectWord(patch, DIAL_FUNCTION_MOVIE - 4, 0xe3500001);
++  expectWord(patch, DIAL_FUNCTION_MOVIE, 0x1a000001);
++  expectWord(patch, DIAL_FUNCTION_MOVIE + 4, 0xe3540003);
++  expectWord(patch, DIAL_FUNCTION_MOVIE + 8, 0x13a04000);
++  expectWord(patch, DIAL_FUNCTION_MOVIE + 12, 0xe1a00004);
++  patch.setWord(DIAL_FUNCTION_MOVIE, branchWord(DIAL_FUNCTION_MOVIE, DIAL_FUNCTION_MOVIE + 12), 'movie exposure: the dials as for a still');
++
++  // (7) The functions begin with the test of the argument (r2; the shutter speed's has it in r5 by then).
++  expectWord(patch, TEXT_TV + 0x40, 0xe3550000); // cmp r5, #0 (mov r5, r2 at +0x20)
++  expectWord(patch, TEXT_TV + 0x20, 0xe1a05002);
++  expectWord(patch, TEXT_AV, 0xe3520000); // cmp r2, #0
++  expectWord(patch, ICON_ISO + 8, 0xe1a04002); // mov r4, r2
++  expectWord(patch, ICON_ISO + 0x1c, 0xe3540000); // cmp r4, #0
++  expectWord(patch, TEXT_ISO + 4, 0xe3520000); // cmp r2, #0
++  for (const { at, word, call, link, to } of MOVIE_ARGUMENTS) {
++    expectWord(patch, at, word);
++    // The call itself, or an earlier addition's code in its place that goes on to the function (Sensor Shift's, at the
++    // shooting screen's ISO icon: `shift.ts`): a branch of the same kind into the appended area.
++    const w = patch.word(at + call);
++    if (!(w >>> 24 === (link ? 0xeb : 0xea) && branchTarget(at + call, w) >= ICON_CATALOG - 0x40)) expectWord(patch, at + call, branchWord(at + call, to, 14, link));
++  }
++  for (const { at, what } of MOVIE_ARGUMENTS) patch.setWord(at, MOV_R2_0, `movie exposure: ${what}`);
++
++  // (8) mov r0, r7; bl ISO_AUTO_NOW; cmp r0, #0; bne plain; mov r0, r5; mov r1, #1; bl BULB_STATE_SETTER
++  expectWord(patch, BULB_STEP_SITE - 4, 0xe1a00007);
++  expectWord(patch, BULB_STEP_SITE, branchWord(BULB_STEP_SITE, ISO_AUTO_NOW, 14, true));
++  expectWord(patch, BULB_STEP_SITE + 4, 0xe3500000);
++  expectWord(patch, BULB_STEP_SITE + 8, 0x1affffc7);
++  expectWord(patch, BULB_STEP_SITE + 12, 0xe1a00005);
++  expectWord(patch, BULB_STEP_SITE + 16, 0xe3a01001);
++  expectWord(patch, BULB_STEP_SITE + 20, branchWord(BULB_STEP_SITE + 20, BULB_STATE_SETTER, 14, true));
++  // r5 is the step's own copy of the settings (mov r5, r0 after the getter, kept to its end); r1 is set anew after the call.
++  const noBulb = patch.append((at) => [
++    ...assembleWords(
++      `ldrb r1, [r5, #0xb76]
++       cmp r1, #1
++       moveq r0, #1
++       bxeq lr`, at),
++    branchWord(at + 16, ISO_AUTO_NOW),
++  ], 4);
++  if (noBulb % 4 !== 0) fail('unaligned code');
++  patch.setWord(BULB_STEP_SITE, branchWord(BULB_STEP_SITE, noBulb, 14, true), 'movie exposure: the shutter speed stops at the movie limit in M');
++}
+diff --git a/core/src/fw/gr4v120/aspect/moviesr.ts b/core/src/fw/gr4v120/aspect/moviesr.ts
+new file mode 100644
+--- /dev/null
++++ b/core/src/fw/gr4v120/aspect/moviesr.ts
+@@ -0,0 +1,265 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/**
++ * Shake reduction for movies by sensor shift (GR IV firmware 1.20 and 1.21): the movie menu's
++ * Movie SR offers Off, Sensor Shift and Electronic instead of Off and On.
++ *
++ * What the firmware does. The shake reduction unit (a microcontroller of its own) moves the sensor
++ * when the main processor reports "shake reduction on" in the state it sends (field 0x13; built by
++ * 0x537BB254 from the still / movie mode and the two settings, sent again for the properties 0xF9,
++ * Shake Reduction, and 0x89, all settings). For a movie the firmware always reports off and, with
++ * Movie SR on, field 0x14: the unit's own movie parameters, for the electronic shake reduction that
++ * the main processor does by moving a window of the picture. For that window every movie is read
++ * with a margin of 5 % on each side (2064 x 1160, of which 1858 x 1044 are recorded as 1920 x 1080),
++ * also with Movie SR off: the flag is set for every movie live view by 0x5365C850 (when the live
++ * view is set up) and 0x5365AB38 (while it runs).
++ * Camera tests 090 to 093 (hand-patched test firmware) on a GR IV 1.21: with field 0x13 reported
++ * for a movie the unit stabilises as for stills, and without the margin the whole read-out is
++ * recorded.
++ *
++ * The setting. Movie SR itself (0x77B of the user settings; property 0xFA) stays what it is, the
++ * electronic shake reduction: 0 or 1, read by the camera's own code. "Sensor Shift" is bit 0 of
++ * MOVIE_BYTE (`movie4k.ts`), with Movie SR 0. So: Off = 0 / 0, Sensor Shift = 0 / bit, Electronic
++ * = 1 (the bit is cleared when it is chosen; Movie SR switched on another way, by an Fn button's
++ * Shake Reduction, counts as Electronic whatever the bit). A firmware without this sees Off or On.
++ *
++ * What is changed:
++ *  - Movie SR's list (record 62 of the list table): three rows, their set and "current";
++ *  - the icon of the setting on the menu line and on the shooting screen (the calls of the icon
++ *    function 0x53390E18 at 0x531B2C78 and 0x533A6AEC): the hand of the still shake reduction for
++ *    Sensor Shift, the hand with an "E" for Electronic;
++ *  - the state for the unit, a movie's field 0x13 (0x537BB2D8, `mov r2, #0`): on with Sensor
++ *    Shift, unless Sensor Shift's composition adjustment (`shift.ts`) holds the sensor;
++ *  - the state is sent again for property 0xFA too (0x536AF4DC), and at once when the list sets
++ *    the value;
++ *  - the margin: only with Electronic. As in test 093 it is decided when the live view is set up
++ *    (Movie SR as the camera side has it then) and kept for as long as that live view runs, in a
++ *    byte of the sbrk arena (`battery.ts`), so that window and margin cannot disagree: a change of
++ *    the setting moves the picture's edge at the next set-up (the shooting mode changed, or the
++ *    camera switched on).
++ * Off therefore records the whole read-out as well: about 11 % more of the scene than the
++ * official firmware's movies.
++ */
++import { FirmwareError } from '../../types';
++import { assembleWords, branchTarget, branchWord, movImmediate, movWord } from './arm';
++import { ICON_CATALOG, LANGUAGES, LOOKUP_BOUNDS, Patch, concat, expectWord, u16le, u32le, widenTextRows } from './build';
++import { LIST_SET_ITEM, TEXT_OFF, installTexts, listTable } from './datestamp-menu';
++import { MOVIE_BYTE, MOVIE_SENSOR_SR_BIT } from './movie4k';
++import type { ShiftCode } from './shift';
++import { adr } from '../target';
++
++export const MOVIESR_TEXT_IDS = { sensor: 1050, electronic: 1051 } as const;
++/** Identity 24 of the ratio icon numbers, never given out (as 734..739). */
++export const MOVIESR_ICON_ID = 740;
++/** "No margin in this live view": a byte of the sbrk arena (0x55839040..0x55839080, `battery.ts`), zero at start-up. */
++export const MOVIESR_LATCH = adr(0x55839044);
++
++const ICON_SR_OFF = 467;
++const ICON_SR_ON = 469;
++const SETTINGS = adr(0x550832a8);
++const MOVIE_SR_LIVE = 0x12c3; // Movie SR in effect (the setting kept is at 0x77f)
++const MOVIE_SR_SET = adr(0x533337ac); // (settings, value)
++const APP = adr(0x532406a4);
++const GET_SETTINGS = adr(0x53240c38);
++const ICON_OF = adr(0x53390e18); // (resources + 4, Movie SR, variant) -> icon 467 / 469
++const LINE_ICON_CALL = adr(0x531b2c78); // bl ICON_OF in the movie menu line's draw function (0x531B2C44)
++const SCREEN_ICON_TAIL = adr(0x533a6aec); // b ICON_OF: the shooting screen's icon, for a movie
++const SR_HOLDER = adr(0x550b9b20); // +4: SrMessage; its +0x60 the state
++const SR_STATE = adr(0x537bb254); // (state): build and send
++const SR_STATE_MOVIE = adr(0x537bb2d8); // mov r2, #0: field 0x13 for a movie
++const SR_PROPERTY = adr(0x536af4dc); // cmp r3, #0xf9 in the unit's property handler (0x536AF4BC)
++const MARGIN_SETUP = adr(0x5365c87c); // mov r3, #1 (then strb r3, [r5, #0x74c])
++const MARGIN_UPDATE = adr(0x5365ab70); // mov r3, #1 (then strb r3, [r6, #0x74c])
++const CAMERA_MOVIE_SR = adr(0x5377db4c); // (camera properties) -> Movie SR
++/** Movie SR's list record (62 of the list table) and its handlers. */
++const SR_RECORD = 62;
++const LIST_RECORD = 0x4c;
++const SR_TITLE = 415;
++const SR_COUNT = adr(0x531d0b4c);
++const SR_DRAW = adr(0x531d2c28);
++const SR_SET = adr(0x531d4e08);
++const SR_CURRENT = adr(0x531d67f0);
++
++/**
++ * In `LANGS` order (cs da en fi fr de el hu it ja ko nl pl pt ru zh-CN es sv th zh-TW tr). The two Chinese say "SR" as the
++ * camera's own texts do ("自动关闭SR"): the characters of 防抖 / 防震 are not in its texts of those languages.
++ * Where a language would use Sensor Shift's own name (`shift.ts`), the option says "mechanical" instead, so that the two
++ * are not taken for one thing (the comments here go on calling the option Sensor Shift).
++ */
++export const MOVIESR_SENSOR_NAMES: readonly string[] = [
++  'Mechanická', 'Mekanisk', 'Mechanical', 'Mekaaninen', 'Capteur', 'Sensor-Shift', 'Αισθητήρας', 'Érzékelő',
++  'Sensore', 'メカ式', '기계식', 'Mechanisch', 'Matryca', 'Sensor', 'Механическая', '传感器SR',
++  'Sensor', 'Mekanisk', 'เซ็นเซอร์', '感測器SR', 'Sensör',
++];
++export const MOVIESR_ELECTRONIC_NAMES: readonly string[] = [
++  'Elektronická', 'Elektronisk', 'Electronic', 'Elektroninen', 'Électronique', 'Elektronisch', 'Ηλεκτρονική', 'Elektronikus',
++  'Elettronica', '電子式', '전자식', 'Elektronisch', 'Elektroniczna', 'Eletrónica', 'Электронная', '电子SR',
++  'Electrónica', 'Elektronisk', 'อิเล็กทรอนิกส์', '電子SR', 'Elektronik',
++];
++
++function fail(code: string, message: string): never {
++  throw new FirmwareError(code, message);
++}
++const lo = (v: number): number => v & 0xffff;
++const hi = (v: number): number => v >>> 16;
++
++/** The icon of Electronic: the camera's shake reduction hand (40 x 40 RGBA) with an "E" at its lower right. */
++export function drawElectronicIcon(hand: Uint8Array): Uint8Array {
++  if (hand.length !== 40 * 40 * 4) fail('internal', 'movie shake reduction: icon size');
++  const px = hand.slice();
++  const E = ['######', '######', '##....', '#####.', '#####.', '##....', '##....', '######', '######'];
++  const X = 33, Y = 30;
++  const on = (x: number, y: number): boolean => y >= 0 && y < E.length && x >= 0 && x < 6 && E[y][x] === '#';
++  for (let y = -1; y <= E.length; y++) {
++    for (let x = -1; x <= 6; x++) {
++      let near = false;
++      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) near = near || on(x + dx, y + dy);
++      if (!near || X + x > 39 || Y + y > 39) continue;
++      px.set(on(x, y) ? [255, 255, 255, 255] : [0, 0, 0, 255], ((Y + y) * 40 + X + x) * 4);
++    }
++  }
++  return px;
++}
++
++/** The texts and the icon (before the menus use them). Returns ICONBIN with the icon appended. */
++export function installMovieSrAssets(patch: Patch, iconbin: Uint8Array): Uint8Array {
++  if (MOVIESR_SENSOR_NAMES.length !== LANGUAGES || MOVIESR_ELECTRONIC_NAMES.length !== LANGUAGES) fail('internal', 'movie shake reduction: texts');
++  widenTextRows(patch, MOVIESR_TEXT_IDS.electronic);
++  installTexts(patch, [{ id: MOVIESR_TEXT_IDS.sensor, names: MOVIESR_SENSOR_NAMES }, { id: MOVIESR_TEXT_IDS.electronic, names: MOVIESR_ELECTRONIC_NAMES }]);
++  // The camera's icon: {u16 kind = 1, width, height, flags = 0, u32 offset in 4-byte units}.
++  const d = new DataView(patch.readMapped(patch.word(ICON_CATALOG + ICON_SR_ON * 4), 12).buffer);
++  if (d.getUint16(0, true) !== 1 || d.getUint16(2, true) !== 40 || d.getUint16(4, true) !== 40 || d.getUint16(6, true) !== 0) fail('unexpected-layout', 'shake reduction icon is not as expected');
++  const at = d.getUint32(8, true) * 4;
++  if (at + 6400 > iconbin.length) fail('unexpected-layout', 'shake reduction icon is not in ICONBIN');
++  if (patch.word(ICON_CATALOG + MOVIESR_ICON_ID * 4) !== 0) fail('unexpected-layout', 'icon number already in use');
++  const pad = (4 - (iconbin.length % 4)) % 4;
++  const offset = iconbin.length + pad;
++  const descriptor = patch.append(concat([u16le([1, 40, 40, 0]), u32le([offset / 4])]), 16);
++  patch.write(ICON_CATALOG + MOVIESR_ICON_ID * 4, u32le([descriptor]));
++  for (const [site, register] of LOOKUP_BOUNDS) {
++    if ((patch.word(site) & 0xfff0f000) >>> 0 !== (0xe3000000 | (register << 12)) >>> 0) fail('unexpected-layout', 'icon bound is not a MOVW');
++    patch.setWord(site, movWord(register, Math.max(MOVIESR_ICON_ID, movImmediate(patch.word(site)))), 'icon upper bound');
++  }
++  return concat([iconbin, new Uint8Array(pad), drawElectronicIcon(iconbin.slice(at, at + 6400))]);
++}
++
++/**
++ * The list, the icons, the state for the unit and the margin. `shift`: Sensor Shift's module when
++ * it is in the build (its composition adjustment holds the sensor: no shake reduction then).
++ * Before any addition that copies the list table is fine, and after: the record is changed where
++ * the table is.
++ */
++export function installMovieSr(patch: Patch, shift: ShiftCode | null): void {
++  const BYTE = `movw r3, #${lo(MOVIE_BYTE)}; movt r3, #${hi(MOVIE_BYTE)}`;
++  const LIVE = `movw ip, #${lo(SETTINGS + MOVIE_SR_LIVE)}; movt ip, #${hi(SETTINGS + MOVIE_SR_LIVE)}; ldrb ip, [ip]`;
++  // --- What this relies on.
++  expectWord(patch, ICON_OF, 0xe3510000); // cmp r1, #0
++  expectWord(patch, LINE_ICON_CALL, branchWord(LINE_ICON_CALL, ICON_OF, 14, true));
++  expectWord(patch, LINE_ICON_CALL - 8, 0xe3a02000); // mov r2, #0 (variant)
++  expectWord(patch, SCREEN_ICON_TAIL, branchWord(SCREEN_ICON_TAIL, ICON_OF));
++  expectWord(patch, MOVIE_SR_SET, 0xe1a0c00d);
++  expectWord(patch, SR_STATE, 0xe1a0c00d);
++  expectWord(patch, SR_STATE_MOVIE - 8, 0xe1a00004); // mov r0, r4
++  expectWord(patch, SR_STATE_MOVIE - 4, 0xe3a01013); // mov r1, #0x13
++  expectWord(patch, SR_STATE_MOVIE, 0xe3a02000); // mov r2, #0
++  expectWord(patch, SR_STATE_MOVIE + 8, 0xe3560000); // cmp r6, #0 (Movie SR: field 0x14)
++  expectWord(patch, SR_PROPERTY, 0xe35300f9); // cmp r3, #0xf9
++  expectWord(patch, SR_PROPERTY + 4, 0x0a000018); // beq: the state built and sent
++  expectWord(patch, SR_PROPERTY + 8, 0xe35300fb); // cmp r3, #0xfb
++  for (const [site, register] of [[MARGIN_SETUP, 5], [MARGIN_UPDATE, 6]] as const) {
++    expectWord(patch, site, 0xe3a03001); // mov r3, #1
++    expectWord(patch, site + 4, (0xe5c0374c | (register << 16)) >>> 0); // strb r3, [rX, #0x74c]
++  }
++  expectWord(patch, CAMERA_MOVIE_SR + 4, 0xe1a0c00d); // mov ip, sp
++  const record = listTable(patch) + SR_RECORD * LIST_RECORD;
++  const rv = new DataView(patch.read(record, LIST_RECORD).buffer);
++  if (rv.getUint32(0, true) !== 0x00010000 || rv.getUint16(4, true) !== SR_TITLE || rv.getUint32(0x0c, true) !== SR_COUNT || rv.getUint32(0x14, true) !== SR_DRAW || rv.getUint32(0x24, true) !== SR_SET
++    || rv.getUint32(0x2c, true) !== SR_CURRENT || [0x10, 0x18, 0x1c, 0x20, 0x28, 0x30, 0x34, 0x38, 0x3c, 0x40, 0x44, 0x48].some((off) => rv.getUint32(off, true) !== 0)) fail('unexpected-layout', 'Movie SR list record is not as expected');
++  expectWord(patch, SR_SET + 0x2c, branchWord(SR_SET + 0x2c, MOVIE_SR_SET));
++
++  // --- The list: Off, Sensor Shift, Electronic (this = r0; draw: item = r1, row = r2; set, current: row = r1).
++  const count = patch.append((at) => assembleWords('mov r0, #3; bx lr', at), 16);
++  const draw = patch.append((at) => assembleWords(
++    `cmp r2, #2; bxhi lr
++     mov r0, r1
++     movw r1, #${ICON_SR_OFF}; movw r3, #${TEXT_OFF}
++     cmp r2, #1
++     movweq r1, #${ICON_SR_ON}; movweq r3, #${MOVIESR_TEXT_IDS.sensor}
++     movwhi r1, #${MOVIESR_ICON_ID}; movwhi r3, #${MOVIESR_TEXT_IDS.electronic}
++     mov r2, r3
++     b #${LIST_SET_ITEM}`, at), 16);
++  // set: the bit, then Movie SR through the camera's own setter (its property goes to the camera side), then the state for the unit.
++  const set = patch.append((at) => assembleWords(
++    `cmp r1, #2; bxhi lr
++     push {r4, lr}
++     mov r4, r1
++     ${BYTE}; ldrb ip, [r3]; bic ip, ip, #${MOVIE_SENSOR_SR_BIT}
++     cmp r4, #1; orreq ip, ip, #${MOVIE_SENSOR_SR_BIT}
++     strb ip, [r3]
++     bl #${APP}; bl #${GET_SETTINGS}
++     cmp r4, #2; moveq r1, #1; movne r1, #0
++     bl #${MOVIE_SR_SET}
++     movw r0, #${lo(SR_HOLDER + 4)}; movt r0, #${hi(SR_HOLDER + 4)}; ldr r0, [r0]
++     cmp r0, #0; ldrne r0, [r0, #0x60]; cmpne r0, #0
++     pop {r4, lr}
++     bxeq lr
++     b #${SR_STATE}`, at), 16);
++  // current: 2 with Movie SR on, else 1 with the bit, else 0.
++  const MODE = `${LIVE}; cmp ip, #0; movne r0, #2; bne have
++     ${BYTE}; ldrb r0, [r3]; and r0, r0, #${MOVIE_SENSOR_SR_BIT}
++     have:`;
++  const current = patch.append((at) => assembleWords(
++    `${MODE} cmp r0, r1; moveq r0, #1; movne r0, #0; bx lr`, at), 16);
++  patch.setWord(record + 0x0c, count, 'movie shake reduction: three rows');
++  patch.setWord(record + 0x14, draw, 'movie shake reduction: Off, Sensor Shift, Electronic');
++  patch.setWord(record + 0x24, set, 'movie shake reduction: the row chosen');
++  patch.setWord(record + 0x2c, current, 'movie shake reduction: the row current');
++
++  // --- The icon of the setting: (resources + 4, Movie SR, variant).
++  const icon = patch.append((at) => assembleWords(
++    `cmp r2, #0; bne native
++     cmp r1, #0; movwne r0, #${MOVIESR_ICON_ID}; bxne lr
++     ${BYTE}; ldrb r3, [r3]; tst r3, #${MOVIE_SENSOR_SR_BIT}
++     movwne r0, #${ICON_SR_ON}; bxne lr
++     native: b #${ICON_OF}`, at), 16);
++  patch.setWord(LINE_ICON_CALL, branchWord(LINE_ICON_CALL, icon, 14, true), 'movie shake reduction: the menu line\'s icon');
++  patch.setWord(SCREEN_ICON_TAIL, branchWord(SCREEN_ICON_TAIL, icon), 'movie shake reduction: the shooting screen\'s icon');
++
++  // --- The state for the unit, a movie: field 0x13 = Sensor Shift chosen, Movie SR off, the sensor not held. r0, r1 kept.
++  // Movie SR as the function itself has it (r6, from the camera side, what field 0x14 is made of just after): the two
++  // fields then always belong to the same value, also while a change of the setting is still on its way to the camera side.
++  const held = shift ? `cmp r2, #0; bxeq lr
++     push {r0, r1, r2, r3, ip, lr}
++     mov r1, #4; ${shift.loadCtx}; bl #${shift.code}
++     cmp r0, #0
++     pop {r0, r1, r2, r3, ip, lr}
++     movne r2, #0` : '';
++  const state = patch.append((at) => assembleWords(
++    `${BYTE}; ldrb r2, [r3]; and r2, r2, #${MOVIE_SENSOR_SR_BIT}
++     cmp r6, #0; movne r2, #0
++     ${held}
++     bx lr`, at), 16);
++  patch.setWord(SR_STATE_MOVIE, branchWord(SR_STATE_MOVIE, state, 14, true), 'movie shake reduction: the sensor shift on for a movie');
++  // --- The state is sent again when Movie SR changes (property 0xFA), as for Shake Reduction (0xF9).
++  const again = branchTarget(SR_PROPERTY + 4, patch.word(SR_PROPERTY + 4));
++  const property = patch.append((at) => assembleWords(
++    `cmp r3, #0xf9; cmpne r3, #0xfa
++     beq #${again}
++     b #${SR_PROPERTY + 8}`, at), 16);
++  patch.setWord(SR_PROPERTY, branchWord(SR_PROPERTY, property), 'movie shake reduction: the state sent again when Movie SR changes');
++
++  // --- The margin: with Electronic only; decided when the live view is set up (r4 = the live view), kept while it runs.
++  const LATCH = `movw r3, #${lo(MOVIESR_LATCH)}; movt r3, #${hi(MOVIESR_LATCH)}`;
++  const setup = patch.append((at) => assembleWords(
++    `push {r0, r1, r2, r3, ip, lr}
++     ldr r0, [r4, #0x3bc]; bl #${CAMERA_MOVIE_SR}
++     cmp r0, #0; moveq r1, #1; movne r1, #0
++     ${LATCH}; strb r1, [r3]
++     eor r1, r1, #1; str r1, [sp, #0xc]
++     pop {r0, r1, r2, r3, ip, pc}`, at), 16);
++  const update = patch.append((at) => assembleWords(
++    `${LATCH}; ldrb r3, [r3]
++     eor r3, r3, #1
++     bx lr`, at), 16);
++  patch.setWord(MARGIN_SETUP, branchWord(MARGIN_SETUP, setup, 14, true), 'movie shake reduction: the margin with Electronic only');
++  patch.setWord(MARGIN_UPDATE, branchWord(MARGIN_UPDATE, update, 14, true), 'movie shake reduction: the margin as decided at set-up');
++}
 diff --git a/core/src/fw/gr4v120/aspect/package.ts b/core/src/fw/gr4v120/aspect/package.ts
 --- a/core/src/fw/gr4v120/aspect/package.ts
 +++ b/core/src/fw/gr4v120/aspect/package.ts
@@ -3477,17 +4957,26 @@ diff --git a/core/src/fw/gr4v120/aspect/package.ts b/core/src/fw/gr4v120/aspect/
   * A build without them reads as before; earlier programs do not take a record with
   * this byte set.
   *
-@@ -83,6 +85,9 @@
+@@ -83,15 +85,9 @@
  const FEATURE2_ADJ_SLOTS = 2;
  /** A following byte selects 1 = bright or 2 = balanced. */
  const FEATURE2_BRIGHT_AUTO = 4;
+-/**
+- * Fourth feature byte, bit 4: the HLG photo mode (`hlg.ts`; this fork). The third byte has no bit left to announce
+- * the fourth: it follows the third byte (and the grid's two bytes) only when it is not zero, which the zero padding
+- * of the record can never be; a third byte of zero is written, and accepted, only in front of it (as on 1.20).
+- * @decision DEC-HLG-MARK-003 (fork): HLG was bit 7 of the third byte since 0.8.16 of the fork; upstream 0.9.0
+- * took that bit for the movie exposure modes (1.20 / 1.21), so HLG moved to bit 4 of the fourth byte (the same
+- * on 1.11, 1.20 and 1.21). A file the fork wrote before reads back as the movie exposure modes, not HLG.
+- */
+-const FEATURE4_HLG_PHOTO = 16;
 +/** Second feature byte (0.8.11): bit 3 exposure preview, bit 4 soft focus's still-menu line (`exposure.ts`). */
 +const FEATURE2_EXPOSURE_PREVIEW = 8;
 +const FEATURE2_SOFT_FOCUS_MENU = 16;
- /**
-  * Third feature byte: bit 7, the HLG photo mode (`hlg.ts`; this fork).
-  * @decision DEC-HLG-MARK-002 (fork): 0.8.12 to 0.8.15 of the fork marked HLG with bit 5 of the second byte;
-@@ -103,6 +108,14 @@
+ /** Second feature byte: bit 5, the learned Auto for Shadow Correction (`shadowml.ts`). */
+ const FEATURE2_SHADOW_LEARN = 32;
+ /** Second feature byte: bit 7, a third feature byte follows (after the bytes of bits 1 and 2). */
+@@ -104,6 +100,33 @@
  const FEATURE3_BATTERY = 4;
  /** Third feature byte: bit 3, custom grid lines (`grid.ts`); two bytes follow, the 3x3 and the 4x4 style's lines. */
  const FEATURE3_CUSTOM_GRID = 8;
@@ -3499,27 +4988,48 @@ diff --git a/core/src/fw/gr4v120/aspect/package.ts b/core/src/fw/gr4v120/aspect/
 +const FEATURE3_VIDEO_AF = 32;
 +/** Third feature byte: bit 6, the learned auto white balance (`awb2.ts`). */
 +const FEATURE3_AWB_LEARN = 64;
++/** Third feature byte: bit 7, exposure modes for movies (`movieexp.ts`). */
++const FEATURE3_MOVIE_EXPOSURE = 128;
++/**
++ * Fourth feature byte. The third byte has no bit left to announce it: it follows the third byte (and the grid's two
++ * bytes) only when it is not zero, which the zero padding of the record can never be; a third byte of zero is
++ * written, and accepted, only in front of it. Bit 0, the front lamp kept lit (`lamp.ts`).
++ */
++const FEATURE4_CONSTANT_LIGHT = 1;
++/** Fourth feature byte: bit 1 Sensor Shift (`shift.ts`), bit 2 4K movies (`movie4k.ts`), bit 3 the sensor-shift shake reduction for movies (`moviesr.ts`). */
++const FEATURE4_SENSOR_SHIFT = 2;
++const FEATURE4_MOVIE_4K = 4;
++const FEATURE4_MOVIE_SR = 8;
++/**
++ * Fourth feature byte: bit 4, the HLG photo mode (`hlg.ts`; this fork).
++ * @decision DEC-HLG-MARK-003 (fork): HLG was bit 7 of the third byte since 0.8.16 of the fork; upstream 0.9.0
++ * took that bit for the movie exposure modes, so HLG moved to bit 4 of the fourth byte (the same on 1.11, 1.20
++ * and 1.21). A file the fork wrote before reads back as the movie exposure modes, not HLG.
++ */
++const FEATURE4_HLG_PHOTO = 16;
  
  /**
   * `u8 count, then per ratio: u8 length + ratio text, u8 length + name`, (revision 3: `u8 features`),
-@@ -134,12 +147,12 @@
+@@ -135,13 +158,13 @@
    if (tone !== 'dark' && tone !== 'light') fail('internal', 'unknown shade tone');
    if (tone !== 'dark' && !features.ratioShade) fail('internal', 'a shade tone needs the live-view shade');
    if (features.ratioShade && specs.length === 0) fail('internal', 'the live-view shade needs an added ratio');
--  const f3 = (features.ratioShade ? FEATURE3_RATIO_SHADE : 0) | (tone === 'light' ? FEATURE3_SHADE_LIGHT : 0) | (features.batteryPercent ? FEATURE3_BATTERY : 0) | (features.customGrid ? FEATURE3_CUSTOM_GRID : 0) | (features.hlgPhoto ? FEATURE3_HLG_PHOTO : 0);
--  if (features.brightAuto || features.hdrGainMap || (features.adjSlots && features.adjSlots > 5) || features.shadowLearn || f3) {
--    if (revision < 3) fail('internal', 'the HDR gain map, ADJ slots, the learned shadow correction and the third feature byte need revision 3');
-+  const f3 = (features.ratioShade ? FEATURE3_RATIO_SHADE : 0) | (tone === 'light' ? FEATURE3_SHADE_LIGHT : 0) | (features.batteryPercent ? FEATURE3_BATTERY : 0) | (features.customGrid ? FEATURE3_CUSTOM_GRID : 0) | (features.flashTtl ? FEATURE3_FLASH_TTL : 0) | (features.videoAf ? FEATURE3_VIDEO_AF : 0) | (features.awbLearn ? FEATURE3_AWB_LEARN : 0) | (features.hlgPhoto ? FEATURE3_HLG_PHOTO : 0);
-+  if (features.brightAuto || features.hdrGainMap || (features.adjSlots && features.adjSlots > 5) || features.exposurePreview || features.softFocusMenu || features.shadowLearn || features.filmGrain || f3) {
-+    if (revision < 3) fail('internal', 'the HDR gain map, ADJ slots, bright Auto, exposure preview, the soft focus line, the learned shadow correction, the film grain and the third feature byte need revision 3');
+-  const f3 = (features.ratioShade ? FEATURE3_RATIO_SHADE : 0) | (tone === 'light' ? FEATURE3_SHADE_LIGHT : 0) | (features.batteryPercent ? FEATURE3_BATTERY : 0) | (features.customGrid ? FEATURE3_CUSTOM_GRID : 0);
+-  const f4 = features.hlgPhoto ? FEATURE4_HLG_PHOTO : 0;
+-  if (features.brightAuto || features.hdrGainMap || (features.adjSlots && features.adjSlots > 5) || features.shadowLearn || f3 || f4) {
+-    if (revision < 3) fail('internal', 'the HDR gain map, ADJ slots, the learned shadow correction and the third and fourth feature bytes need revision 3');
++  const f3 = (features.ratioShade ? FEATURE3_RATIO_SHADE : 0) | (tone === 'light' ? FEATURE3_SHADE_LIGHT : 0) | (features.batteryPercent ? FEATURE3_BATTERY : 0) | (features.customGrid ? FEATURE3_CUSTOM_GRID : 0) | (features.flashTtl ? FEATURE3_FLASH_TTL : 0) | (features.videoAf ? FEATURE3_VIDEO_AF : 0) | (features.awbLearn ? FEATURE3_AWB_LEARN : 0) | (features.movieExposure ? FEATURE3_MOVIE_EXPOSURE : 0);
++  const f4 = (features.constantLight ? FEATURE4_CONSTANT_LIGHT : 0) | (features.sensorShift ? FEATURE4_SENSOR_SHIFT : 0) | (features.movie4k ? FEATURE4_MOVIE_4K : 0) | (features.movieSr ? FEATURE4_MOVIE_SR : 0) | (features.hlgPhoto ? FEATURE4_HLG_PHOTO : 0);
++  if (features.brightAuto || features.hdrGainMap || (features.adjSlots && features.adjSlots > 5) || features.exposurePreview || features.softFocusMenu || features.shadowLearn || features.filmGrain || f3 || f4) {
++    if (revision < 3) fail('internal', 'the HDR gain map, ADJ slots, bright Auto, exposure preview, the soft focus line, the learned shadow correction, the film grain and the third and fourth feature bytes need revision 3');
      const adj = features.adjSlots && features.adjSlots > 5 ? features.adjSlots : 0;
      if (adj && !(Number.isInteger(adj) && adj <= ADJ_SLOTS_MAX)) fail('internal', 'ADJ slots cannot be recorded');
--    bytes.push((features.hdrGainMap ? FEATURE2_HDR_GAIN_MAP : 0) | (adj ? FEATURE2_ADJ_SLOTS : 0) | (features.brightAuto ? FEATURE2_BRIGHT_AUTO : 0) | (features.shadowLearn ? FEATURE2_SHADOW_LEARN : 0) | (f3 ? FEATURE2_MORE : 0));
-+    bytes.push((features.hdrGainMap ? FEATURE2_HDR_GAIN_MAP : 0) | (adj ? FEATURE2_ADJ_SLOTS : 0) | (features.brightAuto ? FEATURE2_BRIGHT_AUTO : 0) | (features.exposurePreview ? FEATURE2_EXPOSURE_PREVIEW : 0) | (features.softFocusMenu ? FEATURE2_SOFT_FOCUS_MENU : 0) | (features.shadowLearn ? FEATURE2_SHADOW_LEARN : 0) | (features.filmGrain ? FEATURE2_FILM_GRAIN : 0) | (f3 ? FEATURE2_MORE : 0));
+-    bytes.push((features.hdrGainMap ? FEATURE2_HDR_GAIN_MAP : 0) | (adj ? FEATURE2_ADJ_SLOTS : 0) | (features.brightAuto ? FEATURE2_BRIGHT_AUTO : 0) | (features.shadowLearn ? FEATURE2_SHADOW_LEARN : 0) | (f3 || f4 ? FEATURE2_MORE : 0));
++    bytes.push((features.hdrGainMap ? FEATURE2_HDR_GAIN_MAP : 0) | (adj ? FEATURE2_ADJ_SLOTS : 0) | (features.brightAuto ? FEATURE2_BRIGHT_AUTO : 0) | (features.exposurePreview ? FEATURE2_EXPOSURE_PREVIEW : 0) | (features.softFocusMenu ? FEATURE2_SOFT_FOCUS_MENU : 0) | (features.shadowLearn ? FEATURE2_SHADOW_LEARN : 0) | (features.filmGrain ? FEATURE2_FILM_GRAIN : 0) | (f3 || f4 ? FEATURE2_MORE : 0));
      if (adj) bytes.push(adj);
      if (features.brightAuto) bytes.push(features.brightAuto === 'balanced' ? 2 : 1);
-     if (f3) bytes.push(f3);
-@@ -234,8 +247,11 @@
+     if (f3 || f4) bytes.push(f3);
+@@ -237,8 +260,11 @@
      if (f & FEATURE_DIRECT_FLASH) features.directFlash = true;
      if (p < rec.length) {
        const f2 = rec[p++];
@@ -3532,28 +5042,583 @@ diff --git a/core/src/fw/gr4v120/aspect/package.ts b/core/src/fw/gr4v120/aspect/
        if (f2 & FEATURE2_ADJ_SLOTS) {
          if (p >= rec.length) return null;
          const n = rec[p++];
-@@ -252,8 +268,11 @@
+@@ -255,7 +281,11 @@
        if (f2 & FEATURE2_MORE) {
          if (p >= rec.length) return null;
          const f3 = rec[p++];
--        if (f3 === 0 || (f3 & ~(FEATURE3_RATIO_SHADE | FEATURE3_SHADE_LIGHT | FEATURE3_BATTERY | FEATURE3_CUSTOM_GRID | FEATURE3_HLG_PHOTO)) !== 0) return null;
-+        if (f3 === 0 || (f3 & ~(FEATURE3_RATIO_SHADE | FEATURE3_SHADE_LIGHT | FEATURE3_BATTERY | FEATURE3_CUSTOM_GRID | FEATURE3_FLASH_TTL | FEATURE3_VIDEO_AF | FEATURE3_AWB_LEARN | FEATURE3_HLG_PHOTO)) !== 0) return null;
-         if (f3 & FEATURE3_HLG_PHOTO) features.hlgPhoto = true;
+-        if ((f3 & ~(FEATURE3_RATIO_SHADE | FEATURE3_SHADE_LIGHT | FEATURE3_BATTERY | FEATURE3_CUSTOM_GRID)) !== 0) return null;
++        if ((f3 & ~(FEATURE3_RATIO_SHADE | FEATURE3_SHADE_LIGHT | FEATURE3_BATTERY | FEATURE3_CUSTOM_GRID | FEATURE3_FLASH_TTL | FEATURE3_VIDEO_AF | FEATURE3_AWB_LEARN | FEATURE3_MOVIE_EXPOSURE)) !== 0) return null;
 +        if (f3 & FEATURE3_FLASH_TTL) features.flashTtl = true;
 +        if (f3 & FEATURE3_VIDEO_AF) features.videoAf = true;
 +        if (f3 & FEATURE3_AWB_LEARN) features.awbLearn = true;
++        if (f3 & FEATURE3_MOVIE_EXPOSURE) features.movieExposure = true;
          if (f3 & FEATURE3_RATIO_SHADE) {
            if (count === 0) return null;
            features.ratioShade = true;
-@@ -268,7 +287,7 @@
-         }
+@@ -271,12 +301,16 @@
+         const f4 = p < rec.length ? rec[p] : 0;
+         if (f4 !== 0) {
+           p++;
+-          if ((f4 & ~FEATURE4_HLG_PHOTO) !== 0) return null;
+-          features.hlgPhoto = true;
++          if ((f4 & ~(FEATURE4_CONSTANT_LIGHT | FEATURE4_SENSOR_SHIFT | FEATURE4_MOVIE_4K | FEATURE4_MOVIE_SR | FEATURE4_HLG_PHOTO)) !== 0) return null;
++          if (f4 & FEATURE4_CONSTANT_LIGHT) features.constantLight = true;
++          if (f4 & FEATURE4_SENSOR_SHIFT) features.sensorShift = true;
++          if (f4 & FEATURE4_MOVIE_4K) features.movie4k = true;
++          if (f4 & FEATURE4_MOVIE_SR) features.movieSr = true;
++          if (f4 & FEATURE4_HLG_PHOTO) features.hlgPhoto = true;
+         } else if (f3 === 0) return null;
        }
      }
 -    if (count === 0 && !features.adjSoftFocus && !features.dateStamp && !features.monoUnlock && !features.guard && extraSlots === 0 && shutdownPictures === 0 && !features.lookLayout && !features.directFlash && !features.hdrGainMap && !features.hlgPhoto && !features.adjSlots && !features.brightAuto && !features.batteryPercent && !features.customGrid && !features.shadowLearn) return null;
-+    if (count === 0 && !features.adjSoftFocus && !features.dateStamp && !features.monoUnlock && !features.guard && extraSlots === 0 && shutdownPictures === 0 && !features.lookLayout && !features.directFlash && !features.hdrGainMap && !features.hlgPhoto && !features.adjSlots && !features.exposurePreview && !features.brightAuto && !features.batteryPercent && !features.customGrid && !features.shadowLearn && !features.filmGrain && !features.flashTtl && !features.videoAf && !features.awbLearn) return null;
++    if (count === 0 && !features.adjSoftFocus && !features.dateStamp && !features.monoUnlock && !features.guard && extraSlots === 0 && shutdownPictures === 0 && !features.lookLayout && !features.directFlash && !features.hdrGainMap && !features.adjSlots && !features.exposurePreview && !features.brightAuto && !features.batteryPercent && !features.customGrid && !features.shadowLearn && !features.filmGrain && !features.flashTtl && !features.videoAf && !features.awbLearn && !features.movieExposure && !features.sensorShift && !features.movie4k && !features.movieSr && !features.constantLight && !features.hlgPhoto) return null;
    }
    for (; p < rec.length; p++) if (rec[p] !== 0) return null;
    return { specs: out, features, extraSlots, shutdownPictures };
+diff --git a/core/src/fw/gr4v120/aspect/shift.ts b/core/src/fw/gr4v120/aspect/shift.ts
+new file mode 100644
+--- /dev/null
++++ b/core/src/fw/gr4v120/aspect/shift.ts
+@@ -0,0 +1,539 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/**
++ * Sensor Shift (GR IV firmware 1.20 and 1.21): the picture moved and turned by hand with the shake
++ * reduction unit, as the "Composition Adjustment" of Pentax bodies.
++ *
++ * While the adjustment is on, the shooting screen shows X, Y and R in place of shutter speed,
++ * aperture and ISO, and a key guide "DISP  Center"; the four-way controller shifts the sensor (28
++ * steps of about 0.04 mm each way), the dials turn it (18 steps of 0.125 degrees each way; the more
++ * it is turned, the less it can be shifted), DISP brings it back to the centre, OK or Fn ends the
++ * adjustment and leaves the sensor where it is. Shake reduction is off as long as the adjustment is
++ * on or the sensor is away from the centre. Nothing is kept when the camera is switched off.
++ *
++ * Where it is started:
++ *  - an ADJ lever function (the next number after the camera's 0x14, exposure preview's and
++ *    Constant Light's), offered by ADJ Mode Setting, with the values Off / Adjust: carried out when
++ *    the lever's strip closes on it;
++ *  - an Fn function, 0x2E, offered for the Fn button (a row of its own at the end of that
++ *    button's list: the other three buttons that share the list move the sensor in the adjustment)
++ *    and for the Movie button, pressed and held: a press, or a hold, starts and ends the adjustment.
++ *
++ * The camera-side logic is one position-independent module, tools/shift/shift.c (compiled into
++ * `shift-code.ts`); it gets every address in a context written here. Camera tests 107 to 111 on a
++ * GR IV HDF 1.21.
++ *
++ * How the sensor is moved. The shake reduction unit (a microcontroller of its own, the same program
++ * in 1.20 and 1.21 but for its date) writes its three actuator offsets, the auto horizon
++ * correction's, through three pointers (0x200009F8..) into the position registers 0x40114400,
++ * 0x40114430 and 0x40114460. The module turns the pointers onto the unit's own buffer
++ * (0x2000ADF4..) with the unit's "write a word" command (0x6B; 0x536B2180 sends it), so that the
++ * unit no longer touches the registers, and writes the registers itself; back at the centre it
++ * restores the pointers. Measured: 256 units are about 0.14 mm; actuator 0 moves the picture
++ * sideways, 1 and 2 together move it up and down and, against each other, turn it.
++ *
++ * What is changed in the camera's code:
++ *  - SwitchModel::Notify (0x53272A80), at its entry: the module sees every key event of the
++ *    shooting screen first and uses up those of the adjustment;
++ *  - the capture-ready fast path of a switch message (the call at 0x53183C14): left out for Fn when
++ *    Fn starts or ends the adjustment and for left / right during it (that path runs the buttons'
++ *    functions in another task, before Notify);
++ *  - the shooting screen's shutter speed, aperture and ISO texts (the six calls of
++ *    AsciiView::SetText in 0x5318C118, 0x5318C30C and 0x5318C544) and the ISO icon (the call at
++ *    0x5318C518): X, Y, R and no icon during the adjustment;
++ *  - the key guide's content (0x5318E8F4, at its entry): DISP and "Center" during the adjustment;
++ *  - what is reported to the unit as "shake reduction on" (0x537BB2B0, in the function that builds
++ *    the unit's state, 0x537BB254): off while the sensor is shifted or the adjustment is on;
++ *  - the ADJ function table copied with one more record, the function's name and icon (as
++ *    `lamp.ts`); the Fn button's list record: four handlers that add a row; the held Movie button's
++ *    list with one more function; the Fn functions' name and icon; a case of the three function
++ *    switches before their bounds checks: nothing (the module acts on the key events themselves).
++ *
++ * Going back to a firmware without this: an Fn or Movie button left on 0x2E does nothing there (the
++ * official switches log it and return; its name and icon are empty); an ADJ slot left on the added function must be set to
++ * something else first, as for exposure preview (the settings guard of a GR Mod build does it).
++ */
++import { FirmwareError } from '../../types';
++import { assembleWords, branchTarget, branchWord, movImmediate, movWord } from './arm';
++import { ICON_CATALOG, LANGUAGES, LOOKUP_BOUNDS, Patch, concat, expectWord, u16le, u32le, widenTextRows } from './build';
++import { LIST_SET_ITEM, TEXT_OFF, installTexts, listTable } from './datestamp-menu';
++import { SHIFT_CODE, SHIFT_CODE_LENGTH } from './shift-code';
++import { adr } from '../target';
++
++/** The module's state: 0x29 bytes of the sbrk arena (0x55839040..0x55839080, `battery.ts`: 0x40 the battery's byte, 0x74 Constant Light's word, 0x78 and 0x7C the white balance's and movie AF's pointers). */
++export const SHIFT_STATE = adr(0x55839048);
++export const SHIFT_STATE_BYTES = 0x29;
++export const SHIFT_TEXT_IDS = { name: 1041, adjust: 1042, center: 1043 } as const;
++/** Identity 23 of the ratio icon numbers, never given out (as 734..738, `exposure.ts`, `lamp.ts`). */
++export const SHIFT_ICON_ID = 739;
++/** The Fn function: the first number after the camera's last (0x2d): in no list, beyond its function switches' tables. */
++export const FN_SHIFT = 0x2e;
++export const SHIFT_MAGIC = 0x74666873; // "shft"
++/** The DISP button's icon (50 x 40), the camera's own. */
++const ICON_DISP = 542;
++
++const NOTIFY = adr(0x53272a80); // SwitchModel::Notify(model, switch, event)
++const FAST_CALL = adr(0x53183c14); // bl: the capture-ready fast path of a switch message
++const FAST_PATH = adr(0x5325e67c);
++const SET_TEXT = adr(0x53590490); // AsciiView::SetText(view, text)
++const TV_TEXT = adr(0x5318c118); // LiveViewController: the shutter speed's text
++const AV_TEXT = adr(0x5318c30c);
++const SV_TEXT = adr(0x5318c544);
++const SV_ICON = adr(0x5318c4f0); // the ISO icon in front of the value
++const SV_ICON_CALL = adr(0x5318c518); // bl: the icon of the ISO setting
++const SV_ICON_OF = adr(0x533a88fc);
++/** The six calls of SetText: [call, which value]. */
++const LABEL_CALLS: readonly (readonly [number, number])[] = [
++  [adr(0x5318c1d0), 0], [adr(0x5318c208), 0], [adr(0x5318c3c8), 1], [adr(0x5318c400), 1], [adr(0x5318c60c), 2], [adr(0x5318c644), 2],
++];
++const GUIDE = adr(0x5318e8f4); // (LV, icon*, ascii*, text*, icon 2*) -> 1 when there is a key guide
++const OSD_ITEM_36 = adr(0x5318eb48); // (LV, 36, shown): the item the key guide replaces
++const OSD_ITEM_38 = adr(0x5318ea8c); // (LV, 38, shown): the key guide
++const OSD_UPDATE = adr(0x5318bee0); // calls every item with what the two tables say
++const OSD_SHOWN_A = adr(0x53dc08e0);
++const OSD_SHOWN_B = adr(0x53dbf95c);
++const LV_HOLDER = adr(0x55081d40); // the object that keeps the LiveViewController at +4
++const LV_HOLDER_GET = adr(0x53187154);
++const LV_VTABLE = adr(0x53dbf740);
++const SCREEN_ID = adr(0x55088534);
++const SETTINGS = adr(0x550832a8);
++const APP_STATE = adr(0x55083138); // +0x25: nothing on the screen
++const VIEW_STATE = adr(0x5508a010); // +0x0B: nothing on the screen
++const SR_HOLDER = adr(0x550b9b20); // +4: SrMessage
++const SR_WRITE = adr(0x536b2180); // (SrMessage, address, value): the unit's command 0x6B
++const SR_STATE = adr(0x537bb254); // (DspState): the state reported to the unit
++const SR_STATE_ON = adr(0x537bb2b0); // cmp r7, #0: shake reduction on
++const GET_APP = adr(0x532406a4);
++const GET_SETTINGS = adr(0x53240c38);
++const SET_FN = adr(0x5333fbd8); // (settings model, function): the Fn button's function
++const LIST_ITEM = adr(0x53593d64); // (list, index) -> item (the ADJ controller's list view)
++const ITEM_SET_TEXT = adr(0x535a1138); // (item, text number)
++
++const ADJ_TABLE = adr(0x53dc9dfc);
++const ADJ_RECORD = 0x5c;
++const ADJ_OFFICIAL_FUNCTIONS = 21;
++const CROP = 0x13;
++const H_ENTER = 0x00;
++const H_LEAVE = 0x08;
++const H_DRAW = 0x18;
++const H_IS_CURRENT = 0x20;
++const H_SET = 0x28;
++const H_COUNT = 0x30;
++/** Every MOVW / MOVT pair that loads the ADJ function table's address: [movw, movt, register] (as `exposure.ts`, `lamp.ts`). */
++const ADJ_TABLE_SITES: readonly (readonly [number, number, number])[] = [
++  [adr(0x531bd4c4), adr(0x531bd4d4), 4], [adr(0x531bee8c), adr(0x531bee94), 2], [adr(0x531bf028), adr(0x531bf030), 3], [adr(0x531bf0c4), adr(0x531bf0cc), 2],
++  [adr(0x531bf5c0), adr(0x531bf5c8), 2], [adr(0x531bffd4), adr(0x531bffdc), 2], [adr(0x531c0030), adr(0x531c0038), 2], [adr(0x531c0128), adr(0x531c0130), 2],
++  [adr(0x531c01b4), adr(0x531c01bc), 2], [adr(0x531c0240), adr(0x531c0248), 2], [adr(0x531c02e8), adr(0x531c02f0), 7], [adr(0x531c0434), adr(0x531c043c), 2],
++  [adr(0x531c05d4), adr(0x531c05dc), 2], [adr(0x531c06d0), adr(0x531c06e8), 4], [adr(0x531c09dc), adr(0x531c09e4), 6], [adr(0x531c0ae8), adr(0x531c0af0), 2],
++  [adr(0x531c0b94), adr(0x531c0b9c), 2], [adr(0x531c0bfc), adr(0x531c0c0c), 7], [adr(0x531c0cb8), adr(0x531c0cc8), 7], [adr(0x531c0e9c), adr(0x531c0ea4), 2],
++  [adr(0x531c1060), adr(0x531c1064), 3], [adr(0x531c1220), adr(0x531c1228), 2],
++];
++const ADJ_TABLE_END = adr(0x531bd600);
++const ADJ_NAME_OF = adr(0x5338f484); // (resources, function) -> text: cmp r1, #0 first
++const ADJ_ICON_OF = adr(0x53390e40); // (resources, function, variant) -> icon: cmp r1, #0 first
++const ADJ_LIST_LOW = adr(0x531dc834);
++const ADJ_LIST_HIGH = adr(0x531dc844);
++const ADJ_LIST_LENGTH = adr(0x531dc860);
++
++const FN_NAME_OF = adr(0x5338fbac); // (resources, function) -> text: cmp r1, #0 first
++const FN_ICON_OF = adr(0x533914bc); // (resources, function, variant) -> icon: cmp r1, #0 first
++const FN_AVAILABLE = adr(0x531d75d8); // (function) -> offered on this model
++const FN_SWITCH_BOUND = adr(0x5339910c); // cmp r2, #0x2d; the jump table follows
++const FN_SWITCH_END = adr(0x5339927c);
++const MOVIE_SWITCH_BOUND = adr(0x53397bd8); // events 2 and 3 of the Movie button
++const MOVIE_SWITCH_END = adr(0x53397ad0);
++const MOVIE_HELD_BOUND = adr(0x53397ca0); // event 4: the end of a hold
++/** The held Movie button's list: its MOVW / MOVT / length, the official list and its bytes. */
++const HELD_LIST = adr(0x53de52bc);
++const HELD_LIST_LOW = adr(0x531dcc0c);
++const HELD_LIST_HIGH = adr(0x531dcc10);
++const HELD_LIST_LENGTH = adr(0x531dcc20);
++const HELD_LIST_OFFICIAL = [
++  0x00, 0x01, 0x02, 0x03, 0x04, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16,
++  0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x2d, 0x2c, 0x1e, 0x1f, 0x20, 0x22, 0x2b, 0x23, 0x24, 0x25, 0x26,
++];
++/** The Fn button's list: record 73 of the list table (title 505), with the camera's handlers. */
++const FN_LIST_RECORD = 73;
++const FN_LIST_TITLE = 505;
++const FN_LIST_COUNT = adr(0x531d0be0);
++const FN_LIST_DRAW = adr(0x531d3080);
++const FN_LIST_SET = adr(0x531d5018);
++const FN_LIST_CURRENT = adr(0x531d6a18);
++const LIST_RECORD = 0x4c;
++
++/** In `LANGS` order (cs da en fi fr de el hu it ja ko nl pl pt ru zh-CN es sv th zh-TW tr). */
++export const SHIFT_NAMES: readonly string[] = [
++  'Posun snímače', 'Sensorforskydning', 'Sensor Shift', 'Kennon siirto', 'Décalage du capteur', 'Sensorverschiebung', 'Μετατόπιση αισθητήρα', 'Érzékelő eltolása',
++  'Spostamento sensore', 'センサーシフト', '구도 미세 조정', 'Sensorverschuiving', 'Przesunięcie matrycy', 'Deslocamento do sensor', 'Сдвиг матрицы', '传感器位移',
++  'Desplazamiento del sensor', 'Sensorförskjutning', 'เลื่อนเซ็นเซอร์', '感測器位移', 'Sensör kaydırma',
++];
++export const SHIFT_ADJUST_NAMES: readonly string[] = [
++  'Upravit', 'Justér', 'Adjust', 'Säädä', 'Régler', 'Einstellen', 'Ρύθμιση', 'Beállítás',
++  'Regola', '調整', '조정', 'Aanpassen', 'Dostosuj', 'Ajustar', 'Настроить', '调整',
++  'Ajustar', 'Justera', 'ปรับ', '調整', 'Ayarla',
++];
++/** The key guide beside the DISP icon: back to the centre. */
++export const SHIFT_CENTER_NAMES: readonly string[] = [
++  'Střed', 'Centrér', 'Center', 'Keskitä', 'Centrer', 'Zentrieren', 'Κέντρο', 'Középre',
++  'Centra', 'センター', '중앙', 'Centreren', 'Wyśrodkuj', 'Centrar', 'В центр', '复位',
++  'Centrar', 'Centrera', 'กึ่งกลาง', '復位', 'Ortala',
++];
++
++function fail(code: string, message: string): never {
++  throw new FirmwareError(code, message);
++}
++const lo = (v: number): number => v & 0xffff;
++const hi = (v: number): number => v >>> 16;
++
++/** The ADJ lever function's number: after the camera's 21, exposure preview's and Constant Light's. */
++export function shiftAdjFunction(exposurePreview: boolean, constantLight: boolean): number {
++  return ADJ_OFFICIAL_FUNCTIONS + (exposurePreview ? 1 : 0) + (constantLight ? 1 : 0);
++}
++
++/**
++ * The 40x40 icon on the tile of the camera's ADJ and Fn icons: a dashed rectangle (where the sensor
++ * was) and, in front of it, a solid one four pixels to the right and three down (where it is now).
++ */
++export function drawShiftIcon(): Uint8Array {
++  const px = new Uint8Array(40 * 40 * 4);
++  const put = (x: number, y: number, c: readonly number[]): void => px.set(c, (y * 40 + x) * 4);
++  const BG = [0x35, 0x35, 0x36, 255], WHITE = [255, 255, 255, 255], FRAME = [0x80, 0x80, 0x80, 255];
++  for (let y = 0; y < 40; y++) {
++    for (let x = 0; x < 40; x++) put(x, y, x < 1 || y < 1 || x > 38 || y > 38 ? [255, 255, 255, 0] : x === 1 || y === 1 || x === 38 || y === 38 ? FRAME : BG);
++  }
++  const T = 2, ON = 3, OFF = 2;
++  // Dashes that start and end with a dash, so that the corners are closed.
++  const dashed = (i: number, n: number): boolean => {
++    const period = ON + OFF;
++    const i2 = i - Math.floor(((n - ON) % period) / 2);
++    return i < ON || i >= n - ON || ((i2 % period) + period) % period < ON;
++  };
++  const solid = (): boolean => true;
++  const rect = (x0: number, y0: number, x1: number, y1: number, on: (i: number, n: number) => boolean): void => {
++    for (let x = x0; x <= x1; x++) if (on(x - x0, x1 - x0 + 1)) for (let k = 0; k < T; k++) { put(x, y0 + k, WHITE); put(x, y1 - T + 1 + k, WHITE); }
++    for (let y = y0; y <= y1; y++) if (on(y - y0, y1 - y0 + 1)) for (let k = 0; k < T; k++) { put(x0 + k, y, WHITE); put(x1 - T + 1 + k, y, WHITE); }
++  };
++  rect(5, 9, 29, 27, dashed);
++  for (let y = 12; y <= 30; y++) for (let x = 9; x <= 33; x++) put(x, y, BG);
++  rect(9, 12, 33, 30, solid);
++  return px;
++}
++
++/** The texts and the icon (once, before the menus use them). Returns ICONBIN with the icon appended. */
++export function installShiftAssets(patch: Patch, iconbin: Uint8Array): Uint8Array {
++  if (SHIFT_NAMES.length !== LANGUAGES || SHIFT_ADJUST_NAMES.length !== LANGUAGES || SHIFT_CENTER_NAMES.length !== LANGUAGES) fail('internal', 'sensor shift: texts');
++  widenTextRows(patch, SHIFT_TEXT_IDS.center);
++  installTexts(patch, [{ id: SHIFT_TEXT_IDS.name, names: SHIFT_NAMES }, { id: SHIFT_TEXT_IDS.adjust, names: SHIFT_ADJUST_NAMES }, { id: SHIFT_TEXT_IDS.center, names: SHIFT_CENTER_NAMES }]);
++  if (patch.word(ICON_CATALOG + SHIFT_ICON_ID * 4) !== 0) fail('unexpected-layout', 'icon number already in use');
++  const pad = (4 - (iconbin.length % 4)) % 4;
++  const offset = iconbin.length + pad;
++  const descriptor = patch.append(concat([u16le([1, 40, 40, 0]), u32le([offset / 4])]), 16);
++  patch.write(ICON_CATALOG + SHIFT_ICON_ID * 4, u32le([descriptor]));
++  for (const [site, register] of LOOKUP_BOUNDS) {
++    if ((patch.word(site) & 0xfff0f000) >>> 0 !== (0xe3000000 | (register << 12)) >>> 0) fail('unexpected-layout', 'icon bound is not a MOVW');
++    patch.setWord(site, movWord(register, Math.max(SHIFT_ICON_ID, movImmediate(patch.word(site)))), 'icon upper bound');
++  }
++  return concat([iconbin, new Uint8Array(pad), drawShiftIcon()]);
++}
++
++export interface ShiftCode {
++  /** The module's entry and its context. */
++  code: number;
++  ctx: number;
++  /** `movw r0 / movt r0` of the context. */
++  loadCtx: string;
++}
++
++/** Words of the context (struct ctx in shift.c). */
++const CTX = { fnDraw: 28, fnSet: 29, fnCurrent: 30, words: 47 } as const;
++
++/**
++ * The module, its context and the hooks of the shooting screen: the keys, the three values, the key
++ * guide and the shake reduction state.
++ */
++export function installShiftCore(patch: Patch): ShiftCode {
++  // --- What the hooks rely on.
++  expectWord(patch, NOTIFY, 0xe5903760); // ldr r3, [r0, #0x760]
++  expectWord(patch, NOTIFY + 4, 0xe1a0c00d); // mov ip, sp
++  expectWord(patch, FAST_CALL, branchWord(FAST_CALL, FAST_PATH, 14, true));
++  expectWord(patch, FAST_CALL - 8, 0xe1a00006); // mov r0, r6
++  expectWord(patch, FAST_CALL - 4, 0xe1a01004); // mov r1, r4 (the message)
++  for (const [call] of LABEL_CALLS) expectWord(patch, call, branchWord(call, SET_TEXT, 14, true));
++  for (const f of [TV_TEXT, AV_TEXT, SV_TEXT, SV_ICON, OSD_ITEM_36, OSD_ITEM_38, OSD_UPDATE, SR_WRITE, SR_STATE, GET_APP, GET_SETTINGS, SET_FN]) expectWord(patch, f, 0xe1a0c00d); // mov ip, sp
++  expectWord(patch, SV_ICON_CALL, branchWord(SV_ICON_CALL, SV_ICON_OF, 14, true));
++  expectWord(patch, GUIDE, 0xe1a0c00d);
++  expectWord(patch, GUIDE + 4, 0xe92ddff0); // push {r4-r9, sl, fp, ip, lr, pc}
++  // The key guide (item 38) asks the content function, then shows the view or not; the item before it in the same place (36) hides when there is a guide.
++  expectWord(patch, OSD_ITEM_38 + 0x88, branchWord(OSD_ITEM_38 + 0x88, GUIDE, 14, true));
++  expectWord(patch, OSD_ITEM_36 + 0xd8, branchWord(OSD_ITEM_36 + 0xd8, GUIDE, 14, true));
++  // The screen's update: what hides everything (two bytes of the view, a byte each of two models), then the two tables.
++  expectWord(patch, OSD_UPDATE + 0x30, branchWord(OSD_UPDATE + 0x30, adr(0x533ead4c), 14, true));
++  expectWord(patch, adr(0x533ead4c), 0xe5d00025); // ldrb r0, [r0, #0x25]
++  expectWord(patch, OSD_UPDATE + 0x3c, 0xe5d534e6); // ldrb r3, [r5, #0x4e6]
++  expectWord(patch, OSD_UPDATE + 0x100, 0xe5d532d6); // ldrb r3, [r5, #0x2d6]
++  expectWord(patch, OSD_UPDATE + 0x108, 0xe5d572dd); // ldrb r7, [r5, #0x2dd]
++  expectWord(patch, OSD_UPDATE + 0x10c, movWord(10, lo(OSD_SHOWN_A)));
++  expectWord(patch, OSD_UPDATE + 0x110, movWord(2, lo(OSD_SHOWN_B)));
++  expectWord(patch, adr(0x533a13e0), 0xe5d0000b); // ldrb r0, [r0, #0xb]
++  expectWord(patch, adr(0x5318f504) + 0x28, 0xe5d454e5); // ldrb r5, [r4, #0x4e5]: the update's caller
++  // The LiveViewController's holder and its class.
++  expectWord(patch, LV_HOLDER_GET + 0x20, movWord(0, lo(LV_HOLDER)));
++  expectWord(patch, LV_VTABLE + 0xc, adr(0x5318ae30));
++  // The shake reduction state: r7 = shake reduction on, decided here; the unit's command.
++  expectWord(patch, SR_STATE_ON, 0xe3570000); // cmp r7, #0
++  expectWord(patch, SR_STATE_ON + 4, 0xe1a00004); // mov r0, r4
++  expectWord(patch, SR_STATE_ON + 8, 0x0a000010); // beq: field 0x13 = 0
++  expectWord(patch, SR_STATE_ON + 0xc, 0xe3a01013); // mov r1, #0x13
++
++  const module = Uint8Array.from(atob(SHIFT_CODE), (c) => c.charCodeAt(0));
++  if (module.length !== SHIFT_CODE_LENGTH) fail('internal', 'sensor shift: embedded module length');
++  const code = patch.append(module, 16);
++  const ctx = patch.append(u32le([
++    SHIFT_MAGIC, SHIFT_STATE, SR_HOLDER + 4, LV_HOLDER + 4, LV_VTABLE, SCREEN_ID,
++    SETTINGS + 0x1469, SETTINGS + 0x146e, SETTINGS + 0xb69, SETTINGS + 0x925, APP_STATE + 0x25, VIEW_STATE + 0x0b,
++    OSD_SHOWN_A, OSD_SHOWN_B,
++    SR_WRITE, SR_STATE, TV_TEXT, AV_TEXT, SV_TEXT, SV_ICON, OSD_ITEM_36, OSD_ITEM_38,
++    LIST_ITEM, ITEM_SET_TEXT, LIST_SET_ITEM, GET_APP, GET_SETTINGS, SET_FN,
++    FN_LIST_DRAW, FN_LIST_SET, FN_LIST_CURRENT,
++    FN_SHIFT, SHIFT_ICON_ID, ICON_DISP, SHIFT_TEXT_IDS.name, SHIFT_TEXT_IDS.adjust, TEXT_OFF, SHIFT_TEXT_IDS.center,
++    0x200009f8, 0x200009fc, 0x20000a00, 0x40114400, 0x40114430, 0x40114460, 0x2000adf4, 0x2000adf8, 0x2000adfc,
++  ]), 16);
++  if (patch.word(ctx + (CTX.words - 1) * 4) !== 0x2000adfc || patch.word(ctx + CTX.fnDraw * 4) !== FN_LIST_DRAW) fail('internal', 'sensor shift: context');
++  const loadCtx = `movw r0, #${lo(ctx)}; movt r0, #${hi(ctx)}`;
++
++  // --- The keys: (model, switch, event). 1 = used up: return; else the function's first instruction, then on.
++  const key = patch.append((at) => assembleWords(
++    `push {r0, r1, r2, r3, ip, lr}
++     mov r3, r2; mov r2, r1; mov r1, #0
++     ${loadCtx}; bl #${code}
++     cmp r0, #0
++     pop {r0, r1, r2, r3, ip, lr}
++     bxne lr
++     ldr r3, [r0, #0x760]
++     b #${NOTIFY + 4}`, at), 16);
++  patch.setWord(NOTIFY, branchWord(NOTIFY, key), 'sensor shift: the keys');
++  // --- The fast path of a switch message: (model, message). 1 = left out.
++  const fast = patch.append((at) => assembleWords(
++    `push {r0, r1, r2, r3, ip, lr}
++     mov r2, r1; mov r1, #1
++     ${loadCtx}; bl #${code}
++     cmp r0, #0
++     pop {r0, r1, r2, r3, ip, lr}
++     bxne lr
++     b #${FAST_PATH}`, at), 16);
++  patch.setWord(FAST_CALL, branchWord(FAST_CALL, fast, 14, true), 'sensor shift: the fast path of a switch message');
++  // --- The three values: (view, text). The module's text in place of the camera's during the adjustment.
++  const labels = [0, 1, 2].map((which) => patch.append((at) => assembleWords(
++    `push {r0, r1, r2, r3, ip, lr}
++     mov r2, #${which}; mov r1, #2
++     ${loadCtx}; bl #${code}
++     mov ip, r0
++     pop {r0, r1, r2, r3}
++     cmp ip, #0; movne r1, ip
++     pop {ip, lr}
++     b #${SET_TEXT}`, at), 16));
++  for (const [call, which] of LABEL_CALLS) patch.setWord(call, branchWord(call, labels[which], 14, true), 'sensor shift: X, Y and R in place of shutter speed, aperture and ISO');
++  // --- The ISO icon: none during the adjustment.
++  const icon = patch.append((at) => assembleWords(
++    `push {r0, r1, r2, r3, ip, lr}
++     mov r1, #3
++     ${loadCtx}; bl #${code}
++     cmp r0, #0
++     pop {r0, r1, r2, r3, ip, lr}
++     movne r0, #0; bxne lr
++     b #${SV_ICON_OF}`, at), 16);
++  patch.setWord(SV_ICON_CALL, branchWord(SV_ICON_CALL, icon, 14, true), 'sensor shift: no ISO icon in front of R');
++  // --- The key guide: (LV, icon*, ascii*, text*). 1 = filled in.
++  const guide = patch.append((at) => assembleWords(
++    `push {r0, r1, r2, r3, ip, lr}
++     sub sp, sp, #8; str r3, [sp]
++     mov r3, r2; mov r2, r1; mov r1, #5
++     ${loadCtx}; bl #${code}
++     add sp, sp, #8
++     cmp r0, #0
++     pop {r0, r1, r2, r3, ip, lr}
++     movne r0, #1; bxne lr
++     mov ip, sp
++     b #${GUIDE + 4}`, at), 16);
++  patch.setWord(GUIDE, branchWord(GUIDE, guide), 'sensor shift: the key guide');
++  // --- Shake reduction on (r7): off while the sensor is shifted or the adjustment is on.
++  const srOff = patch.append((at) => assembleWords(
++    `push {r0, r1, r2, r3, ip, lr}
++     mov r1, #4
++     ${loadCtx}; bl #${code}
++     cmp r0, #0
++     pop {r0, r1, r2, r3, ip, lr}
++     movne r7, #0
++     cmp r7, #0
++     bx lr`, at), 16);
++  patch.setWord(SR_STATE_ON, branchWord(SR_STATE_ON, srOff, 14, true), 'sensor shift: shake reduction off while the sensor is shifted');
++  return { code, ctx, loadCtx };
++}
++
++/** What the word at `at` (the entry of a lookup: `cmp r1, #0`, or an earlier addition's branch) goes on to. */
++function entryTail(patch: Patch, at: number): string {
++  const first = patch.word(at);
++  if (first === 0xe3510000) return `cmp r1, #0; b #${at + 4}`;
++  if (first >>> 24 === 0xea) return `b #${branchTarget(at, first)}`;
++  return fail('unexpected-layout', 'sensor shift: a lookup does not start as expected');
++}
++
++/**
++ * The ADJ lever function (after every addition that changes the function table's records in place
++ * or copies it: soft focus, Direct Flash, exposure preview, Constant Light). `fn` is its number,
++ * `shiftAdjFunction`. Returns the table's new address.
++ */
++export function installShiftAdj(patch: Patch, core: ShiftCode, fn: number): number {
++  const at = ADJ_TABLE_SITES.map(([low, high, r]) => {
++    const a = patch.word(low), b = patch.word(high);
++    if (a !== movWord(r, movImmediate(a)) || b !== movWord(r, movImmediate(b), true)) fail('unexpected-layout', 'ADJ function table site is not a MOVW/MOVT pair');
++    return (movImmediate(a) | (movImmediate(b) << 16)) >>> 0;
++  });
++  const old = at[0];
++  if (at.some((t) => t !== old)) fail('unexpected-layout', 'ADJ function table is not where it was expected');
++  const functions = (patch.word(ADJ_TABLE_END) - old) / ADJ_RECORD;
++  if (functions !== fn || !(fn >= ADJ_OFFICIAL_FUNCTIONS && fn <= ADJ_OFFICIAL_FUNCTIONS + 2) || (old === ADJ_TABLE) !== (fn === ADJ_OFFICIAL_FUNCTIONS)) fail('unexpected-layout', 'ADJ function table does not have the functions expected');
++  const crop = patch.read(old + CROP * ADJ_RECORD, ADJ_RECORD);
++  const cv = new DataView(crop.buffer);
++  if (cv.getUint32(0x10, true) !== adr(0x531bb654) || cv.getUint32(0x38, true) !== 0 || cv.getUint32(0x3c, true) !== adr(0x531bdf1c) || cv.getUint32(0x40, true) !== 0) fail('unexpected-layout', 'Crop record of the ADJ table is not as expected');
++  for (const off of [H_DRAW, H_IS_CURRENT, H_SET, H_COUNT]) if (cv.getUint32(off, true) === 0 || cv.getUint32(off + 4, true) !== 0) fail('unexpected-layout', 'Crop record of the ADJ table is not as expected');
++  for (const off of [H_ENTER, H_ENTER + 4, H_LEAVE, H_LEAVE + 4]) if (cv.getUint32(off, true) !== 0) fail('unexpected-layout', 'Crop record of the ADJ table is not as expected');
++
++  // --- Handlers (this = r0, value index = r1): into the module.
++  const { loadCtx, code } = core;
++  const enter = patch.append((a) => assembleWords(`mov r1, #6; ${loadCtx}; b #${code}`, a), 16);
++  const leave = patch.append((a) => assembleWords(`mov r1, #7; ${loadCtx}; b #${code}`, a), 16);
++  const draw = patch.append((a) => assembleWords(`mov r3, r1; mov r2, r0; mov r1, #8; ${loadCtx}; b #${code}`, a), 16);
++  const current = patch.append((a) => assembleWords(`mov r2, r1; mov r1, #9; ${loadCtx}; b #${code}`, a), 16);
++  const set = patch.append((a) => assembleWords(`mov r2, r1; mov r1, #10; ${loadCtx}; b #${code}`, a), 16);
++  const count = patch.append((a) => assembleWords('mov r0, #2; bx lr', a), 16);
++  const record = crop.slice();
++  const rv = new DataView(record.buffer);
++  rv.setUint32(H_ENTER, enter, true);
++  rv.setUint32(H_LEAVE, leave, true);
++  rv.setUint32(H_DRAW, draw, true);
++  rv.setUint32(H_IS_CURRENT, current, true);
++  rv.setUint32(H_SET, set, true);
++  rv.setUint32(H_COUNT, count, true);
++  rv.setUint32(0x3c, 0, true); // no "disabled" check (Crop's would disable it with Crop)
++
++  // --- The table, copied with the record; every reference moved.
++  const table = patch.append(concat([patch.read(old, fn * ADJ_RECORD), record]), 16);
++  for (const [low, high, r] of ADJ_TABLE_SITES) {
++    patch.setWord(low, movWord(r, lo(table)), 'sensor shift: ADJ function table, low half');
++    patch.setWord(high, movWord(r, hi(table), true), 'sensor shift: ADJ function table, high half');
++  }
++  patch.setWord(ADJ_TABLE_END, table + (fn + 1) * ADJ_RECORD, 'sensor shift: end of the ADJ function table');
++
++  // --- Name and icon (before the camera's own cases, or an earlier addition's).
++  const nameTail = entryTail(patch, ADJ_NAME_OF);
++  const name = patch.append((a) => assembleWords(
++    `cmp r1, #${fn}; movweq r0, #${SHIFT_TEXT_IDS.name}; bxeq lr
++     ${nameTail}`, a), 16);
++  patch.setWord(ADJ_NAME_OF, branchWord(ADJ_NAME_OF, name), 'sensor shift: ADJ function name');
++  const iconTail = entryTail(patch, ADJ_ICON_OF);
++  const icon = patch.append((a) => assembleWords(
++    `cmp r1, #${fn}; bne other
++     cmp r2, #0; movne r0, #0; movweq r0, #${SHIFT_ICON_ID}; bx lr
++     other: ${iconTail}`, a), 16);
++  patch.setWord(ADJ_ICON_OF, branchWord(ADJ_ICON_OF, icon), 'sensor shift: ADJ function icon');
++
++  // --- ADJ Mode Setting: the functions offered, the new one last.
++  const listAt = (movImmediate(patch.word(ADJ_LIST_LOW)) | (movImmediate(patch.word(ADJ_LIST_HIGH)) << 16)) >>> 0;
++  expectWord(patch, ADJ_LIST_LOW, movWord(4, lo(listAt)));
++  expectWord(patch, ADJ_LIST_HIGH, movWord(4, hi(listAt), true));
++  const lengthWord = patch.word(ADJ_LIST_LENGTH);
++  if ((lengthWord & 0xffffff00) >>> 0 !== 0xe2846000) fail('unexpected-layout', 'ADJ function list length is not as expected');
++  const list = [...patch.read(listAt, lengthWord & 0xff)];
++  if (list.includes(fn) || list.some((f) => f >= fn)) fail('unexpected-layout', 'ADJ function list is not as expected');
++  list.push(fn);
++  const newList = patch.append(Uint8Array.from(list), 16);
++  patch.setWord(ADJ_LIST_LOW, movWord(4, lo(newList)), 'sensor shift: ADJ function list, low half');
++  patch.setWord(ADJ_LIST_HIGH, movWord(4, hi(newList), true), 'sensor shift: ADJ function list, high half');
++  patch.setWord(ADJ_LIST_LENGTH, 0xe2846000 | list.length, 'sensor shift: ADJ function list length');
++  return table;
++}
++
++/**
++ * The Fn function 0x2E: a row at the end of the Fn button's list, and in the held Movie button's
++ * list (after Constant Light's Fn function, which copies the lists and takes the lookups' entries first).
++ */
++export function installShiftFn(patch: Patch, core: ShiftCode): void {
++  const { loadCtx, code } = core;
++  // "Offered on this model": cases for 0x19..0x2d only; a higher number is offered.
++  expectWord(patch, FN_AVAILABLE, 0xe2400019); // sub r0, r0, #0x19
++  expectWord(patch, FN_AVAILABLE + 0x10, 0xe3500014); // cmp r0, #0x14
++  expectWord(patch, FN_AVAILABLE + 0x14, 0x979ff100); // ldrls pc, [pc, r0, lsl #2]
++  expectWord(patch, FN_AVAILABLE + 0x18, branchWord(FN_AVAILABLE + 0x18, FN_AVAILABLE + 0xd0)); // b: mov r0, #1
++  expectWord(patch, FN_AVAILABLE + 0xd0, 0xe3a00001);
++  // The three function switches: a number above 0x2d goes to their defaults (an assertion's log). Each gets a case
++  // before its bounds check (the camera's, or Constant Light's case in its place): nothing, then the end that
++  // function 0 (none) goes to. The module acts on the key events themselves.
++  for (const [bound, register, end, what] of [[FN_SWITCH_BOUND, 'r2', FN_SWITCH_END, 'the buttons'], [MOVIE_SWITCH_BOUND, 'sl', MOVIE_SWITCH_END, 'the Movie button'], [MOVIE_HELD_BOUND, 'r0', MOVIE_SWITCH_END, 'the end of a hold']] as const) {
++    if ((patch.word(bound + 4) & 0xfffffff0) >>> 0 !== 0x979ff100) fail('unexpected-layout', 'sensor shift: a function switch is not as expected'); // ldrls pc, [pc, rX, lsl #2]
++    expectWord(patch, bound + 12, end); // function 0 (none): the end
++    const first = patch.word(bound);
++    const tail = (first & 0xfff0ffff) >>> 0 === 0xe350002d ? `cmp ${register}, #0x2d; b #${bound + 4}` : first >>> 24 === 0xea ? `b #${branchTarget(bound, first)}` : fail('unexpected-layout', 'sensor shift: a function switch does not start as expected');
++    const skip = patch.append((a) => assembleWords(
++      `cmp ${register}, #${FN_SHIFT}; beq #${end}
++       ${tail}`, a), 16);
++    patch.setWord(bound, branchWord(bound, skip), `sensor shift: the Fn function does nothing in the switch of ${what}`);
++  }
++
++  // --- Name and icon (before the camera's own cases, or Constant Light's).
++  const nameTail = entryTail(patch, FN_NAME_OF);
++  const name = patch.append((a) => assembleWords(
++    `cmp r1, #${FN_SHIFT}; movweq r0, #${SHIFT_TEXT_IDS.name}; bxeq lr
++     ${nameTail}`, a), 16);
++  patch.setWord(FN_NAME_OF, branchWord(FN_NAME_OF, name), 'sensor shift: Fn function name');
++  const iconTail = entryTail(patch, FN_ICON_OF);
++  const icon = patch.append((a) => assembleWords(
++    `cmp r1, #${FN_SHIFT}; bne other
++     cmp r2, #0; movne r0, #0; movweq r0, #${SHIFT_ICON_ID}; bx lr
++     other: ${iconTail}`, a), 16);
++  patch.setWord(FN_ICON_OF, branchWord(FN_ICON_OF, icon), 'sensor shift: Fn function icon');
++
++  // --- The held Movie button's list (the official one, or Constant Light's copy): one more function.
++  const heldAt = (movImmediate(patch.word(HELD_LIST_LOW)) | (movImmediate(patch.word(HELD_LIST_HIGH)) << 16)) >>> 0;
++  expectWord(patch, HELD_LIST_LOW, movWord(4, lo(heldAt)));
++  expectWord(patch, HELD_LIST_HIGH, movWord(4, hi(heldAt), true));
++  const heldLength = patch.word(HELD_LIST_LENGTH);
++  if ((heldLength & 0xffffff00) >>> 0 !== 0xe2846000) fail('unexpected-layout', 'the held Movie button\'s function list length is not as expected');
++  const held = [...patch.read(heldAt, heldLength & 0xff)];
++  const official = patch.read(HELD_LIST, HELD_LIST_OFFICIAL.length);
++  if (!HELD_LIST_OFFICIAL.every((v, i) => official[i] === v && held[i] === v) || held.length > HELD_LIST_OFFICIAL.length + 1 || held.includes(FN_SHIFT)) fail('unexpected-layout', 'the held Movie button\'s function list is not as expected');
++  held.push(FN_SHIFT);
++  const heldList = patch.append(Uint8Array.from(held), 16);
++  patch.setWord(HELD_LIST_LOW, movWord(4, lo(heldList)), 'sensor shift: held Movie button function list, low half');
++  patch.setWord(HELD_LIST_HIGH, movWord(4, hi(heldList), true), 'sensor shift: held Movie button function list, high half');
++  patch.setWord(HELD_LIST_LENGTH, 0xe2846000 | held.length, 'sensor shift: held Movie button function list length');
++
++  // --- The Fn button's list: the record's handlers, with a row of their own after the camera's.
++  const record = listTable(patch) + FN_LIST_RECORD * LIST_RECORD;
++  const rv = new DataView(patch.read(record, LIST_RECORD).buffer);
++  if (rv.getUint16(4, true) !== FN_LIST_TITLE || rv.getUint32(0x0c, true) !== FN_LIST_COUNT || rv.getUint32(0x14, true) !== FN_LIST_DRAW || rv.getUint32(0x24, true) !== FN_LIST_SET || rv.getUint32(0x2c, true) !== FN_LIST_CURRENT
++    || [0x10, 0x18, 0x28, 0x30].some((off) => rv.getUint32(off, true) !== 0)) fail('unexpected-layout', 'the Fn button\'s list record is not as expected');
++  expectWord(patch, FN_LIST_COUNT, 0xe59031b8); // ldr r3, [r0, #0x1b8]
++  expectWord(patch, FN_LIST_COUNT + 4, 0xe59001b4); // ldr r0, [r0, #0x1b4]
++  expectWord(patch, FN_LIST_DRAW + 0x60, branchWord(FN_LIST_DRAW + 0x60, LIST_SET_ITEM)); // b: the row's icon and text
++  expectWord(patch, FN_LIST_SET + 0x2c, branchWord(FN_LIST_SET + 0x2c, SET_FN));
++  expectWord(patch, SET_FN - 0xd8 + 0x18, 0xe5d00925); // ldrb r0, [r0, #0x925]: the function kept
++  if (patch.word(ctxWord(core, CTX.fnDraw)) !== FN_LIST_DRAW || patch.word(ctxWord(core, CTX.fnSet)) !== FN_LIST_SET || patch.word(ctxWord(core, CTX.fnCurrent)) !== FN_LIST_CURRENT) fail('internal', 'sensor shift: context');
++  const count = patch.append((a) => assembleWords(`mov r2, r0; mov r1, #11; ${loadCtx}; b #${code}`, a), 16);
++  const draw = patch.append((a) => assembleWords(
++    `push {r4, lr}
++     sub sp, sp, #8; str r2, [sp]
++     mov r3, r1; mov r2, r0; mov r1, #12
++     ${loadCtx}; bl #${code}
++     add sp, sp, #8
++     pop {r4, pc}`, a), 16);
++  const set = patch.append((a) => assembleWords(`mov r3, r1; mov r2, r0; mov r1, #13; ${loadCtx}; b #${code}`, a), 16);
++  const current = patch.append((a) => assembleWords(`mov r3, r1; mov r2, r0; mov r1, #14; ${loadCtx}; b #${code}`, a), 16);
++  patch.setWord(record + 0x0c, count, 'sensor shift: the Fn button\'s list, one more row');
++  patch.setWord(record + 0x14, draw, 'sensor shift: the Fn button\'s list, the row');
++  patch.setWord(record + 0x24, set, 'sensor shift: the Fn button\'s list, the row chosen');
++  patch.setWord(record + 0x2c, current, 'sensor shift: the Fn button\'s list, the row current');
++}
++
++function ctxWord(core: ShiftCode, index: number): number {
++  return core.ctx + index * 4;
++}
 diff --git a/core/src/fw/gr4v120/aspect/shutdown.ts b/core/src/fw/gr4v120/aspect/shutdown.ts
 --- a/core/src/fw/gr4v120/aspect/shutdown.ts
 +++ b/core/src/fw/gr4v120/aspect/shutdown.ts
@@ -4216,7 +6281,7 @@ diff --git a/core/src/fw/gr4v120/aspect/softfocus.ts b/core/src/fw/gr4v120/aspec
   */
 -export function installAdjSoftFocus(patch: Patch, iconbin: Uint8Array): Uint8Array {
 +export function installAdjSoftFocus(patch: Patch, iconbin: Uint8Array, maxFunction = ADJ_FUNCTIONS - 1): Uint8Array {
-+  if (maxFunction !== ADJ_FUNCTIONS - 1 && maxFunction !== ADJ_FUNCTIONS) fail('internal', 'soft focus: the last ADJ function');
++  if (!(Number.isInteger(maxFunction) && maxFunction >= ADJ_FUNCTIONS - 1 && maxFunction <= ADJ_FUNCTIONS + 2)) fail('internal', 'soft focus: the last ADJ function');
    // --- Checks of the official code this relies on.
    for (const [off, value] of OFFICIAL_RECORD) expectWord(patch, ADJ_TABLE + ADJ_SOFT_FOCUS * ADJ_RECORD + off, value);
    if (ADJ_SOFT_FOCUS >= ADJ_FUNCTIONS) fail('internal', 'soft focus must reuse a record of the table');
@@ -6565,7 +8630,46 @@ diff --git a/tools/gr4v120/adjslots/check.py b/tools/gr4v120/adjslots/check.py
      return out
  
  
-@@ -519,11 +533,11 @@
+@@ -411,6 +425,12 @@
+         # strip
+         cam.run(0x531c0f74)
+         r['strip'] = strip_of(cam)
++        # where the strip's drawing leaves the frames and icons of slots 1..5 (test 097)
++        places = {}
++        for v in cam.log:
++            if v[0] == 'x' and isinstance(v[1], tuple) and v[1][0] in ('frame', 'icon'):
++                places[v[1]] = v[2]
++        r['places'] = places
+         # can ADJ be used
+         fn = cam.img.u32(VTABLE_9)
+         r['open'] = cam.run(fn) & 0xff
+@@ -484,8 +504,11 @@
+             src = (k + 1) % n
+             want = src if m.disabled(m.fn[k]) else k   # (an empty slot's icon cannot be touched)
+             check(got == want, f'{what}: tap {k} (from {src}): {got} want {want}')
+-        x0 = frame_x(n, 0)
+-        check(all((x - x0) % pitch(n) == 0 and 0 <= (x - x0) // pitch(n) < n for x in r['x']), f'{what}: selection x {r["x"]}')
++        # the fixed layout (movies): the five slots and the selection where the camera has them
++        x0, step, slots_shown = (425, 60, 5) if fixed else (frame_x(n, 0), pitch(n), n)
++        check(all((x - x0) % step == 0 and 0 <= (x - x0) // step < slots_shown for x in r['x']), f'{what}: selection x {r["x"]}')
++        want = {(kind, k): x0 + step * k + (5 if kind == 'icon' else 0) for kind in ('frame', 'icon') for k in range(5)}
++        check(r['places'] == want, f'{what}: places of slots 1..5 {r["places"]} want {want}')
+ 
+ 
+ def compare_official(d):
+@@ -499,6 +522,11 @@
+         b, m = run_scenario(d / 'n5.rtos', 5, False, sc)
+         for pos, (ra, rb) in enumerate(zip(a, b)):
+             for key in ra:
++                if key == 'places':
++                    # the official code never moves them (they are made at 425 + 60 k); the new code puts them there
++                    want = {(kind, k): 425 + 60 * k + (5 if kind == 'icon' else 0) for kind in ('frame', 'icon') for k in range(5)}
++                    check(ra[key] == {} and rb[key] == want, f'n5 vs official, {sc[0]} fixed {sc[2]} pos {pos}: places {rb[key]}')
++                    continue
+                 check(ra[key] == rb[key], f'n5 vs official, {sc[0]} fixed {sc[2]} pos {pos}: {key} {ra[key]} / {rb[key]}')
+         check_model(5, sc, b, m)
+         count += 1
+@@ -519,11 +547,11 @@
  # Menu
  
  ADJ_MENU_ID = 0x020001c0
@@ -6579,7 +8683,7 @@ diff --git a/tools/gr4v120/adjslots/check.py b/tools/gr4v120/adjslots/check.py
  SUB_CTOR, SUB_SET_CURRENT, SUB_SHOW = 0x531e4414, 0x531e361c, 0x531e4168
  SUB_DOWN, SUB_UP, SUB_OK = 0x531e3a8c, 0x531e3a44, 0x531e3af4
  SUB_DRAW_CALL = 0x531e3f90   # blx r2: a line's value draw (skipped and recorded)
-@@ -673,10 +687,10 @@
+@@ -673,10 +701,10 @@
      check(rec[0] == off_adj[0] and rec[1] == off_adj[1], f'{name}: lines record head')
      # Lists: count / row draw are ADJ Mode Setting 1's; set and is current per value.
      seltab = new.movw_movt(0x531d825c, 0x531d826c)
@@ -6592,7 +8696,7 @@ diff --git a/tools/gr4v120/adjslots/check.py b/tools/gr4v120/adjslots/check.py
          check(v('<H', r, 4)[0] == T0 + 1 + j, f'{name}: list {j} title')
          check(v('<I', r, 0x0c)[0] == v('<I', o, 0x0c)[0] and v('<I', r, 0x14)[0] == v('<I', o, 0x14)[0], f'{name}: list {j} count / draw')
          setf, cur = v('<I', r, 0x24)[0], v('<I', r, 0x2c)[0]
-@@ -690,12 +704,12 @@
+@@ -690,12 +718,12 @@
                  e.mu.mem_write(EXT + j, bytes([raw]))
                  ic = e.call(cur, (this, i))
                  fval = raw & 0x1f
@@ -6607,7 +8711,7 @@ diff --git a/tools/gr4v120/adjslots/check.py b/tools/gr4v120/adjslots/check.py
                      check(after == (raw & 0xe0) | vec[i], f'{name}: list {j} byte {raw:#x} set {i}: {after:#x}')
                  else:
                      check(after == raw, f'{name}: list {j} byte {raw:#x} set {i} (none): {after:#x}')
-@@ -708,7 +722,7 @@
+@@ -708,7 +736,7 @@
              e.call(draw, (0x70000000, 0x70700000))
              icons = [c for c in e.calls if c[0] == 'sub-icon']
              fval = raw & 0x1f
@@ -6616,7 +8720,7 @@ diff --git a/tools/gr4v120/adjslots/check.py b/tools/gr4v120/adjslots/check.py
              check(icons == [('sub-icon', 0x70700000, ICON_BASE + fval, icons[0][3] if icons else 0)], f'{name}: line {j} icon for {raw:#x}: {icons}')
  
      # SubMenuController itself, every widget function real: every other submenu as in the reference
-@@ -808,7 +822,7 @@
+@@ -808,7 +836,7 @@
                  want.append(0)
                  continue
              f = b[j] & 0x1f
@@ -6625,7 +8729,7 @@ diff --git a/tools/gr4v120/adjslots/check.py b/tools/gr4v120/adjslots/check.py
              v = (b[j] & 0xe0) | (f if ok else 0)
              if j == 0:
                  if (v >> 5) > n - 5:
-@@ -828,8 +842,16 @@
+@@ -828,8 +856,16 @@
  
  def check_calls(d, name):
      img = dm.Image(d / name)
@@ -6644,7 +8748,7 @@ diff --git a/tools/gr4v120/adjslots/check.py b/tools/gr4v120/adjslots/check.py
      # find the module in the image
      at = img.R.find(code)
      check(at > 0, f'{name}: module not found')
-@@ -856,7 +878,7 @@
+@@ -856,7 +892,7 @@
      # each is a function the firmware itself calls (a bl to it exists in the official image)
      off = dm.Image(d / 'official.rtos')
      called = set()
@@ -6653,7 +8757,7 @@ diff --git a/tools/gr4v120/adjslots/check.py b/tools/gr4v120/adjslots/check.py
          x = struct.unpack_from('<I', off.R, o)[0]
          if (x >> 24) in (0xeb, 0xea):
              called.add(0x53000000 + o + 8 + (((x & 0xffffff) ^ 0x800000) - 0x800000) * 4)
-@@ -879,6 +901,9 @@
+@@ -879,6 +915,9 @@
          images = (('n6.rtos', 6, False), ('n7.rtos', 7, False), ('n8.rtos', 8, False), ('n8sf.rtos', 8, True), ('n8all.rtos', 8, True))
      for name, n, sf in images:
          print(f'{name}:')
@@ -6881,7 +8985,7 @@ diff --git a/core/src/fw/gr4v120/patch.ts b/core/src/fw/gr4v120/patch.ts
    // Additions that append code or icons need the grown layout. The monochrome looks change 13
    // words in place: on their own (or with only same-length edits) the file keeps the official layout.
 -  const grows = !!features.brightAuto || ratios.length > 0 || !!features.adjSoftFocus || !!features.dateStamp || !!features.hlgPhoto || (features.extraSlots?.length ?? 0) > 0 || (features.shutdown?.pictures.length ?? 0) > 0 || !!features.guard || !!features.cinemaHalation || !!features.directFlash || (features.adjSlots ?? 5) > 5 || !!features.hdrGainMap || !!features.batteryPercent || !!features.customGrid || !!features.shadowLearn;
-+  const grows = !!features.brightAuto || ratios.length > 0 || !!features.adjSoftFocus || !!features.dateStamp || !!features.hlgPhoto || (features.extraSlots?.length ?? 0) > 0 || (features.shutdown?.pictures.length ?? 0) > 0 || !!features.guard || !!features.cinemaHalation || !!features.directFlash || (features.adjSlots ?? 5) > 5 || !!features.hdrGainMap || !!features.batteryPercent || !!features.customGrid || !!features.shadowLearn || !!features.filmGrain || !!features.flashTtl || !!features.videoAf || !!features.awbLearn;
++  const grows = !!features.brightAuto || ratios.length > 0 || !!features.adjSoftFocus || !!features.dateStamp || (features.extraSlots?.length ?? 0) > 0 || (features.shutdown?.pictures.length ?? 0) > 0 || !!features.guard || !!features.cinemaHalation || !!features.directFlash || (features.adjSlots ?? 5) > 5 || !!features.hdrGainMap || !!features.batteryPercent || !!features.customGrid || !!features.shadowLearn || !!features.filmGrain || !!features.flashTtl || !!features.videoAf || !!features.awbLearn || !!features.movieExposure || !!features.sensorShift || !!features.movie4k || !!features.movieSr || !!features.constantLight || !!features.hlgPhoto;
    const inPlaceMono = !grows && !!features.monoUnlock;
    const inPlaceLooks = !grows && !!features.lookLayout;
    const { fw, DEC, img, ranges } = await editPayload(officialRaw, edits, clarity, inPlaceMono, inPlaceLooks ? features.lookLayout : undefined);

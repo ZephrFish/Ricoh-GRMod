@@ -1,3 +1,9 @@
+import { de } from './locales/de';
+import { es } from './locales/es';
+import { ja } from './locales/ja';
+import { ko } from './locales/ko';
+import { zhTW } from './locales/zh-TW';
+
 const zh = {
   app: 'GR Mod',
   navIC: '影像控制', navWall: '结束画面', navCopies: '固件副本',
@@ -153,8 +159,18 @@ const zh = {
   flashTtlLine: '闪光 TTL  ·  GF-2，两个带[消减红眼]的闪光模式（预闪测光）',
   navVideoAf: '视频相位对焦', videoAfSub: '录制影片时，使用传感器的相位数据直接驱动镜头，减少对焦时的拉风箱现象。', tIcFVafB: '录制影片时，使用传感器的相位数据直接驱动镜头：主体移动时，镜头直接移至目标对焦位置，减少反复对焦（拉风箱、画面呼吸）；相位数据可用时，照相机不再重新搜索，无可用相位数据时仍使用原厂对焦方式。录制期间未轻触屏幕时，对焦框为中央的小框；轻触屏幕后，对焦框仍按原方式移动。',
   videoAfLine: '视频相位对焦  ·  录制影片时由相位数据驱动镜头以达到更快更准确地对焦效果',
+  navMovieExp: '视频模式曝光控制', movieExpSub: '影片不再固定以 P 模式录制：使用模式转盘选择的曝光模式（P / Av / Tv / M），可调整光圈、快门速度和 ISO 感光度。', tIcFMexpB: '录制影片时，使用模式转盘选择的曝光模式（P / Av / Tv / M 以及 U1–U3），不再固定为 P 模式。影片画面显示快门速度、光圈和 ISO 感光度，可使用拨盘和 ISO 按钮调整，操作方法与拍摄静态图像时相同；这些设定值与静态图像拍摄共用。最慢的快门速度受帧率限制（例如 60p 时为 1/60 秒）。在 M 模式下将快门速度设为 B / T 时，影片以 P 模式录制。模式转盘位于 P 且 ISO 感光度为 AUTO 时，曝光与原厂固件相同。照相机中没有此功能的菜单项目。',
+  movieExpLine: '视频模式曝光控制',
   navAwb: '自动白平衡优化', awbSub: '自动白平衡优化使用学习型模型估计光源：减少户外偏冷和室内灯光下偏黄。', tIcFAwbB: '白平衡设为[自动]、[暖色优先]或[白色优先]时，使用基于带实测光源的公开数据集训练的模型估计光源，取代原厂估计：户外减少偏冷，室内灯光下减少偏黄。取景画面与照片使用相同的估计结果，使照片色彩与屏幕显示一致。三档仅在暖光下有所区别（[白色优先]不保留暖色，[自动]保留少量暖色，[暖色优先]保留较多暖色），户外三档相同。使用闪光灯拍摄的照片，以及预设和手动白平衡，仍使用原厂结果。',
   awbLine: '自动白平衡优化  ·  白平衡[自动]、[暖色优先]、[白色优先]时生效（闪光照片用原厂结果）',
+  navLamp: '辅助灯常亮', lampSub: '忘带手电筒了？让相机正面的对焦辅助灯保持常亮！可在菜单中选择开启，也可加入ADJ模式列表或绑定为 Fn 快捷键。', tIcFLampB: '相机正面的对焦辅助灯（也是自拍定时灯）可以手动打开并保持常亮。拍摄菜单的[自动对焦辅助灯]下方会多出[辅助灯常亮]一项。可在菜单中选择开启，也可加入ADJ模式列表或绑定为 Fn 快捷键。',
+  lampLine: '辅助灯常亮',
+  navShift: '传感器位移', shiftSub: '通过防抖组件平移和旋转传感器从而微调构图；可加入ADJ模式列表或绑定为 Fn 快捷键。', tIcFShiftB: '相机的防抖组件可以移动传感器，[ADJ模式设定]的可选功能里会多出[传感器位移]一项；[Fn按钮设定]里，Fn 按钮和[长按影片按钮]的可选功能里也会多出这一项。调整期间，拍摄画面上快门速度、光圈和 ISO 的位置改为显示 X、Y、R：方向键平移传感器（每个方向 28 级，每级约 0.04 mm），拨盘旋转传感器（每个方向 18 级，每级 0.125°；旋转得越多，可平移的范围越小），按 DISP 回到中心，按 OK 或 Fn 结束调整并让传感器留在当前位置。调整期间以及传感器不在中心时，防抖功能关闭。关机后传感器回到中心。',
+  shiftLine: '传感器位移',
+  navMovie4k: '4K 视频', movie4kSub: '影片可以用 4K（3840×2160）录制，帧速率为 30p 或 24p；影片菜单的[帧速率]变为[帧速率 / 分辨率]。', tIcFMovie4kB: '影片菜单的[帧速率]一项变为[帧速率 / 分辨率]，进入后可分别设定：[帧速率]（60p / 30p / 24p）和[分辨率]（FHD / 4K）。4K 为 3840×2160，只能以 30p 或 24p 录制。4K 的视角比 FHD 窄（约 1.35 倍裁切）。同时加入[视频相位对焦]时，4K 录制没有相位数据，按相机原有的方式对焦。',
+  movie4kLine: '4K 视频',
+  navMovieSr: '视频模式传感器防抖', movieSrSub: '影片菜单的[Movie SR]变为三个选项：关闭、传感器防抖（菜单里写作“传感器SR”）、电子防抖（“电子SR”）。使用传感器防抖时将不裁切画面。', tIcFMovieSrB: '影片菜单的[Movie SR]由“关闭 / 开启”变为三个选项：[关闭]、[传感器SR]和[电子SR]。[传感器SR]像拍摄静态图像时一样移动传感器来稳定画面，不裁切画面；[电子SR]是相机原有的电子防抖，画面四周各裁去约 5%。',
+  movieSrLine: '视频模式传感器防抖',
   navHdr: 'HDR 增益图', hdrSub: '在 JPEG 中写入 HDR 增益图，使支持 HDR 的显示屏呈现更亮的高光', hdrLine: 'HDR 增益图  ·  JPEG 带增益图（[拍摄菜单] › [HDR]开关）',
   navFlash: '闪光灯功能增强', flashSub: '直闪模式：闪光灯以固定功率闪光时，照相机根据对焦距离和输入的闪光灯 GN 值设定曝光。',
   flashPlusSub: '直闪模式（固定功率闪光，根据对焦距离和 GN 值设定曝光）＋ 闪光 TTL（GF-2 在两种带[消减红眼]的闪光模式下使用预闪测光）。', flashLine: '直闪模式  ·  闪光模式第 5 项（固定功率，按对焦距离曝光）',
@@ -419,8 +435,18 @@ const en: typeof zh = {
   flashTtlLine: 'Flash TTL  ·  GF-2, the two flash modes with red-eye reduction (pre-flash metering)',
   navVideoAf: 'Phase Detect AF for Video', videoAfSub: 'While recording, the sensor\'s phase data drives the lens, with less focus hunting.', tIcFVafB: 'While recording, the sensor\'s phase data drives the lens: when the subject moves the lens goes there in a step, instead of searching back and forth (the image "breathing"); while that data is usable the camera does not start a new search, where it says nothing the camera\'s own search runs as before. While recording without a touch the focus area is one frame in the middle; a touch moves it as before.',
   videoAfLine: 'Movie AF  ·  the lens driven by the phase data while recording (middle frame)',
+  navMovieExp: 'Exposure Control in Video Mode', movieExpSub: 'Movies are no longer always recorded in P: the mode dial\'s exposure mode (P / Av / Tv / M) is used, and aperture, shutter speed and ISO can be set.', tIcFMexpB: 'Movies are recorded in the exposure mode of the mode dial (P / Av / Tv / M and U1–U3) instead of always in P. The movie screen shows shutter speed, aperture and ISO; the dials and the ISO button change them as for stills, and the values are shared with still shooting. The slowest shutter speed depends on the frame rate (1/60 s at 60p, for example). In M with the shutter speed at B / T, movies are recorded in P. With the mode dial at P and ISO at AUTO the exposure is the same as with the official firmware. The camera has no menu item for this.',
+  movieExpLine: 'Exposure Control in Video Mode',
   navAwb: 'Learned auto WB', awbSub: 'Auto white balance from a learned model of the light: not too cool outdoors, not too yellow under room lights.', tIcFAwbB: 'In Auto, Warmth Priority and White Priority white balance, the light is estimated by a model trained on public data sets with measured illuminants, in place of the camera\'s estimate: less cool than the camera\'s outdoors, less yellow under room lights. Live view and the picture share one estimate, so the picture has the colour the screen showed. The three modes differ only in warm light (White Priority leaves no warmth, Auto a little, Warmth Priority more); outdoors they are the same. Pictures taken with the flash, and the preset and manual white balances, keep the camera\'s own result.',
   awbLine: 'Learned auto WB  ·  in Auto, Warmth Priority and White Priority white balance (flash pictures keep the camera\'s result)',
+  navLamp: 'Constant Light', lampSub: 'Forgot your flashlight? Keep the AF assist lamp on the front of the camera lit! Switch it on in the menu, add it to ADJ mode or assign it to an Fn button.', tIcFLampB: 'The AF assist lamp on the front of the camera (also the self-timer lamp) can be switched on by hand and stays lit. The shooting menu gets a line Constant Light below AF Assist Light. It can be switched on in the menu, added to ADJ mode or assigned to an Fn button.',
+  lampLine: 'Constant Light',
+  navShift: 'Sensor Shift', shiftSub: 'Shifts and turns the sensor with the shake reduction unit to fine-tune the framing; it can be added to ADJ mode or assigned to an Fn button.', tIcFShiftB: 'The shake reduction unit can move the sensor. ADJ Mode Setting offers Sensor Shift as a function; in Fn Button Setting, the Fn button and Hold Movie Button offer it too. During the adjustment the shooting screen shows X, Y and R in place of shutter speed, aperture and ISO: the four-way controller shifts the sensor (28 steps of about 0.04 mm each way), the dials turn it (18 steps of 0.125° each way; the more it is turned, the less it can be shifted), DISP brings it back to the centre, OK or Fn ends the adjustment and leaves the sensor where it is. Shake reduction is off during the adjustment and for as long as the sensor is away from the centre. The sensor is back at the centre after the camera is switched off.',
+  shiftLine: 'Sensor Shift',
+  navMovie4k: '4K Video', movie4kSub: 'Movies can be recorded in 4K (3840×2160) at 30p or 24p; the movie menu\'s Framerate becomes Framerate / Resolution.', tIcFMovie4kB: 'The movie menu\'s Framerate line becomes Framerate / Resolution, where the two are set separately: Framerate (60p / 30p / 24p) and Resolution (FHD / 4K). 4K is 3840×2160, at 30p or 24p only. The 4K picture is narrower than FHD (a crop of about 1.35x). With Phase Detect AF for Video also added, a 4K recording has no phase data and is focused the camera\'s own way.',
+  movie4kLine: '4K Video',
+  navMovieSr: 'Sensor-Shift SR in Video Mode', movieSrSub: 'The movie menu\'s Movie SR offers three settings: Off, Mechanical (sensor shift) and Electronic. Mechanical does not crop the picture.', tIcFMovieSrB: 'The movie menu\'s Movie SR offers three settings instead of Off / On: Off, Mechanical and Electronic. Mechanical steadies the picture by moving the sensor, as for stills, without cropping it; Electronic is the camera\'s own electronic shake reduction, which crops about 5 % from each side.',
+  movieSrLine: 'Sensor-Shift SR in Video Mode',
   navHdr: 'HDR gain map', hdrSub: 'Writes an HDR gain map into the JPEGs, so the highlights show brighter on HDR screens', hdrLine: 'HDR gain map  ·  in the JPEGs (switched in Shooting › HDR)',
   navFlash: 'Flash enhancements', flashSub: 'Direct Flash: when the flash fires at a fixed power, the camera sets the exposure from the focus distance and the flash\'s guide number you enter.',
   flashPlusSub: 'Direct Flash (fixed power, exposure from the focus distance and guide number) + flash TTL (pre-flash metering for a GF-2 in the two red-eye flash modes).', flashLine: 'Direct Flash  ·  a fifth Flash Mode (fixed power, exposure from the focus distance)',
@@ -530,43 +556,62 @@ const en: typeof zh = {
   libRename: 'Rename', libRenameExists: 'The library already has a preset with this name', libSearch: 'Search by name or file name', libSortNew: 'Newest first', libSortName: 'By name', libNoMatch: 'No preset matches',
 };
 export type Key = keyof typeof zh;
-/** Both dictionaries (tests compare them). */
-export const DICTS = { zh, en };
+/** One language's texts: every entry of the Chinese ones. */
+export type Dict = typeof zh;
+/** The interface languages; the order of the language menu. */
+export const UI_LANGS = ['zh', 'zh-TW', 'en', 'ja', 'ko', 'es', 'de'] as const;
+export type UiLang = (typeof UI_LANGS)[number];
+/** Each language's own name, for the language menu. */
+export const UI_LANG_NAMES: Record<UiLang, string> = { zh: '简体中文', 'zh-TW': '繁體中文', en: 'English', ja: '日本語', ko: '한국어', es: 'Español', de: 'Deutsch' };
+/** Every dictionary (tests compare them). */
+export const DICTS: Record<UiLang, Dict> = { zh, 'zh-TW': zhTW, en, ja, ko, es, de };
+export const isUiLang = (v: unknown): v is UiLang => typeof v === 'string' && (UI_LANGS as readonly string[]).includes(v);
 /**
- * @decision DEC-QOL-LANG-001
- * @title One app language (kept by the page, saved in the project); the camera menu language follows it
+ * @decision DEC-QOL-LANG-002
+ * @title Upstream's seven-language mechanism, with the fork's English default
  * @status accepted
- * @rationale Supersedes the fork's earlier live-switching UiLangMode / setUiLang / state.uiLang. Upstream GR Mod 0.8.13
- *   has ONE language setting: the preference lives in localStorage and in the saved project (`uiLang`), the camera
- *   menu language follows it (store.ts cameraLang), and a change saves the work then reloads the page, so `dict` is a
- *   constant and the store holds no language field (a smaller diff against upstream for later merges).
- *   Fork default kept: with nothing stored the app and the camera are English, not the system's language ('auto' is
- *   written to storage for an explicit "Follow system"; '' is its in-memory form). 简体中文 gives zh-CN camera names.
- *   Project import and snapshot restore never change the language (store.ts applyProjectExport).
+ * @rationale Supersedes DEC-QOL-LANG-001's two-language switch: upstream (0.9.x) owns the language list, the menu and
+ *   the reload-on-change flow, so the fork only keeps its default. With nothing stored the app and the camera are
+ *   English, not the system's language; an explicit "Follow system" is written to storage as 'auto' ('' is its
+ *   in-memory form, as upstream uses it). Project import and snapshot restore never change the language
+ *   (store.ts applyProjectExport).
  */
+/** The interface language the user picked ('' = as the system), kept in the web view's storage; English when nothing was ever stored. */
 const UI_LANG_KEY = 'grmod.uiLang';
-/** The language the user picked: 'zh' | 'en', or '' for "follow system"; English when nothing was ever stored. */
-export function uiLangPref(): '' | 'zh' | 'en' {
-  try { const v = localStorage.getItem(UI_LANG_KEY); return v === 'zh' || v === 'en' ? v : v === 'auto' ? '' : 'en'; } catch { return 'en'; }
+export function uiLangPref(): '' | UiLang {
+  try { const v = localStorage.getItem(UI_LANG_KEY); return isUiLang(v) ? v : v === 'auto' ? '' : 'en'; } catch { return 'en'; }
 }
-/** Stores the language ('' = follow system, kept as 'auto'); the page reloads in it unless `reload` is false (store.ts setAppLanguage saves the work first). */
-export function setUiLangPref(v: '' | 'zh' | 'en', reload = true): void {
+/** Changes the interface language; the page reloads in it unless `reload` is false (store.ts setAppLanguage saves the work first). */
+export function setUiLangPref(v: '' | UiLang, reload = true): void {
   try { localStorage.setItem(UI_LANG_KEY, v || 'auto'); } catch { /* not kept */ }
   if (reload && typeof window !== 'undefined') window.setTimeout(() => window.location.reload(), 120);
 }
-const systemZh = ((typeof navigator !== 'undefined' && navigator.language) || 'en').toLowerCase().startsWith('zh');
-/** The interface language in use (fixed for the life of the page). */
-export const UI_LANG: 'zh' | 'en' = uiLangPref() || (systemZh ? 'zh' : 'en');
-const dict = UI_LANG === 'zh' ? zh : en;
-if (typeof document !== 'undefined' && document.documentElement) document.documentElement.lang = UI_LANG;
-/** The language t() speaks, for code that formats text itself (release notes, credits). */
-export const uiLangCode = (): 'zh' | 'en' => UI_LANG;
+/** The system's language among the interface languages: its first one GR Mod has, else English. */
+export function systemUiLang(): UiLang {
+  for (const raw of navigator.languages?.length ? navigator.languages : [navigator.language || 'en']) {
+    const l = raw.toLowerCase();
+    if (l.startsWith('zh')) return /-(tw|hk|mo)\b|hant/.test(l) ? 'zh-TW' : 'zh';
+    const base = l.split('-')[0];
+    if (isUiLang(base)) return base;
+  }
+  return 'en';
+}
+/** The interface language in use. */
+export const UI_LANG: UiLang = uiLangPref() || systemUiLang();
+/** The two languages the release notes and the signed update notes are written in: Chinese for both Chinese, else English. */
+export const NOTES_LANG: 'zh' | 'en' = UI_LANG === 'zh' || UI_LANG === 'zh-TW' ? 'zh' : 'en';
+/** Chinese and Japanese punctuation (full width) in texts put together by the program. */
+export const WIDE_PUNCT = UI_LANG === 'zh' || UI_LANG === 'zh-TW' || UI_LANG === 'ja';
+const dict = DICTS[UI_LANG];
+try { document.documentElement.lang = UI_LANG === 'zh' ? 'zh-CN' : UI_LANG; } catch { /* no document (tests) */ }
+/** The language t() speaks, for code that formats text itself and for the tests. */
+export const uiLangCode = (): UiLang => UI_LANG;
 /** The phone app (Android, iOS): its own wording where the desktop's would be wrong (no dragging, no card). */
 const capx = (globalThis as unknown as { Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string } }).Capacitor;
 const PHONE = !!capx?.isNativePlatform?.() && ['android', 'ios'].includes(capx.getPlatform?.() ?? '');
 export function t(key: Key, vars?: Record<string, string | number>): string {
   const own = PHONE ? (dict as Record<string, string>)[`${key}M`] : undefined;
-  let s: string = own ?? dict[key] ?? key;
+  let s: string = own ?? dict[key] ?? DICTS.en[key] ?? key;
   if (vars) for (const k of Object.keys(vars)) s = s.split(`{${k}}`).join(String(vars[k]));
   return s;
 }

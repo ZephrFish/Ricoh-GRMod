@@ -33,6 +33,7 @@ import { installDirectFlashMenu } from './directflash-menu';
 import { DATESTAMP_BYTE, installDateStamp, lookNames } from './datestamp';
 import { HDR_SWITCH_BYTE, installHdrGainMap } from './hdrgain';
 import { StillLine, hdrStillLine, hdrTopDraw, installDateStampMenu, installHdrMenu, installStillLines } from './datestamp-menu';
+import { installLampAdj, installLampAssets, installLampCore, installLampFn, installLampList, lampAdjFunction, lampStillLine } from './lamp';
 import { exposurePreviewStillLines, installExposurePreviewAdj, installExposurePreviewAssets, installExposurePreviewLists, installExposurePreviewLive } from './exposure';
 import { installMonoUnlock } from './monounlock';
 import { installBrightAuto } from './brightauto';
@@ -58,6 +59,10 @@ import { installRatioShade } from './shade';
 import { GRID_SELECT, SHADE_SETTING, installGridStyleMenu, installShadeList, installShadePalette, installTtlFlashNames, installViewAssets, shadeStillLine } from './viewmenu';
 import type { ShadeTone } from './shade';
 import { installExposurePreviewOff } from './lvpreview';
+import { installMovieExposure } from './movieexp';
+import { MOVIE_4K_BIT, MOVIE_SENSOR_SR_BIT, installMovie4k } from './movie4k';
+import { installMovieSr, installMovieSrAssets } from './moviesr';
+import { installShiftAdj, installShiftAssets, installShiftCore, installShiftFn, shiftAdjFunction } from './shift';
 import { FRAME_LOOK, LOOK_STASH, installLookStash, monoLook, monoTable, styleColour } from './lookstash';
 import type { ShutdownPictureSpec } from './shutdown';
 import { adr, adrHEX, adrHex, adrText, byRelease } from '../target';
@@ -195,6 +200,16 @@ export interface ExtensionFeatures {
   videoAf?: boolean;
   /** A learned auto white balance for the three Auto modes (`awb2.ts`); 1.20 and 1.21. Off unless asked for. */
   awbLearn?: boolean;
+  /** Movies in the exposure mode of the mode dial, with the still mode's ISO setting (`movieexp.ts`); 1.20 and 1.21. Off unless asked for. */
+  movieExposure?: boolean;
+  /** The front lamp kept lit, switched in the still menu, on the ADJ lever and by an Fn function (`lamp.ts`); 1.20 and 1.21. */
+  constantLight?: boolean;
+  /** The picture moved and turned by hand with the shake reduction unit (`shift.ts`); 1.20 and 1.21. Off unless asked for. */
+  sensorShift?: boolean;
+  /** 4K movies: Frame Rate / Resolution in the movie menu (`movie4k.ts`); 1.20 and 1.21. Off unless asked for. */
+  movie4k?: boolean;
+  /** Movie SR with Off / Sensor Shift / Electronic (`moviesr.ts`); 1.20 and 1.21. Off unless asked for. */
+  movieSr?: boolean;
 }
 
 /** For test builds only: a fixed setting byte (1 short, 3 long style) instead of the camera menu. */
@@ -1114,7 +1129,7 @@ function installExtensionsInner(rtos: Uint8Array, iconbin: Uint8Array, ratios: r
   const shutdown = features.shutdown && features.shutdown.pictures.length > 0 ? features.shutdown : undefined;
   const cinema = (['CY', 'CG'] as const).filter((id) => features.cinemaHalation?.[id] === true);
   const adjSlots = features.adjSlots && features.adjSlots > 5 ? features.adjSlots : 0;
-  const extra = !!features.brightAuto || !!features.exposurePreview || !!features.adjSoftFocus || !!features.dateStamp || !!features.monoUnlock || slots.length > 0 || !!shutdown || !!features.guard || cinema.length > 0 || !!features.directFlash || adjSlots > 0 || !!features.hdrGainMap || !!features.hlgPhoto || !!features.batteryPercent || !!features.customGrid || !!features.ratioShade || !!features.shadowLearn || !!features.filmGrain || !!features.flashTtl || !!features.videoAf || !!features.awbLearn;
+  const extra = !!features.brightAuto || !!features.exposurePreview || !!features.adjSoftFocus || !!features.dateStamp || !!features.monoUnlock || slots.length > 0 || !!shutdown || !!features.guard || cinema.length > 0 || !!features.directFlash || adjSlots > 0 || !!features.hdrGainMap || !!features.batteryPercent || !!features.customGrid || !!features.ratioShade || !!features.shadowLearn || !!features.filmGrain || !!features.flashTtl || !!features.videoAf || !!features.awbLearn || !!features.movieExposure || !!features.sensorShift || !!features.movie4k || !!features.movieSr || !!features.constantLight || !!features.hlgPhoto;
   if (features.customGrid && (!validCustomGrid(features.customGrid) || isCameraGrid(features.customGrid))) fail('internal', 'a custom grid must differ from the camera’s');
   if (features.ratioShade && ratios.length === 0) fail('internal', 'the live-view shade needs an added ratio');
   if (features.ratioShadeTone !== undefined && features.ratioShadeTone !== 'dark') fail('bad-edit', 'the live-view shade is chosen in the camera menu on this firmware');
@@ -1138,6 +1153,9 @@ function installExtensionsInner(rtos: Uint8Array, iconbin: Uint8Array, ratios: r
   if (features.flashTtl !== undefined && typeof features.flashTtl !== 'boolean') fail('bad-edit', 'flashTtl must be boolean');
   if (features.videoAf !== undefined && typeof features.videoAf !== 'boolean') fail('bad-edit', 'videoAf must be boolean');
   if (features.awbLearn !== undefined && typeof features.awbLearn !== 'boolean') fail('bad-edit', 'awbLearn must be boolean');
+  if (features.movieExposure !== undefined && typeof features.movieExposure !== 'boolean') fail('bad-edit', 'movieExposure must be boolean');
+  if (features.constantLight !== undefined && typeof features.constantLight !== 'boolean') fail('bad-edit', 'constantLight must be boolean');
+  for (const name of ['sensorShift', 'movie4k', 'movieSr'] as const) if (features[name] !== undefined && typeof features[name] !== 'boolean') fail('bad-edit', `${name} must be boolean`);
   const patch = new Patch(rtos);
   const ramCopy = new DataView(patch.read(BASE + 0x450, 12).buffer);
   if (ramCopy.getUint32(0, true) !== RAM.source || ramCopy.getUint32(4, true) !== RAM.destination || ramCopy.getUint32(8, true) !== RAM.length) {
@@ -1167,7 +1185,9 @@ function installExtensionsInner(rtos: Uint8Array, iconbin: Uint8Array, ratios: r
   const lineOpts = features.exposurePreview || features.softFocusMenu ? { exposurePreview: !!features.exposurePreview, directFlash: !!features.directFlash, softFocus: !!features.softFocusMenu } : null;
   const ep = features.exposurePreview ? lineOpts : null;
   if (ep && test.exposurePreviewOff) fail('internal', 'exposure preview: the setting or always off, not both');
-  if (features.adjSoftFocus) icons = installAdjSoftFocus(patch, icons, ep ? 0x15 : 0x14);
+  // The last ADJ lever function: the camera's 0x14, then exposure preview's, Constant Light's and Sensor Shift's.
+  const lastAdj = 0x14 + (ep ? 1 : 0) + (features.constantLight ? 1 : 0) + (features.sensorShift ? 1 : 0);
+  if (features.adjSoftFocus) icons = installAdjSoftFocus(patch, icons, lastAdj);
   // Test 084: the custom grids as values of the Grid Style list (its record in place, before any
   // addition copies the list table), their texts and icons, and the shade's.
   if (features.customGrid || features.ratioShade) icons = installViewAssets(patch, icons, { ...(features.customGrid ? { grid: features.customGrid } : {}), shade: !!features.ratioShade });
@@ -1184,6 +1204,16 @@ function installExtensionsInner(rtos: Uint8Array, iconbin: Uint8Array, ratios: r
   }
   if (features.hlgPhoto) icons = installHlgPhoto(patch, icons);
   if (features.ratioShade) stillLines.push(shadeStillLine(patch));
+  // Constant Light: the lamp's code, then its line (after AF Assist Light), name and icon.
+  const lamp = features.constantLight ? installLampCore(patch) : null;
+  if (lamp) {
+    icons = installLampAssets(patch, icons);
+    stillLines.push(lampStillLine(patch));
+  }
+  // Sensor Shift: the module and the shooting screen's hooks, its texts and icon.
+  const shift = features.sensorShift ? installShiftCore(patch) : null;
+  if (shift) icons = installShiftAssets(patch, icons);
+  if (features.movieSr) icons = installMovieSrAssets(patch, icons);
   if (features.dateStamp) {
     const fixed = test.dateStampFixed;
     // From 0.8.2 (builds with the guard) the imprint goes by the picture's look.
@@ -1194,7 +1224,7 @@ function installExtensionsInner(rtos: Uint8Array, iconbin: Uint8Array, ratios: r
     if (!fixed) icons = installDateStampMenu(patch, icons, stillLines);
     if (look && slots.length === 0) installLookStash(patch);
   }
-  if (stillLines.length && (!features.dateStamp || test.dateStampFixed)) installStillLines(patch, stillLines, lineOpts ? 'exposure preview and soft focus' : hdrDraw ? 'HDR gain map' : 'live-view shade');
+  if (stillLines.length && (!features.dateStamp || test.dateStampFixed)) installStillLines(patch, stillLines, lineOpts ? 'exposure preview and soft focus' : hdrDraw ? 'HDR gain map' : features.ratioShade ? 'live-view shade' : 'constant light');
   // Halation: added slots that have it, Cinema slots with a preset that are asked to.
   const halation: HalationLook[] = [];
   slots.forEach((x, k) => {
@@ -1224,15 +1254,25 @@ function installExtensionsInner(rtos: Uint8Array, iconbin: Uint8Array, ratios: r
   if (features.hdrGainMap) installHdrMenu(patch, HDR_SWITCH_BYTE);
   if (lineOpts) installExposurePreviewLists(patch, lineOpts);
   if (features.ratioShade) installShadeList(patch);
+  if (lamp) installLampList(patch, lamp);
   // Exposure preview on the ADJ lever: the function table copied with a 22nd function (after soft
   // focus and Direct Flash, which change its records in place; before the ADJ slots' module, which reads it).
-  const adjTable = ep ? installExposurePreviewAdj(patch, ep) : 0;
+  const epTable = ep ? installExposurePreviewAdj(patch, ep) : 0;
+  // Constant Light on the ADJ lever (one more function, after exposure preview's) and as an Fn function.
+  const lampTable = lamp ? installLampAdj(patch, lamp, lampAdjFunction(!!ep)) : epTable;
+  if (lamp) installLampFn(patch, lamp);
+  // Sensor Shift on the ADJ lever (one more function, the last) and as an Fn function (after Constant Light's, which copies the lists first).
+  const adjTable = shift ? installShiftAdj(patch, shift, shiftAdjFunction(!!ep, !!lamp)) : lampTable;
+  if (shift) installShiftFn(patch, shift);
+  // The movie menu: Movie SR's three values; Frame Rate / Resolution (a submenu and a list more, after the others).
+  if (features.movieSr) installMovieSr(patch, shift);
+  if (features.movie4k) installMovie4k(patch);
   // ADJ lever slots: after the other additions that copy the submenu or list table (it adds records the same way).
-  if (adjSlots > 0) installAdjSlots(patch, adjSlots, adjTable ? { functionTable: adjTable } : {});
+  if (adjSlots > 0) installAdjSlots(patch, adjSlots, adjTable ? { functionTable: adjTable, lastFunction: lastAdj } : {});
   if (ep) installExposurePreviewLive(patch, ep);
   else if (test.exposurePreviewOff) installExposurePreviewOff(patch);
   // Last: wraps every other settings save/load and user-mode recall hook.
-  if (features.guard) installSettingsGuard(patch, { slots: slots.length, ratios: ratios.length > 0, adjSoftFocus: !!features.adjSoftFocus, ...(features.lookLayout ? { hiddenLooks: features.lookLayout.hidden } : {}), ...(adjSlots > 0 ? { adjSlots } : {}), ...(features.hdrGainMap ? { hdr: true } : {}), ...(ep ? { exposurePreview: true } : {}) });
+  if (features.guard) installSettingsGuard(patch, { slots: slots.length, ratios: ratios.length > 0, adjSoftFocus: !!features.adjSoftFocus, ...(features.lookLayout ? { hiddenLooks: features.lookLayout.hidden } : {}), ...(adjSlots > 0 ? { adjSlots } : {}), ...(features.hdrGainMap ? { hdr: true } : {}), ...(ep ? { exposurePreview: true } : {}), ...(lamp || shift ? { lastAdjFunction: lastAdj } : {}), ...(features.movieSr || features.movie4k ? { movieBits: (features.movieSr ? MOVIE_SENSOR_SR_BIT : 0) | (features.movie4k ? MOVIE_4K_BIT : 0) } : {}) });
   if (features.brightAuto) installBrightAuto(patch, features.brightAuto === 'balanced' ? 'balanced' : 'bright');
   if (features.batteryPercent) icons = installBatteryPercent(patch, icons, !!test.batteryDiag);
   // After the ratios: the diagonals take the point setter the grid view's layout calls then.
@@ -1255,8 +1295,11 @@ function installExtensionsInner(rtos: Uint8Array, iconbin: Uint8Array, ratios: r
   if (features.awbLearn) installAwbLearn(patch);
   // Very last: the zero fill over the sbrk arena; the additions above expect it at 0x55839040 or its official end.
   // (Movie AF and the learned white balance keep their state pointers in the arena: they need the zero fill there too.)
-  if (features.batteryPercent || features.videoAf || features.awbLearn) extendBatteryZeroFill(patch);
+  if (features.batteryPercent || features.videoAf || features.awbLearn || features.constantLight || features.sensorShift || features.movieSr || features.movie4k) extendBatteryZeroFill(patch);
+  // Exposure modes for movies: after everything, so that a build with it differs from the one without only by its
+  // own words (and the record of the additions).
+  if (features.movieExposure) installMovieExposure(patch);
   if (patch.length % 4 !== 0) fail('internal', 'image length is not a multiple of 4');
   if (BASE + patch.length >= APPEND_LIMIT) fail('too-many-ratios', 'the appended area would reach the RAM area');
-  return { revision, rtos: patch.bytes(), iconbin: icons, ratios: [...ratios], words: patch.words, features: { ...(features.brightAuto ? { brightAuto: features.brightAuto === 'balanced' ? 'balanced' as const : 'bright' as const } : {}), adjSoftFocus: !!features.adjSoftFocus, ...(features.dateStamp ? { dateStamp: true } : {}), ...(features.monoUnlock ? { monoUnlock: true } : {}), ...(features.hlgPhoto ? { hlgPhoto: true } : {}), ...(slots.length > 0 ? { extraSlots: [...slots] } : {}), ...(shutdown ? { shutdown } : {}), ...(features.guard ? { guard: true } : {}), ...(cinema.length > 0 ? { cinemaHalation: Object.fromEntries(cinema.map((id) => [id, true])) } : {}), ...(features.lookLayout ? { lookLayout: features.lookLayout } : {}), ...(features.directFlash ? { directFlash: true } : {}), ...(features.hdrGainMap ? { hdrGainMap: true } : {}), ...(adjSlots > 0 ? { adjSlots } : {}), ...(features.exposurePreview ? { exposurePreview: true } : {}), ...(features.softFocusMenu ? { softFocusMenu: true } : {}), ...(features.batteryPercent ? { batteryPercent: true } : {}), ...(features.customGrid ? { customGrid: features.customGrid } : {}), ...(features.ratioShade ? { ratioShade: true } : {}), ...(features.shadowLearn ? { shadowLearn: true } : {}), ...(features.filmGrain ? { filmGrain: true } : {}), ...(features.flashTtl ? { flashTtl: true } : {}), ...(features.videoAf ? { videoAf: true } : {}), ...(features.awbLearn ? { awbLearn: true } : {}) } };
+  return { revision, rtos: patch.bytes(), iconbin: icons, ratios: [...ratios], words: patch.words, features: { ...(features.brightAuto ? { brightAuto: features.brightAuto === 'balanced' ? 'balanced' as const : 'bright' as const } : {}), adjSoftFocus: !!features.adjSoftFocus, ...(features.dateStamp ? { dateStamp: true } : {}), ...(features.monoUnlock ? { monoUnlock: true } : {}), ...(slots.length > 0 ? { extraSlots: [...slots] } : {}), ...(shutdown ? { shutdown } : {}), ...(features.guard ? { guard: true } : {}), ...(cinema.length > 0 ? { cinemaHalation: Object.fromEntries(cinema.map((id) => [id, true])) } : {}), ...(features.lookLayout ? { lookLayout: features.lookLayout } : {}), ...(features.directFlash ? { directFlash: true } : {}), ...(features.hdrGainMap ? { hdrGainMap: true } : {}), ...(adjSlots > 0 ? { adjSlots } : {}), ...(features.exposurePreview ? { exposurePreview: true } : {}), ...(features.softFocusMenu ? { softFocusMenu: true } : {}), ...(features.batteryPercent ? { batteryPercent: true } : {}), ...(features.customGrid ? { customGrid: features.customGrid } : {}), ...(features.ratioShade ? { ratioShade: true } : {}), ...(features.shadowLearn ? { shadowLearn: true } : {}), ...(features.filmGrain ? { filmGrain: true } : {}), ...(features.flashTtl ? { flashTtl: true } : {}), ...(features.videoAf ? { videoAf: true } : {}), ...(features.awbLearn ? { awbLearn: true } : {}), ...(features.movieExposure ? { movieExposure: true } : {}), ...(features.sensorShift ? { sensorShift: true } : {}), ...(features.movie4k ? { movie4k: true } : {}), ...(features.movieSr ? { movieSr: true } : {}), ...(features.constantLight ? { constantLight: true } : {}), ...(features.hlgPhoto ? { hlgPhoto: true } : {}) } };
 }

@@ -121,7 +121,7 @@ describe('app language (one setting; the camera menu language follows it)', () =
     expect(JSON.parse(dec(mocks.files.get('project.json'))).uiLang).toBe('');
     system('zh-TW', 'en');
     let r = await fresh(); await r.s.init();
-    expect(r.i.uiLangCode()).toBe('zh'); expect(r.s.getState().lang).toBe('zh-TW'); expect(r.s.getState().langAuto).toBe(true);
+    expect(r.i.uiLangCode()).toBe('zh-TW'); expect(r.s.getState().lang).toBe('zh-TW'); expect(r.s.getState().langAuto).toBe(true); // upstream 0.9 has Traditional Chinese
     system('fr-FR', 'en');
     r = await fresh(); await r.s.init();
     expect(r.i.uiLangCode()).toBe('en'); expect(r.s.getState().lang).toBe('fr'); // the app has no French: English; the camera has
