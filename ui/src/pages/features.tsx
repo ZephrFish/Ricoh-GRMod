@@ -5,7 +5,7 @@ import { FirmwareHero } from '../firmware';
 import { t } from '../i18n';
 import {
   useStore, loadFirmwareFile, gridOffered, setSoft, setDateStamp, setMonoUnlock, setFlashPlus, flashPlusOn, setAdjSlots, adjSlotsOf, setHdr, setExposurePreview, setFilmGrain,
-  setShadowLearn, setBattery, setVideoAf, setMovieExposure, setAwbLearn, setConstantLight, setSensorShift, setMovie4k, setMovieSr, setDistanceFeet, setBrightAuto, setCustomGrid, setHlgPhoto, setPhotoFit,
+  setShadowLearn, setBattery, setSubjectAf, setLockProtect, setVideoAf, setMovieExposure, setAwbLearn, setWbPerLook, setConstantLight, setSensorShift, setMovie4k, setMovieSr, setDistanceFeet, setBrightAuto, setCustomGrid, setHlgPhoto, setPhotoFit,
 } from '../store';
 import { isFirmware } from './files';
 import { GridDetail, GridThumb, closeGrid, openGrid, useGridArrival } from './grid';
@@ -93,6 +93,10 @@ function ExtrasList() {
   const ttlOk = useStore((s) => !!s.info?.features.flashTtl);
   const battery = useStore((s) => s.battery);
   const batteryOk = useStore((s) => !!s.info?.features.batteryPercent);
+  const saf = useStore((s) => s.subjectAf);
+  const safOk = useStore((s) => !!s.info?.features.subjectAf);
+  const lockP = useStore((s) => s.lockProtect);
+  const lockOk = useStore((s) => !!s.info?.features.lockProtect);
   const vaf = useStore((s) => s.videoAf);
   const vafOk = useStore((s) => !!s.info?.features.videoAf);
   const mexp = useStore((s) => s.movieExposure);
@@ -109,6 +113,8 @@ function ExtrasList() {
   const msrOk = useStore((s) => !!s.info?.features.movieSr);
   const feet = useStore((s) => s.distanceFeet);
   const unitsOk = useStore((s) => !!s.info?.features.distanceFeet);
+  const wbLook = useStore((s) => s.wbPerLook);
+  const wbLookOk = useStore((s) => !!s.info?.features.wbPerLook);
   const gridOk = useStore((s) => gridOffered(s));
   // the level names without their "Auto brightness · " prefix, first letter up
   const level = (key: 'brightAutoOff' | 'brightAutoBalanced' | 'brightAutoBright'): string => ((x) => x.charAt(0).toUpperCase() + x.slice(1))(t(key).split(' · ').pop()!);
@@ -130,6 +136,7 @@ function ExtrasList() {
           value={grain ? 'mod' : 'camera'} onChange={(v) => setFilmGrain(v === 'mod')}
           options={[{ value: 'camera', label: t('grainCamera') }, { value: 'mod', label: t('grainMod') }]} />
       )}
+      {safOk && <FeatureCapsule icon={Ico.subject} title={t('navSubjectAf')} sub={t('subjectAfSub')} on={saf} onChange={setSubjectAf} tour="ex-f-saf" />}
       {vafOk && <FeatureCapsule icon={Ico.movie} title={t('navVideoAf')} sub={t('videoAfSub')} on={vaf} onChange={setVideoAf} tour="ex-f-vaf" />}
       {mexpOk && <FeatureCapsule icon={Ico.movieExp} title={t('navMovieExp')} sub={t('movieExpSub')} on={mexp} onChange={setMovieExposure} tour="ex-f-mexp" />}
       {m4kOk && <FeatureCapsule icon={Ico.movie4k} title={t('navMovie4k')} sub={t('movie4kSub')} on={m4k} onChange={setMovie4k} tour="ex-f-4k" />}
@@ -142,6 +149,8 @@ function ExtrasList() {
           value={feet ? 'ft' : 'm'} onChange={(v) => setDistanceFeet(v === 'ft')}
           options={[{ value: 'm', label: t('unitsMetre') }, { value: 'ft', label: t('unitsFeet') }]} />
       )}
+      {wbLookOk && <FeatureCapsule icon={Ico.wb} title={t('navWbLook')} sub={t('wbLookSub')} on={wbLook} onChange={setWbPerLook} tour="ex-f-wblook" />}
+      {lockOk && <FeatureCapsule icon={Ico.lock} title={t('navLockProtect')} sub={t('lockProtectSub')} on={lockP} onChange={setLockProtect} tour="ex-f-lock" />}
       {gridOk && <GridCapsule />}
       {adjMax > 5 && (
         <ChoiceCapsule icon={Ico.adj} title={t('navAdjSlots')} sub={t('adjSlotsSub')} on={adj > 5} tour="ex-f-adj"

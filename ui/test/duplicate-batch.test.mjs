@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// @mock-exempt: engine worker, host bridge, pixels and preview are external boundaries (same pattern as gr3x-ui-library.test.mjs)
-// QoL batch D2: .cube export of a slot, duplicate an added slot, batch preset import, library rename and search,
-// on the real UI store with an in-memory host.
+// @mock-exempt: engine worker, host bridge, pixels and preview are external boundaries (same pattern as store-gr3.test.mjs)
+// Duplicate an added slot and batch preset import, on the real UI store with an in-memory host.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import * as core from '../src/index';
+import * as core from '@grmod/core';
 
 const mocks = vi.hoisted(() => ({
   engine: { open: vi.fn(), reset: vi.fn(), convert: vi.fn(), heartbeat: vi.fn(), ratio: vi.fn() },
@@ -13,10 +12,10 @@ const mocks = vi.hoisted(() => ({
     volumes: vi.fn(), sidecar: vi.fn(), join: (...p) => p.join('/'),
   },
 }));
-vi.mock('../../ui/src/engine', () => ({ engine: mocks.engine, EngineError: class extends Error {} }));
-vi.mock('../../ui/src/host', () => ({ host: mocks.host, HostError: class extends Error {}, sha256Hex: async (b) => (await import('node:crypto')).createHash('sha256').update(b).digest('hex') /* a real hash: the fit cache (PR 42) is keyed by it */, isAndroid: false, isMobile: false }));
-vi.mock('../../ui/src/pixels', () => ({ ensureIconFont: vi.fn(), textIcon: vi.fn(() => new Uint8Array(1)), imageIcon: vi.fn(() => new Uint8Array(1)) }));
-vi.mock('../../ui/src/preview', () => ({ decodePreview: vi.fn() }));
+vi.mock('../src/engine', () => ({ engine: mocks.engine, EngineError: class extends Error {} }));
+vi.mock('../src/host', () => ({ host: mocks.host, HostError: class extends Error {}, sha256Hex: async (b) => (await import('node:crypto')).createHash('sha256').update(b).digest('hex'), isAndroid: false, isMobile: false }));
+vi.mock('../src/pixels', () => ({ ensureIconFont: vi.fn(), textIcon: vi.fn(() => new Uint8Array(1)), imageIcon: vi.fn(() => new Uint8Array(1)) }));
+vi.mock('../src/preview', () => ({ decodePreview: vi.fn() }));
 
 const caps = { build: true, presets: true, wallpaper: false, factoryEntry: false, bridge: false };
 const gr4 = () => ({
@@ -45,33 +44,14 @@ beforeEach(async () => {
   mocks.engine.convert.mockImplementation(async (_kind, text) => fitted('Look ' + text.length));
   mocks.engine.open.mockResolvedValue(gr4());
   vi.stubGlobal('document', { hidden: true });
-  store = await import('../../ui/src/store');
+  vi.stubGlobal('fetch', async () => { throw new Error('offline'); });
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  store = await import('../src/store');
   await store.adoptFirmware('fwdc248b.bin', '1.11', new Uint8Array([1]));
-});
+  // The fork's photo-weighted .cube fit is on by default and would change the fitting options these tests compare; off here (core/test/photo-fit-ui.test.mjs tests it with the library and batch import).
+  store.setPhotoFit(false);
+}, 60000);
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
-
-describe('export a slot as a .cube', () => {
-  it('downloads <slot name>.cube with a 33^3 table for an added slot, and refuses a slot without a fitted look', async () => {
-    const downloads = [];
-    const a = { click() { downloads.push({ name: this.download, href: this.href }); }, remove() {} };
-    vi.stubGlobal('document', { hidden: true, createElement: () => a, body: { appendChild() {} } });
-    let blob;
-    vi.stubGlobal('URL', { createObjectURL: (b) => { blob = b; return 'blob:x'; }, revokeObjectURL() {} });
-    store.exportSlotCubeFile('CY');
-    expect(downloads).toEqual([]); // nothing fitted
-    expect(store.getState().toasts.at(-1).kind).toBe('error');
-    store.addExtraSlot();
-    const k = store.getState().extras[0].key;
-    store.setExtraName(k, 'Warm 400');
-    await store.loadPresetFile(k, file('w.cube'));
-    store.exportSlotCubeFile(k);
-    expect(downloads).toHaveLength(1);
-    expect(downloads[0].name).toBe('Warm 400.cube');
-    const text = await blob.text();
-    expect(text.split('\n').slice(0, 3)).toEqual(['TITLE "Warm 400"', 'LUT_3D_SIZE 33', 'DOMAIN_MIN 0.0 0.0 0.0']);
-    expect(text.split('\n').filter((l) => /^[\d.]/.test(l))).toHaveLength(33 ** 3);
-  });
-});
 
 describe('duplicate an added slot', () => {
   it('copies params, icon, name suffix and the preset file under the new key, right after the source in extras and look order', async () => {
@@ -103,6 +83,16 @@ describe('duplicate an added slot', () => {
     const k2 = store.duplicateExtraSlot(a);
     expect(store.getState().extras.find((x) => x.key === k2).name).toBe('ABCDEFGHIJ 2');
     expect(core.validateExtraSlotName(store.getState().extras.find((x) => x.key === k2).name)).toBeNull();
+  });
+  it('a slot without a name of its own gives a copy without one, named by its place', async () => {
+    store.setExtraCount(1);
+    await vi.advanceTimersByTimeAsync(5);
+    const [a] = store.getState().extras.map((x) => x.key);
+    const k = store.duplicateExtraSlot(a);
+    const dup = store.getState().extras.find((x) => x.key === k);
+    expect(dup.name).toBe('');
+    expect(store.extraName(dup)).toBe('GR Mod 2');
+    expect(store.getState().toasts.at(-1).text).toContain('GR Mod 2');
   });
   it('is refused at MAX_EXTRA_SLOTS with a reason, and changes nothing', async () => {
     store.setExtraCount(core.MAX_EXTRA_SLOTS);
@@ -136,48 +126,70 @@ describe('batch preset import', () => {
     expect(store.getState().slots.CY.preset.fileName).toBe('new.cube');
     expect(store.getState().confirm).toBeUndefined();
   });
-  it('3 files into a project with 2 empty slots fill them in order, then ask before adding a slot', async () => {
-    const files3 = [file('a.cube'), file('b.cube'), file('c.cube')];
-    const done = store.loadPresetFiles(files3, 'CG'); // dropped on Green: it goes first, then the free slot (Yellow)
-    await vi.advanceTimersByTimeAsync(5);
-    expect(store.getState().confirm.title).toBe('Add slots for the remaining presets?');
-    expect(store.getState().confirm.lines.join(' ')).toContain('c.cube');
-    expect(store.getState().slots.CG.preset.fileName).toBe('a.cube'); // the two free slots are filled before it asks
-    expect(store.getState().slots.CY.preset.fileName).toBe('b.cube');
-    expect(store.getState().extras).toHaveLength(0);
-    store.answerConfirm(true);
+  it('2 files dropped on Green: the first on Green, the second on a new added slot, never on Yellow', async () => {
+    const done = store.loadPresetFiles([file('a.cube'), file('b.cube')], 'CG');
     await vi.advanceTimersByTimeAsync(5); await done;
     const s = store.getState();
     expect(s.slots.CG.preset.fileName).toBe('a.cube');
-    expect(s.slots.CY.preset.fileName).toBe('b.cube');
+    expect(s.slots.CY.preset).toBeUndefined(); // a Cinema slot only takes a file dropped on it
     expect(s.extras).toHaveLength(1);
-    expect(s.extras[0].preset.fileName).toBe('c.cube');
+    expect(s.extras[0].preset.fileName).toBe('b.cube');
+    expect(s.confirm).toBeUndefined(); // added slots are made without asking
     expect(s.busy).toBeUndefined();
-    expect(lastToast()).toMatchObject({ kind: 'ok', text: '3 presets applied' });
+    expect(s.activeSlot).toBe('CG');
+    expect(lastToast()).toMatchObject({ kind: 'ok', text: '2 presets applied' });
   });
-  it('declining the extra slot skips the rest; a failing file is reported by name; a slot with a preset is never overwritten', async () => {
-    await store.loadPresetFile('CY', file('keep.cube', 'LUT_3D_SIZE 2 keep'));
+  it('fills empty added slots in order first, keeps the good ones, and replaces the slot it was dropped on', async () => {
+    store.setExtraCount(3); await vi.advanceTimersByTimeAsync(5);
+    const [x1, x2, x3] = store.getState().extras.map((x) => x.key);
+    await store.loadPresetFile(x2, file('keep.cube', 'LUT_3D_SIZE 2 keep'));
+    await store.loadPresetFile('CY', file('old.cube', 'LUT_3D_SIZE 2 old'));
+    const done = store.loadPresetFiles([file('a.cube'), file('b.cube'), file('c.cube'), file('d.cube')], 'CY');
+    await vi.advanceTimersByTimeAsync(5); await done;
+    const s = store.getState(), by = (k) => s.extras.find((x) => x.key === k).preset.fileName;
+    expect(s.slots.CY.preset.fileName).toBe('a.cube'); // dropped there: replaced, as one file would
+    expect(by(x1)).toBe('b.cube');
+    expect(by(x2)).toBe('keep.cube');
+    expect(by(x3)).toBe('c.cube');
+    expect(s.extras).toHaveLength(4);
+    expect(s.extras[3].preset.fileName).toBe('d.cube');
+    expect(s.slots.CG.preset).toBeUndefined();
+  });
+  it('imports nothing when the added slots would go over the limit, and says so', async () => {
+    store.setExtraCount(core.MAX_EXTRA_SLOTS - 1); await vi.advanceTimersByTimeAsync(5);
+    const before = store.getState().extras.length;
+    mocks.engine.convert.mockClear();
+    await store.loadPresetFiles([file('a.cube'), file('b.cube'), file('c.cube'), file('d.cube')], 'CY');
+    // 3 to place, 19 empty added slots: they fit
+    expect(store.getState().extras).toHaveLength(before);
+    expect(mocks.engine.convert).toHaveBeenCalledTimes(4);
+    store.setExtraCount(core.MAX_EXTRA_SLOTS); await vi.advanceTimersByTimeAsync(5);
+    for (const x of store.getState().extras) await store.loadPresetFile(x.key, file('full.cube'));
+    mocks.engine.convert.mockClear();
+    await store.loadPresetFiles([file('e.cube'), file('f.cube')], 'CG');
+    expect(mocks.engine.convert).not.toHaveBeenCalled();
+    expect(store.getState().slots.CG.preset).toBeUndefined(); // not even the first one
+    expect(store.getState().extras).toHaveLength(core.MAX_EXTRA_SLOTS);
+    expect(lastToast()).toMatchObject({ kind: 'error' });
+    expect(lastToast().text).toContain(String(core.MAX_EXTRA_SLOTS));
+  });
+  it('a failing file is reported by name', async () => {
     mocks.engine.convert.mockImplementation(async (_k, text) => { if (text.includes('BAD')) throw new Error('nope'); return fitted('ok ' + text.length); });
-    const done = store.loadPresetFiles([file('bad.cube', 'BAD'), file('good.cube'), file('late.cube')], 'CY');
-    await vi.advanceTimersByTimeAsync(5);
-    store.answerConfirm(false);
+    const done = store.loadPresetFiles([file('bad.cube', 'BAD'), file('good.cube')], 'CY');
     await vi.advanceTimersByTimeAsync(5); await done;
     const s = store.getState();
-    expect(s.slots.CY.preset.fileName).toBe('keep.cube'); // untouched although it was the drop target
-    expect(s.slots.CG.preset.fileName).toBe('bad.cube');
-    expect(s.slots.CG.preset.error).toBeTruthy();
-    expect(s.extras).toHaveLength(0);
+    expect(s.slots.CY.preset.error).toBeTruthy();
+    expect(s.extras[0].preset.fileName).toBe('good.cube');
     expect(lastToast().kind).toBe('error');
-    expect(lastToast().text).toBe('0 presets applied · 2 skipped (no free slot) · 1 failed: bad.cube');
+    expect(lastToast().text).toBe('1 presets applied · 1 failed: bad.cube');
   });
-  it('every key it stores is one the desktop host accepts (the photo fit\'s cache included)', async () => {
+  it('every key it stores is one the desktop host accepts', async () => {
     mocks.engine.convert.mockImplementation(async (_k, text) => fitted(text));
     store.setExtraCount(1); await vi.advanceTimersByTimeAsync(5);
-    expect(store.getState().photoFit).toBe(true); // on by default: .cube imports go through the cache
     const done = store.loadPresetFiles([file('1.cube', 'one'), file('2.cube', 'two')]);
     await vi.advanceTimersByTimeAsync(5); await done; await vi.advanceTimersByTimeAsync(5);
     const keys = mocks.host.storeSet.mock.calls.map((c) => c[0]);
-    expect(keys.some((k) => k.startsWith('fit-'))).toBe(true);
+    expect(keys.length).toBeGreaterThan(0);
     // shell/internal/server/store.go keyPattern
     for (const k of keys) expect(k, k).toMatch(/^[a-z0-9][a-z0-9._-]{0,63}$/);
   });
@@ -188,56 +200,15 @@ describe('batch preset import', () => {
     const done = store.loadPresetFiles([file('1.cube', 'one'), file('2.cube', 'two'), file('3.cube', 'three')]);
     await vi.advanceTimersByTimeAsync(5); await done;
     expect(order).toEqual(['one', 'two', 'three']);
-    expect(seen).toEqual(['Importing preset 1 of 3', 'Importing preset 2 of 3', 'Importing preset 3 of 3']);
-    expect(store.getState().confirm).toBeUndefined(); // enough slots, nothing to ask
+    expect(seen).toEqual(['Importing preset 1 of 3', 'Importing preset 2 of 3', 'Importing preset 3 of 3']); // n is the files dropped
+    expect(store.getState().confirm).toBeUndefined();
     expect(store.batchTargets()).toEqual([]);
   });
-});
-
-describe('library rename and search', () => {
-  const index = () => JSON.parse(new TextDecoder().decode(files.get('library.json')));
-  beforeEach(async () => {
-    await store.loadPresetFile('CY', file('warm.cube', 'LUT_3D_SIZE 2 warm'));
-    await store.saveToLibrary('CY', 'Warm');
-    await store.loadPresetFile('CY', file('Cool-Tone.cube', 'LUT_3D_SIZE 2 cool'));
-    await store.saveToLibrary('CY', 'Cool');
-  });
-  it('renames an entry, persists it to library.json and keeps id, date and files', async () => {
-    const before = index().entries.find((e) => e.name === 'Warm');
-    expect(await store.renameLibraryEntry(before.id, '  Golden hour ')).toBe('ok');
-    const after = index().entries.find((e) => e.id === before.id);
-    expect(after).toMatchObject({ name: 'Golden hour', date: before.date, fileName: 'warm.cube' });
-    expect(store.getState().library.find((e) => e.id === before.id).name).toBe('Golden hour');
-    expect(files.has('library-' + before.id)).toBe(true);
-    expect(await store.renameLibraryEntry(before.id, 'Golden hour')).toBe('ok'); // unchanged: no clash with itself
-  });
-  it('rejects a duplicate name in the same family, a blank name and an unknown id, writing nothing', async () => {
-    const warm = index().entries.find((e) => e.name === 'Warm');
-    const raw = files.get('library.json');
-    expect(await store.renameLibraryEntry(warm.id, 'Cool')).toBe('exists');
-    expect(await store.renameLibraryEntry(warm.id, '   ')).toBe('empty');
-    expect(await store.renameLibraryEntry('nope', 'X')).toBe('missing');
-    expect(files.get('library.json')).toBe(raw);
-    expect(store.getState().library.map((e) => e.name).sort()).toEqual(['Cool', 'Warm']);
-  });
-  it('a name used by the other camera family is allowed', async () => {
-    const warm = index().entries.find((e) => e.name === 'Warm');
-    files.set('library.json', new TextEncoder().encode(JSON.stringify({ v: 1, entries: [...index().entries, { id: 'g3', name: 'Mine', kind: 'cube', family: 'gr3', fileName: 'm.cube', date: 1 }] })));
-    vi.resetModules();
-    const again = await import('../../ui/src/store');
-    await again.loadLibrary();
-    expect(await again.renameLibraryEntry(warm.id, 'Mine')).toBe('ok');
-  });
-  it('search matches name and file name case-insensitively; sort is newest first or by name', () => {
-    const e = (id, name, fileName, date) => ({ id, name, kind: 'cube', family: 'gr4', fileName, date });
-    const list = [e('a', 'Warm', 'one.cube', 1), e('b', 'cool', 'Film-TONE.cube', 3), e('c', 'Amber', 'two.xmp', 2)];
-    expect(store.searchLibrary(list, ' WARM ').map((x) => x.id)).toEqual(['a']);
-    expect(store.searchLibrary(list, 'tone').map((x) => x.id)).toEqual(['b']);
-    expect(store.searchLibrary(list, '.xmp').map((x) => x.id)).toEqual(['c']);
-    expect(store.searchLibrary(list, 'zzz')).toEqual([]);
-    expect(store.searchLibrary(list, '  ')).toHaveLength(3);
-    expect(store.sortLibrary(list, 'new').map((x) => x.id)).toEqual(['b', 'c', 'a']);
-    expect(store.sortLibrary(list, 'name').map((x) => x.id)).toEqual(['c', 'b', 'a']);
-    expect(store.LIBRARY_SEARCH_MIN).toBe(5);
+  it('2 files count as 2 in the progress, however many slots are free', async () => {
+    const seen = [];
+    mocks.engine.convert.mockImplementation(async (_k, text) => { seen.push(store.getState().busy); return fitted(text); });
+    store.setExtraCount(3); await vi.advanceTimersByTimeAsync(5);
+    await store.loadPresetFiles([file('1.cube', 'one'), file('2.cube', 'two')], 'CY');
+    expect(seen).toEqual(['Importing preset 1 of 2', 'Importing preset 2 of 2']);
   });
 });

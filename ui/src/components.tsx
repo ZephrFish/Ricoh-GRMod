@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { DragEvent as ReactDragEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { isIOS, isMobile, useBack } from './host-android';
 import { ICON_H, ICON_W, RATIO_ICON_H, RATIO_ICON_W } from '@grmod/core';
@@ -44,6 +44,8 @@ export const Ico = {
   eyeOff: <svg viewBox="0 0 20 20" {...P}><path d="M8.3 5.2A7.4 7.4 0 0 1 10 5c4.7 0 7.4 5 7.4 5a12.4 12.4 0 0 1-2 2.6M12.3 14.6A6.8 6.8 0 0 1 10 15c-4.7 0-7.4-5-7.4-5a12.6 12.6 0 0 1 3.1-3.6M8.5 8.5a2.2 2.2 0 0 0 3 3M3.6 3.6l12.8 12.8" /></svg>,
   download: <svg viewBox="0 0 20 20" {...P}><path d="M10 3.2v9.6M6 9.2l4 3.8 4-3.8M4 16.2h12" /></svg>,
   info: <svg viewBox="0 0 20 20" {...P}><circle cx="10" cy="10" r="7.2" /><path d="M10 9.2v4.4" /><circle cx="10" cy="6.4" r="0.6" fill="currentColor" /></svg>,
+  lock: <svg viewBox="0 0 20 20" {...P}><rect x="4.6" y="8.8" width="10.8" height="8" rx="1.6" /><path d="M7 8.8V6.4a3 3 0 0 1 6 0v2.4" /><path d="M10 11.8v2" /></svg>,
+  halo: <svg viewBox="0 0 20 20" {...P}><circle cx="10" cy="10" r="2.6" fill="currentColor" stroke="none" /><circle cx="10" cy="10" r="4.9" opacity="0.6" /><circle cx="10" cy="10" r="7.3" opacity="0.3" /></svg>,
   soft: <svg viewBox="0 0 20 20" {...P}><circle cx="10" cy="10" r="3.3" /><circle cx="10" cy="10" r="7.2" strokeDasharray="1.4 2.35" /></svg>,
   date: <svg viewBox="0 0 20 20" {...P}><rect x="2.8" y="4.4" width="14.4" height="12" rx="2" /><path d="M2.8 8.2h14.4M6.6 2.8v3M13.4 2.8v3M6.4 11.4h1.6M9.2 11.4h1.6M12 11.4h1.6M6.4 13.8h1.6M9.2 13.8h1.6" /></svg>,
   adj: <svg viewBox="0 0 20 20" {...P}><rect x="1.8" y="6.6" width="3.4" height="3.4" rx="0.8" /><rect x="6.4" y="6.6" width="3.4" height="3.4" rx="0.8" /><rect x="11" y="6.6" width="3.4" height="3.4" rx="0.8" /><rect x="15.6" y="6.6" width="2.6" height="3.4" rx="0.8" /><path d="M3.5 13.4h13" /></svg>,
@@ -57,6 +59,8 @@ export const Ico = {
   shadow: <svg viewBox="0 0 20 20" {...P}><rect x="2.8" y="2.8" width="14.4" height="14.4" rx="2" /><path d="M5 15C6.4 9.6 9.6 6.6 15 5" /><path d="M5 15l10-10" strokeDasharray="1.2 2" /></svg>,
   /* film grain: dots of a few sizes */
   grain: <svg viewBox="0 0 20 20" {...P}><rect x="2.8" y="2.8" width="14.4" height="14.4" rx="2" /><circle cx="6.6" cy="6.8" r="1" fill="currentColor" stroke="none" /><circle cx="12.2" cy="5.9" r="0.6" fill="currentColor" stroke="none" /><circle cx="9.6" cy="10.2" r="1.4" fill="currentColor" stroke="none" /><circle cx="14" cy="11.4" r="0.8" fill="currentColor" stroke="none" /><circle cx="6.2" cy="13.4" r="0.7" fill="currentColor" stroke="none" /><circle cx="11.6" cy="14.4" r="0.9" fill="currentColor" stroke="none" /></svg>,
+  /* a focus frame round a head */
+  subject: <svg viewBox="0 0 20 20" {...P}><path d="M3 6.6V4.2C3 3.5 3.5 3 4.2 3h2.4M13.4 3h2.4c.7 0 1.2.5 1.2 1.2v2.4M17 13.4v2.4c0 .7-.5 1.2-1.2 1.2h-2.4M6.6 17H4.2C3.5 17 3 16.5 3 15.8v-2.4" /><circle cx="10" cy="8.4" r="2.2" /><path d="M6.3 14.2c.6-1.8 2-2.8 3.7-2.8s3.1 1 3.7 2.8" /></svg>,
   /* a movie camera with a focus frame */
   movie: <svg viewBox="0 0 20 20" {...P}><rect x="2" y="5.6" width="11" height="8.8" rx="1.6" /><path d="M13 8.8l4.6-2.4v7.2L13 11.2" /><path d="M5.6 8.4v-.8h.8M9.4 7.6h.8v.8M10.2 11.6v.8h-.8M6.4 12.4h-.8v-.8" /></svg>,
   movie4k: <svg viewBox="0 0 20 20" {...P}><rect x="2" y="5.6" width="11" height="8.8" rx="1.6" /><path d="M13 8.8l4.6-2.4v7.2L13 11.2" /><path d="M5.9 8.2L4.4 10.6h2.4M6.2 9.6v2.3M8.5 8.2v3.7M10.7 8.2L8.6 10.2l2.2 1.7" strokeWidth="1.15" /></svg>,
@@ -97,7 +101,8 @@ export function Segmented<T extends string>({ value, options, onChange, tour, cl
     b.classList.add('piled');
   };
   useLayoutEffect(place);
-  // without a movement when it is first placed and when the row changes its size (a language, a window)
+  // without a movement when it is first placed and when the row changes its size (a language, a window); a text
+  // option keeps its width when it is chosen (.seg-t reserves the bolder text's width), so choosing never resizes the row
   useLayoutEffect(() => {
     const b = box.current; const p = pill.current;
     if (!b || !p) return undefined;
@@ -112,7 +117,7 @@ export function Segmented<T extends string>({ value, options, onChange, tour, cl
     <div className={className ? `seg ${className}` : 'seg'} role="tablist" data-tour={tour} ref={box}>
       <span className="seg-pill still" ref={pill} aria-hidden />
       {options.map((o) => (
-        <button key={o.value} role="tab" aria-selected={o.value === value} title={o.title} aria-label={o.title} className={o.value === value ? 'on' : ''} onClick={() => onChange(o.value)}>{o.label}</button>
+        <button key={o.value} role="tab" aria-selected={o.value === value} title={o.title} aria-label={o.title} className={o.value === value ? 'on' : ''} onClick={() => onChange(o.value)}>{typeof o.label === 'string' ? <span className="seg-t" data-t={o.label}>{o.label}</span> : o.label}</button>
       ))}
     </div>
   );
@@ -146,14 +151,34 @@ export function FileButton({ accept, multiple, onFiles, children, className, tit
 }
 
 /** Wraps children in a drop target; `over` styling while dragging files across it. */
-export function DropZone({ onFiles, className, children, accept, tour }: { onFiles: (f: File[]) => void; className?: string; children: ReactNode; accept?: (f: File) => boolean; tour?: string }) {
+/**
+ * An area that takes dropped files. `highlight` says, from the MIME types of what is being dragged, whether the area
+ * lights up (`false`: never, for the page-wide firmware drop, which would otherwise colour the whole window for any file).
+ * A drop anywhere, or a drag that ends or leaves the window, always clears the highlight: an inner zone that takes the
+ * drop stops it there, so this zone never sees its own drop or leave.
+ */
+export function DropZone({ onFiles, className, children, accept, tour, highlight }: { onFiles: (f: File[]) => void; className?: string; children: ReactNode; accept?: (f: File) => boolean; tour?: string; highlight?: false | ((types: readonly string[]) => boolean) }) {
   const [over, setOver] = useState(false);
   const depth = useRef(0);
+  useEffect(() => {
+    if (!over) return;
+    const clear = (): void => { depth.current = 0; setOver(false); };
+    // the pointer left the window (a drag inside it leaves one element for the next all the time)
+    const leave = (e: DragEvent): void => { if (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) clear(); };
+    window.addEventListener('drop', clear, true);
+    window.addEventListener('dragend', clear, true);
+    window.addEventListener('dragleave', leave, true);
+    return () => { window.removeEventListener('drop', clear, true); window.removeEventListener('dragend', clear, true); window.removeEventListener('dragleave', leave, true); };
+  }, [over]);
+  const lights = (e: ReactDragEvent): boolean => {
+    if (!e.dataTransfer.types.includes('Files') || highlight === false) return false;
+    return !highlight || highlight(Array.from(e.dataTransfer.items ?? []).map((i) => i.type));
+  };
   return (
     <div
       className={`${className || ''} ${over ? 'drop-over' : ''}`} data-tour={tour}
-      onDragEnter={(e) => { if (e.dataTransfer.types.includes('Files')) { depth.current++; setOver(true); } }}
-      onDragLeave={() => { depth.current = Math.max(0, depth.current - 1); if (depth.current === 0) setOver(false); }}
+      onDragEnter={(e) => { if (lights(e)) { depth.current++; setOver(true); } }}
+      onDragLeave={() => { if (depth.current === 0) return; depth.current = Math.max(0, depth.current - 1); if (depth.current === 0) setOver(false); }}
       onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
       onDrop={(e) => {
         depth.current = 0; setOver(false);

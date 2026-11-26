@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// QoL D2: a fitted slot as a .cube (core/src/color/export-cube.ts, DEC-QOL-EXPORTCUBE-001).
+// A fitted slot as a .cube (core/src/color/export-cube.ts, DEC-EXPORTCUBE-001).
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { GR3X_CAMERA, KN, applyCube, convertCube, exportSlotCube, parseCube, slotApply } from '../src/color/index';
 import type { SlotParams } from '../src/color/index';

@@ -8,7 +8,7 @@ import { cropToRgb, defaultCrop, loadBitmap, workingCopy } from '../pixels';
 import type { Crop } from '../pixels';
 import { State, WallItem, fail, set, setWall, state, toast } from './core';
 import { scheduleSave } from './families';
-import { recordDeleted } from './fork';
+import { recordDeleted } from './undo';
 
 // ------------------------------------------------------------------ power-off images
 const wallBitmaps = new Map<string, ImageBitmap>();
@@ -56,6 +56,7 @@ export async function addWallFiles(files: File[]): Promise<void> {
   }
   scheduleSave();
 }
+/** Take a power-off picture away; the toast's Undo brings it back (its host file is deleted when that window closes). */
 export function removeWall(id: string): void {
   const index = state.wall.findIndex((w) => w.id === id), item = state.wall[index];
   set((s) => ({ wall: s.wall.filter((w) => w.id !== id) }));

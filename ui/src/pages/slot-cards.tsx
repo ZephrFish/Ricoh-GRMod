@@ -5,9 +5,12 @@ import { DropZone, FileButton, Ico, IconCanvas, Prop, Segmented, Select } from '
 import { isMobile } from '../host';
 import { t } from '../i18n';
 import type { Key } from '../i18n';
-import { loadIconImage, loadPresetFile, nameProblem, removePreset, setActiveSlot, setIcon, setName, useStore, extraName, extraNameProblem, extraProblem, halationOf, removeExtraSlot, setExtraCount, setExtraName, setHalation, filmCountChoosable, removeFilm, setFilmCount, duplicateExtraProblem, duplicateExtraSlot, loadPresetFiles } from '../store';
+import { loadIconImage, loadPresetFile, nameProblem, exportSlotCubeFile, removePreset, setActiveSlot, setIcon, setName, useStore, extraName, extraNameProblem, extraProblem, halationOf, removeExtraSlot, setExtraCount, setExtraName, setHalation, filmCountChoosable, removeFilm, setFilmCount, duplicateExtraProblem, duplicateExtraSlot, loadPresetFiles, halationAllOffered } from '../store';
 import type { ExtraSlot, SlotKey } from '../store';
 import { isPreset } from './files';
+
+/** A slot card lights up for a drag that may hold a preset: anything but only pictures (.cube and .xmp have no fixed MIME type). */
+const notOnlyImages = (types: readonly string[]): boolean => types.length === 0 || types.some((x) => !x.startsWith('image/'));
 import { LibraryButtons } from '../library';
 
 export function SlotCard({ id }: { id: SlotId }) {
@@ -24,8 +27,9 @@ export function SlotCard({ id }: { id: SlotId }) {
   const problem = nameProblem(info, id, lang, name);
   const p = slot.preset;
   const first = id === 'CY'; // the one the tour points at
+  const haloAll = useStore((st) => halationAllOffered(st));
   return (
-    <DropZone className={`card ${active ? 'on' : ''}`} tour={first ? 'ic-slot' : undefined} accept={isPreset} onFiles={(f) => { void loadPresetFiles(f, id); }}>
+    <DropZone className={`card ${active ? 'on' : ''}`} tour={first ? 'ic-slot' : undefined} accept={isPreset} highlight={notOnlyImages} onFiles={(f) => { void loadPresetFiles(f, id); }}>
       <div className="card-in" {...pick(() => setActiveSlot(id))}>
         <div className="card-head">
           <IconCanvas pixels={slot.icon.mode !== 'keep' && slot.icon.pixels ? slot.icon.pixels : off.icon} />
@@ -40,23 +44,27 @@ export function SlotCard({ id }: { id: SlotId }) {
         </div>
         <div className="props">
           <Prop label={t('preset')} tour={first ? 'ic-preset' : undefined}>
-            {!p && <FileButton className="btn dashed fill" accept=".xmp,.cube" multiple onFiles={(f) => { void loadPresetFiles(f, id); }}>{Ico.plus}<span>{t('dropPreset')}</span></FileButton>}
-            {p && (
-              <div className="preset">
+            <div className="preset">
+              {!p && <FileButton className="btn dashed fill" accept=".xmp,.cube" multiple onFiles={(f) => { void loadPresetFiles(f, id); }}>{Ico.plus}<span>{t('dropPreset')}</span></FileButton>}
+              {p && (
                 <div className={`file-chip ${p.error ? 'bad' : ''}`}>
                   <FileButton className="file-main" accept=".xmp,.cube" title={t('replace')} onFiles={(f) => { void loadPresetFile(id, f[0]); }}>{Ico.file}<span className="ellipsis">{p.result?.title || p.fileName}</span></FileButton>
                   <button className="file-x" title={t('remove')} aria-label={t('remove')} onClick={() => removePreset(id)}>{Ico.x}</button>
                 </div>
-                {gr3x && p.result && <p className="small muted">{t('gr3xFit', { mean: p.result.meanDE.toFixed(1), p95: p.result.p95DE.toFixed(1) })}{p.result.p95DE > 6 && <><br />{t('gr3xFitPoor')}</>}</p>}
-                {(p.busy || p.error) && (
-                  <div className="chips">
-                    {p.busy && <span className="chip muted"><span className="spinner small" />{t('converting')}</span>}
-                    {p.error && <span className="chip bad" title={p.error}><span className="ellipsis">{p.error}</span></span>}
-                  </div>
-                )}
+              )}
+              {gr3x && p?.result && <p className="small muted">{t('gr3xFit', { mean: p.result.meanDE.toFixed(1), p95: p.result.p95DE.toFixed(1) })}{p.result.p95DE > 6 && <><br />{t('gr3xFitPoor')}</>}</p>}
+              {(p?.busy || p?.error) && (
+                <div className="chips">
+                  {p.busy && <span className="chip muted"><span className="spinner small" />{t('converting')}</span>}
+                  {p.error && <span className="chip bad" title={p.error}><span className="ellipsis">{p.error}</span></span>}
+                </div>
+              )}
+              {/* the preset's small actions in one row under the file (or the drop area) */}
+              <div className="chips preset-actions">
+                {p?.result && <button className="btn small" title={t('exportCubeTip')} onClick={() => { void exportSlotCubeFile(id); }}>{t('exportCube')}</button>}
+                <LibraryButtons k={id} />
               </div>
-            )}
-            <LibraryButtons k={id} />
+            </div>
           </Prop>
           <Prop label={t('icon')} tour={first ? 'ic-icon' : undefined}>
             <div className="chips">
@@ -66,7 +74,7 @@ export function SlotCard({ id }: { id: SlotId }) {
               {slot.icon.mode === 'image' && <FileButton className="btn small" accept="image/*" onFiles={(f) => { void loadIconImage(id, f[0]); }}>{t('chooseImage')}</FileButton>}
             </div>
           </Prop>
-          {(gr3x || p?.result) && <HalationProp k={id} />}
+          {(gr3x || p?.result) && !haloAll && <HalationProp k={id} />}
         </div>
       </div>
     </DropZone>
@@ -155,8 +163,9 @@ export function ExtraSlotCard({ x, index }: { x: ExtraSlot; index: number }) {
   const tile = useStore((s) => s.info!.tiles[x.icon.style]);
   const p = x.preset;
   const k = x.key;
+  const haloAll = useStore((st) => halationAllOffered(st));
   return (
-    <DropZone className={`card ${active ? 'on' : ''}`} accept={isPreset} onFiles={(f) => { void loadPresetFiles(f, k); }}>
+    <DropZone className={`card ${active ? 'on' : ''}`} accept={isPreset} highlight={notOnlyImages} onFiles={(f) => { void loadPresetFiles(f, k); }}>
       <div className="card-in" {...pick(() => setActiveSlot(k))}>
         <div className="card-head">
           <IconCanvas pixels={x.icon.pixels ?? tile} />
@@ -172,22 +181,26 @@ export function ExtraSlotCard({ x, index }: { x: ExtraSlot; index: number }) {
         </div>
         <div className="props">
           <Prop label={t('preset')}>
-            {!p && <FileButton className="btn dashed fill" accept=".xmp,.cube" multiple onFiles={(f) => { void loadPresetFiles(f, k); }}>{Ico.plus}<span>{t('dropPreset')}</span></FileButton>}
-            {p && (
-              <div className="preset">
+            <div className="preset">
+              {!p && <FileButton className="btn dashed fill" accept=".xmp,.cube" multiple onFiles={(f) => { void loadPresetFiles(f, k); }}>{Ico.plus}<span>{t('dropPreset')}</span></FileButton>}
+              {p && (
                 <div className={`file-chip ${p.error ? 'bad' : ''}`}>
                   <FileButton className="file-main" accept=".xmp,.cube" title={t('replace')} onFiles={(f) => { void loadPresetFile(k, f[0]); }}>{Ico.file}<span className="ellipsis">{p.result?.title || p.fileName}</span></FileButton>
                   <button className="file-x" title={t('remove')} aria-label={t('remove')} onClick={() => removePreset(k)}>{Ico.x}</button>
                 </div>
-                {(p.busy || p.error) && (
-                  <div className="chips">
-                    {p.busy && <span className="chip muted"><span className="spinner small" />{t('converting')}</span>}
-                    {p.error && <span className="chip bad" title={p.error}><span className="ellipsis">{p.error}</span></span>}
-                  </div>
-                )}
+              )}
+              {(p?.busy || p?.error) && (
+                <div className="chips">
+                  {p.busy && <span className="chip muted"><span className="spinner small" />{t('converting')}</span>}
+                  {p.error && <span className="chip bad" title={p.error}><span className="ellipsis">{p.error}</span></span>}
+                </div>
+              )}
+              {/* the preset's small actions in one row under the file (or the drop area) */}
+              <div className="chips preset-actions">
+                {p?.result && <button className="btn small" title={t('exportCubeTip')} onClick={() => { void exportSlotCubeFile(k); }}>{t('exportCube')}</button>}
+                <LibraryButtons k={k} />
               </div>
-            )}
-            <LibraryButtons k={k} />
+            </div>
           </Prop>
           <Prop label={t('icon')}>
             <div className="chips">
@@ -197,7 +210,7 @@ export function ExtraSlotCard({ x, index }: { x: ExtraSlot; index: number }) {
               {x.icon.mode === 'image' && <FileButton className="btn small" accept="image/*" onFiles={(f) => { void loadIconImage(k, f[0]); }}>{t('chooseImage')}</FileButton>}
             </div>
           </Prop>
-          <HalationProp k={x.key} />
+          {!haloAll && <HalationProp k={x.key} />}
           {problem && !p?.busy && !p?.error && !nameBad && <div className="chips extra-problem"><span className="chip warn"><span className="ellipsis">{problem}</span></span></div>}
         </div>
       </div>
@@ -238,7 +251,6 @@ function HalationProp({ k }: { k: SlotKey }) {
             {preview > 0 && !fixed && <Segmented value={colour} onChange={(v) => setHalation(k, { colour: v as 'red' | 'white' })} options={[{ value: 'red', label: t('haloRed') }, { value: 'white', label: t('haloWhite') }]} />}
           </div>
         )}
-        <span className="muted small halo-note">{t(cinema ? 'halationCinemaSub' : fixed ? 'gr3xHalationSub' : 'halationSub')}</span>
       </div>
     </Prop>
   );

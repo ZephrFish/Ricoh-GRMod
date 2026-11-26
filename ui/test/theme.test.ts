@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-// The fork's appearance choice (theme.ts, DEC-FORK-THEME-001): upstream's dark rules are switched on, off, or
+// The appearance choice (theme.ts, DEC-THEME-001): upstream's dark rules are switched on, off, or
 // back to following the system, and nothing else is touched. Plain Node: the style sheet objects are stand-ins.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';

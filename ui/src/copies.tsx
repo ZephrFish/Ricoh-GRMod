@@ -64,6 +64,8 @@ function FirmwareLine({ info, builds, lang, name }: { info: CopyInfo | undefined
           {s.shadowLearn && <span className="chip tiny" title={t('shadowLine')}><b>{t('navShadow')}</b></span>}
           {s.filmGrain && <span className="chip tiny" title={t('grainLine')}><b>{t('navGrain')}</b></span>}
           {s.flashTtl && <span className="chip tiny" title={t('flashTtlLine')}><b>{t('navFlashTtl')}</b></span>}
+          {s.subjectAf && <span className="chip tiny" title={t('subjectAfLine')}><b>{t('navSubjectAf')}</b></span>}
+          {s.lockProtect && <span className="chip tiny" title={t('lockProtectLine')}><b>{t('navLockProtect')}</b></span>}
           {s.videoAf && <span className="chip tiny" title={t('videoAfLine')}><b>{t('navVideoAf')}</b></span>}
           {s.awbLearn && <span className="chip tiny" title={t('awbLine')}><b>{t('navAwb')}</b></span>}
           {s.movieExposure && <span className="chip tiny" title={t('movieExpLine')}><b>{t('navMovieExp')}</b></span>}
@@ -72,6 +74,8 @@ function FirmwareLine({ info, builds, lang, name }: { info: CopyInfo | undefined
           {s.movie4k && <span className="chip tiny" title={t('movie4kLine')}><b>{t('navMovie4k')}</b></span>}
           {s.movieSr && <span className="chip tiny" title={t('movieSrLine')}><b>{t('navMovieSr')}</b></span>}
           {s.distanceFeet && <span className="chip tiny" title={t('unitsLine')}><b>{t('navUnits')}</b><span className="ellipsis">{t('unitsFeet')}</span></span>}
+          {s.wbPerLook && <span className="chip tiny" title={t('wbLookLine')}><b>{t('navWbLook')}</b></span>}
+          {s.halationAll && <span className="chip tiny" title={t('halationAllLine')}><b>{t('haloLabel')}</b></span>}
         </div>
       </div>
     </>

@@ -3,7 +3,8 @@
  * The fork's HLG photo mode on every GR IV program, built on the official files and read back:
  * GR IV 1.21 (ported from 1.20 by address, DEC-HLG-121-002), 1.20 and 1.11. Also HLG together with an
  * added slot that has halation: both point the same playback / RAW development scale instruction at a
- * graphic of their own (DEC-HLG-HALATION-001), and before the fix each refused the other's word there.
+ * graphic of their own (DEC-HLG-HALATION-001), and before the fix each refused the other's word there. On 1.20 and
+ * 1.21 also HLG with 0.9.4's halation for every look, which installs those screens through its own module.
  *
  * Needs GRMOD_GR4_121_FIRMWARE, GRMOD_GR4_120_FIRMWARE and testdata/private/official.bin (1.11);
  * each case is skipped when its file is missing.
@@ -46,6 +47,19 @@ for (const [version, path] of files) {
       expect(back.verified).toBe(true);
       expect(back.hlgPhoto).toBe(true);
       expect(back.extraSlots.map((x) => x.name)).toEqual(['HLG mate']);
+    }, 300_000);
+
+    // 0.9.4's halation for every look installs the same Halation screens (halation-ui.ts) through the slot-parameters
+    // module, so the scale instruction HLG points at its own graphic is hooked again there (DEC-HLG-HALATION-001).
+    it.skipIf(version === '1.11')('builds together with halation for every look and white balance per look, and all read back', async () => {
+      const e = await open();
+      expect(e.info.features).toMatchObject({ halationAll: true, wbPerLook: true });
+      const b = await e.buildFirmware([], [], [], { hlgPhoto: true, extraSlots: [slot(true), slot(false)], halationAll: true, wbPerLook: true });
+      expect(Object.values(b.checks).every((v) => v === true)).toBe(true);
+      const back = await e.inspect(b.file);
+      expect(back.verified).toBe(true);
+      expect(back).toMatchObject({ hlgPhoto: true, halationAll: true, wbPerLook: true });
+      expect(back.extraSlots.map((x) => x.name)).toEqual(['HLG mate', 'HLG mate']);
     }, 300_000);
 
     it('is still refused together with the HDR gain map', async () => {

@@ -6,7 +6,7 @@ import type { SlotParams } from './camera';
 import { ColorError } from './math';
 
 /**
- * @decision DEC-QOL-EXPORTCUBE-001
+ * @decision DEC-EXPORTCUBE-001
  * @title The exported .cube is the slot model's rendering of a Standard picture, in sRGB both ways
  * @status accepted
  * @rationale What it represents. The fitted slot is a function from colours the camera renders in
@@ -43,7 +43,7 @@ export interface ExportCubeOptions {
 
 export const EXPORT_CUBE_SIZE = 33;
 
-/** The text of a .cube file holding the slot's look (see DEC-QOL-EXPORTCUBE-001). Throws ColorError 'bad-input' for a bad size or bad slot parameters. */
+/** The text of a .cube file holding the slot's look (see DEC-EXPORTCUBE-001). Throws ColorError 'bad-input' for a bad size or bad slot parameters. */
 export function exportSlotCube(params: SlotParams, opts: ExportCubeOptions = {}): string {
   const n = opts.size ?? EXPORT_CUBE_SIZE;
   if (!Number.isInteger(n) || n < 2 || n > 65) throw new ColorError('bad-input', 'cube size must be an integer from 2 to 65');

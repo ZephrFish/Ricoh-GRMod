@@ -10,7 +10,7 @@ import { installTheme } from './theme';
 
 // index.html replaces the page with a notice when the browser is too old.
 if (!(window as unknown as { __GRMOD_OLD_BROWSER__?: boolean }).__GRMOD_OLD_BROWSER__) {
-  installTheme(); // the fork's appearance choice, before the first paint (theme.ts)
+  installTheme(); // the appearance choice, before the first paint (theme.ts)
   createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
   installWindowBehaviour();
   void init();

@@ -8,8 +8,7 @@ import { t } from '../i18n';
 import { CopySource, State, ask, askOfficial, fail, newFirmwareWarning, set, state, toast } from './core';
 import { gridText, softText } from './features';
 import { toneLabel } from './ratios';
-import { SlotChange, doneToast, firmwareFilename, firmwareToCard, refreshVolumes } from './output';
-import { preflightCard } from './fork';
+import { SlotChange, doneToast, firmwareFilename, firmwareToCard, preflightCard, refreshVolumes } from './output';
 
 // ------------------------------------------------------------------ copies moved aside on the card, and their backups
 const BUILDS_KEY = 'builds.json';
@@ -169,6 +168,8 @@ export function describeCopy(summary: FirmwareSummary, s: State = state): string
   if (summary.shadowLearn) lines.push(t('shadowLine'));
   if (summary.filmGrain) lines.push(t('grainLine'));
   if (summary.flashTtl) lines.push(t('flashTtlLine'));
+  if (summary.subjectAf) lines.push(t('subjectAfLine'));
+  if (summary.lockProtect) lines.push(t('lockProtectLine'));
   if (summary.videoAf) lines.push(t('videoAfLine'));
   if (summary.awbLearn) lines.push(t('awbLine'));
   if (summary.movieExposure) lines.push(t('movieExpLine'));
@@ -177,6 +178,8 @@ export function describeCopy(summary: FirmwareSummary, s: State = state): string
   if (summary.movie4k) lines.push(t('movie4kLine'));
   if (summary.movieSr) lines.push(t('movieSrLine'));
   if (summary.distanceFeet) lines.push(t('unitsLine'));
+  if (summary.wbPerLook) lines.push(t('wbLookLine'));
+  if (summary.halationAll) lines.push(t('halationAllLine'));
   if (summary.adjSlots) lines.push(t('adjSlotsLine', { n: summary.adjSlots }));
   if (summary.batteryPercent) lines.push(t('batteryLine'));
   if (summary.customGrid) lines.push(t('gridLine', { a: gridText(summary.customGrid, 'g3'), b: gridText(summary.customGrid, 'g4') }));
@@ -200,7 +203,7 @@ export async function writeCopy(): Promise<void> {
   const fresh = newFirmwareWarning(sourceInfo) ?? undefined;
   if (!(await (official ? askOfficial(describeCopy(pick.summary), fresh) : ask(t('confirmTitle'), describeCopy(pick.summary), t('confirmOk'), fresh)))) return;
   if (state.info !== sourceInfo || state.model !== sourceModel || state.fwBusy) return;
-  if (!(await preflightCard(v, pick.entry.size))) return; // QoL D1: the card must hold the copy before it is read
+  if (!(await preflightCard(v, pick.entry.size))) return; // the card must hold the copy before it is read
   try {
     set({ busy: t('opening') });
     const file = source === 'card' ? await host.parkedRead(v.id, pick.entry.path) : await host.backupRead(pick.entry.path);

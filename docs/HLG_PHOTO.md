@@ -243,7 +243,7 @@ To ensure the name **"HDR"** appears correctly regardless of whether the camera 
 
 ### 5.3 Grown Layout & Feature Mask
 HLG Photo is registered as a first-class feature in `core/src/fw/aspect/package.ts` (1.11) and `core/src/fw/gr4v120/aspect/package.ts` (1.20 / 1.21):
-- Feature Bit: bit 6 of the fourth feature byte, `FEATURE4_HLG_PHOTO = 64` (`0x40`); bits 0 to 5 of that byte are upstream's (bit 4 framing guides, bit 5 distances in feet). The marker's history is in `DEC-HLG-MARK-004`.
+- Feature Bit: bit 6 of the fifth feature byte, `FEATURE5_HLG_PHOTO = 64` (`0x40`), announced by bit 7 of the fourth byte (`FEATURE4_MORE`), the same on 1.11, 1.20 and 1.21. The other bits of those bytes are upstream's: in the fourth, bit 4 framing guides, bit 5 distances in feet and bit 6 subject recognition (0.9.4); in the fifth, bit 0 white balance per look, bit 1 halation for every look and bit 2 the lock button's Protect (0.9.4). Bit 7 of the fifth byte is left free for upstream. The marker's history is in `DEC-HLG-MARK-005` (`core/src/fw/gr4v120/aspect/package.ts`); `core/test/hlg-mark.test.ts` builds HLG with each of these neighbours and reads every one back.
 - Build Revision: Revision 3 (`GRMODAR3`).
 - Patcher: `Patch.grows` evaluates to `true` when `hlgPhoto` is enabled, allocating appended space at the end of RTOS and recording `FEATURE_HLG_PHOTO` in the trailer metadata record.
 - Self-check: All modified words and appended ranges are tracked in `patch.words` and whitelist ranges, passing `selfCheckGrown` with zero integrity violations.

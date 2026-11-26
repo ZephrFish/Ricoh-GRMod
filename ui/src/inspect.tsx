@@ -1,5 +1,6 @@
 // The "Inspect a firmware file" dialog: what any firmware .bin is (official or modified, verified,
-// the features it switches on, ratios, added slots), read by the engine against the open official firmware.
+// the features it switches on, ratios, added slots, pictures, menu layout), read by the engine against
+// the open official firmware, and the same for a second file side by side (store/inspect.ts).
 import { useEffect } from 'react';
 import { DropZone, FileButton, Ico, IconCanvas } from './components';
 import { modelLabel } from './firmware';
@@ -25,7 +26,7 @@ export function InspectDialog() {
   const s = v.summary;
   const pick = (f: File[]): void => { void inspectFile(f[0]); };
   const o = v.other;
-  const rows = s && o?.summary ? compareRows(s, o.summary, lang) : null;
+  const rows = s && o?.summary ? compareRows(s, o.summary, lang, info?.family) : null;
   return (
     <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) closeInspect(); }}>
       <DropZone onFiles={pick} accept={(f) => /\.bin$/i.test(f.name)} className={`dialog inspect${o ? ' wide' : ''}`}>
@@ -55,7 +56,7 @@ export function InspectDialog() {
               {s.kind !== 'unknown' && (
                 <>
                   <li><b>{t('inspectFeatures')}</b></li>
-                  {featureRows(s).map((f) => <li key={f.label}>{f.label}: {f.on ? <>{t('inspectYes')}{f.detail ? ` · ${f.detail}` : ''}</> : t('inspectNo')}</li>)}
+                  {featureRows(s, info?.family).map((f) => <li key={f.label}>{f.label}: {f.on ? <>{t('inspectYes')}{f.detail ? ` · ${f.detail}` : ''}</> : t('inspectNo')}</li>)}
                   <li><b>{t('inspectRatios')}</b>: {s.ratios.length ? s.ratios.map((r) => `${r.name} (${r.ratio})`).join(' / ') : t('inspectNone')}</li>
                   <li><b>{t('inspectExtras')}</b>: {s.extraSlots.length ? s.extraSlots.map((x) => x.name).join(' / ') : t('inspectNone')}</li>
                   <li><b>{t('inspectPictures')}</b>: {s.shutdownPictures?.length ? s.shutdownPictures.map((p) => p.name).join(' / ') : t('inspectNone')}</li>
@@ -72,7 +73,7 @@ export function InspectDialog() {
             {s && <FileButton accept=".bin" onFiles={(f) => { void inspectCompare(f[0]); }}>{Ico.folder}<span>{t(o ? 'cmpFileAnother' : 'cmpFileBtn')}</span></FileButton>}
             {o && <button type="button" className="btn" onClick={closeCompare}>{t('cmpFileBack')}</button>}
             <FileButton accept=".bin" onFiles={pick}>{Ico.folder}<span>{t('inspectAgain')}</span></FileButton>
-            <button type="button" className="btn primary" onClick={closeInspect}>{t('closeLabel')}</button>
+            <button type="button" className="btn primary" onClick={closeInspect}>{t('done')}</button>
           </div>
         </div>
       </DropZone>

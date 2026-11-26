@@ -6,7 +6,7 @@ import { t } from '../i18n';
 import type { Key } from '../i18n';
 import { RatioItem, ShadeTone, State, emptySlot, filmCountChoosable, isGr3, set, state, toast } from './core';
 import { presetKey, scheduleSave } from './families';
-import { recordDeleted } from './fork';
+import { recordDeleted } from './undo';
 
 // ------------------------------------------------------------------ added aspect ratios
 const RATIO_PROBLEMS: Record<NonNullable<RatioPreview['problem']>, Key> = {

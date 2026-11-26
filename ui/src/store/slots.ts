@@ -5,11 +5,11 @@ import { host, sha256Hex } from '../host';
 import { t } from '../i18n';
 import type { Key } from '../i18n';
 import { ensureIconFont, imageIcon, loadBitmap, textIcon } from '../pixels';
-import { HalationState, IconState, SlotKey, State, availableSlots, fail, isExtra, isGr3, patchSlot, set, setSlot, slotOf, state, toast } from './core';
+import { HalationState, IconState, SlotKey, State, availableSlots, halationAllOffered, fail, isExtra, isGr3, patchSlot, set, setSlot, slotOf, state, toast } from './core';
 import { presetKey, scheduleSave } from './families';
-import { normalizeLookOrder, lookOrderNow } from './looks';
+import { normalizeLookOrder } from './looks';
 import { setActiveSlot } from './photo';
-import { recordDeleted } from './fork';
+import { recordDeleted } from './undo';
 
 // ------------------------------------------------------------------ presets
 const PRESET_ERRORS: Record<string, Key> = {
@@ -113,12 +113,17 @@ export function validHalation(v: unknown): HalationState | null {
   const h = v as Partial<HalationState>;
   return { on: h.on === true, preview: h.preview === 1 || h.preview === 2 || h.preview === 3 ? h.preview : 0, ...(h.colour === 'white' ? { colour: 'white' as const } : {}) };
 }
-/** A slot's halation: every added slot has it (the camera switches it); a Cinema slot when it is switched on (with a preset). */
+/** A slot's halation: every added slot has it (the camera switches it); a Cinema slot when it is switched on (with a preset). With halation for every look: the one switch and the preview's level and colour. */
 export function halationOf(k: SlotKey, s: State = state): HalationState {
+  if (halationAllOffered(s)) return { on: s.halationAll, preview: s.haloPreview, colour: s.haloColour };
   // GR III / IIIx: every film has it, as GR IV's added slots.
   if (s.info?.family === 'gr3x' && !isExtra(k)) return { ...(s.slots[k as SlotId]?.halation ?? { preview: 0 }), on: true };
   if (isExtra(k)) return { ...(s.extras.find((x) => x.key === k)?.halation ?? { preview: 0 }), on: true };
   return s.slots[k as SlotId]?.halation ?? { on: false, preview: 0 };
+}
+/** Halation for every look: the switch, and the level and colour the preview shows. */
+export function setHalationAll(patch: Partial<Pick<State, 'halationAll' | 'haloPreview' | 'haloColour'>>): void {
+  set(patch); scheduleSave();
 }
 /** Change a slot's halation (on / off for a Cinema slot, strength, the level the preview shows). */
 export function setHalation(key: SlotKey, patch: Partial<HalationState>): void {
@@ -135,9 +140,10 @@ export function addExtraSlot(): void {
   void renderIcon(key);
   scheduleSave();
 }
+/** Take an added slot away; with `undoable` (the default) the toast's Undo brings it back. Setting the count lower removes without it. */
 export function removeExtraSlot(key: string, undoable = true): void {
   const was = state, index = was.extras.findIndex((x) => x.key === key), item = was.extras[index];
-  const orderAt = lookOrderNow(was).indexOf(key), hidden = was.lookHidden.includes(key), active = was.activeSlot === key;
+  const orderAt = normalizeLookOrder(was.lookOrder, was.extras).indexOf(key), hidden = was.lookHidden.includes(key), active = was.activeSlot === key;
   set((s) => ({ extras: s.extras.filter((x) => x.key !== key), activeSlot: s.activeSlot === key ? 'CY' : s.activeSlot, lookOrder: normalizeLookOrder(s.lookOrder, s.extras.filter((x) => x.key !== key)), lookHidden: s.lookHidden.filter((k) => k !== key) }));
   const file = presetKey(key); // fixed now: the delete may run after a switch to the other family, whose files are named differently
   const del = (): void => { if (host.available) void host.storeDel(file).catch(() => undefined); };

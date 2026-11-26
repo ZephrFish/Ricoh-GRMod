@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /**
- * The fork's HLG marker in the GR Mod build record (DEC-HLG-MARK-004): bit 6 of the fourth feature byte, beside
- * upstream's framing guides (bit 4, followed by the guides' bytes) and distances in feet (bit 5). Every combination
- * of the three is built on the official 1.20 and 1.21 files and read back, from the record and through inspect:
- * each one is there exactly when it was asked for, so no two share a bit and none is mistaken for another. On 1.11
- * (no framing guides, no feet) HLG is the only bit of its fourth byte, alone and behind a third byte that is zero
- * or not.
+ * The fork's HLG marker in the GR Mod build record (DEC-HLG-MARK-005): bit 6 of the fifth feature byte, announced by
+ * bit 7 of the fourth. Upstream 0.9.4 took bit 6 of the fourth byte for subject recognition and bit 7 for the fifth
+ * byte, whose bits 0 to 2 are white balance per look, halation for every look and the lock button's Protect.
+ * On the official 1.20 and 1.21 files, HLG is built alone, with each of its neighbours (framing guides, which put
+ * their bytes between the fourth and fifth byte; feet; subject recognition; Protect), each neighbour without HLG,
+ * and all of them together; then HLG with the two fifth-byte features that need an added slot. Each one is read back,
+ * from the record and through inspect, exactly when it was asked for, so no two share a bit and none is mistaken for
+ * another. On 1.11 (none of those features) HLG's fourth byte is only the "more" bit, behind a third byte that is
+ * zero or not.
  *
  * Needs GRMOD_GR4_120_FIRMWARE, GRMOD_GR4_121_FIRMWARE and testdata/private/official.bin (1.11); each case is
  * skipped when its file is missing.
@@ -34,37 +37,52 @@ function guides(): FramingGuides {
   return g;
 }
 
-type Flag = 'hlgPhoto' | 'framing' | 'distanceFeet';
-const FLAGS: Flag[] = ['hlgPhoto', 'framing', 'distanceFeet'];
-/** Every non-empty combination of the three, alone and together. */
-const COMBOS: Flag[][] = Array.from({ length: 7 }, (_, n) => FLAGS.filter((_, i) => ((n + 1) >> i) & 1));
+type Flag = 'hlgPhoto' | 'framing' | 'distanceFeet' | 'subjectAf' | 'lockProtect';
+const NEIGHBOURS: Flag[] = ['framing', 'distanceFeet', 'subjectAf', 'lockProtect'];
+/** HLG alone, HLG with each neighbour, each neighbour alone, and everything together. */
+const COMBOS: Flag[][] = [['hlgPhoto'], ...NEIGHBOURS.map((n): Flag[] => ['hlgPhoto', n]), ...NEIGHBOURS.map((n): Flag[] => [n]), ['hlgPhoto', ...NEIGHBOURS]];
+const curve = Array.from({ length: 256 }, (_, i) => Math.min(16383, Math.round(16383 * Math.pow(i / 255, 0.8))));
+const slot = { name: 'HLG mate', matrixQ13: [9100, -600, -308, -300, 8800, -308, -100, -700, 8992], curves: [curve, curve, curve] as [number[], number[], number[]], icon: new Uint8Array(1600 * 4).map((_, i) => (i % 4 === 3 ? 255 : (i * 13) & 255)) };
 
-describe.each(files)('HLG, framing guides and feet on GR IV %s', (_release, file) => {
+describe.each(files)('HLG and its neighbours in the feature bytes on GR IV %s', (_release, file) => {
   for (const combo of COMBOS) {
     it(`${combo.join(' + ')}: each reads back exactly when it was built`, async () => {
       const eng = await Engine.open(new Uint8Array(readFileSync(file)));
-      expect(eng.info.features).toMatchObject({ hlgPhoto: true, framing: true, distanceFeet: true });
+      expect(eng.info.features).toMatchObject({ hlgPhoto: true, framing: true, distanceFeet: true, subjectAf: true, lockProtect: true });
       const on = (f: Flag): boolean => combo.includes(f);
       const g = guides();
-      const b = await eng.buildFirmware([], [], [], { ...(on('hlgPhoto') ? { hlgPhoto: true } : {}), ...(on('framing') ? { framing: g } : {}), ...(on('distanceFeet') ? { distanceFeet: true } : {}) });
+      const b = await eng.buildFirmware([], [], [], { ...(on('hlgPhoto') ? { hlgPhoto: true } : {}), ...(on('framing') ? { framing: g } : {}), ...(on('distanceFeet') ? { distanceFeet: true } : {}), ...(on('subjectAf') ? { subjectAf: true } : {}), ...(on('lockProtect') ? { lockProtect: true } : {}) });
       expect(Object.values(b.checks).every((v) => v === true)).toBe(true);
       const rec = read120(rtosOf(b.file));
       expect(rec).not.toBeNull();
-      expect(!!rec!.hlgPhoto).toBe(on('hlgPhoto'));
-      expect(!!rec!.distanceFeet).toBe(on('distanceFeet'));
+      for (const f of ['hlgPhoto', 'distanceFeet', 'subjectAf', 'lockProtect'] as const) expect(!!rec![f], f).toBe(on(f));
       if (on('framing')) expect(rec!.framing).toEqual(g); else expect(rec!.framing).toBeUndefined();
-      // nothing else of the fourth byte (or the third) is read into the record
-      for (const k of ['constantLight', 'sensorShift', 'movie4k', 'movieSr', 'movieExposure', 'hdrGainMap', 'customGrid'] as const) expect(rec![k], k).toBeFalsy();
+      // nothing else of the fourth and fifth bytes (or the third) is read into the record
+      for (const k of ['constantLight', 'sensorShift', 'movie4k', 'movieSr', 'movieExposure', 'hdrGainMap', 'customGrid', 'wbPerLook', 'halationAll'] as const) expect(rec![k], k).toBeFalsy();
       const s = await eng.inspect(b.file);
       expect(s.verified).toBe(true);
-      expect(!!s.hlgPhoto).toBe(on('hlgPhoto'));
-      expect(!!s.distanceFeet).toBe(on('distanceFeet'));
+      for (const f of ['hlgPhoto', 'distanceFeet', 'subjectAf', 'lockProtect'] as const) expect(!!s[f], f).toBe(on(f));
       if (on('framing')) expect(s.framing).toEqual(g); else expect(s.framing).toBeUndefined();
+    }, 600_000);
+  }
+  for (const hlg of [true, false]) {
+    it(`${hlg ? 'HLG + ' : ''}white balance per look + halation for every look (an added slot): each reads back exactly when it was built`, async () => {
+      const eng = await Engine.open(new Uint8Array(readFileSync(file)));
+      const b = await eng.buildFirmware([], [], [], { extraSlots: [slot], wbPerLook: true, halationAll: true, lockProtect: true, ...(hlg ? { hlgPhoto: true } : {}) });
+      expect(Object.values(b.checks).every((v) => v === true)).toBe(true);
+      const rec = read120(rtosOf(b.file));
+      expect(rec!).toMatchObject({ wbPerLook: true, halationAll: true, lockProtect: true });
+      expect(!!rec!.hlgPhoto).toBe(hlg);
+      expect(rec!.subjectAf).toBeFalsy();
+      const s = await eng.inspect(b.file);
+      expect(s.verified).toBe(true);
+      expect(s).toMatchObject({ wbPerLook: true, halationAll: true, lockProtect: true });
+      expect(!!s.hlgPhoto).toBe(hlg);
     }, 600_000);
   }
 });
 
-describe.skipIf(!existsSync(file111))('HLG on GR IV 1.11: the fourth feature byte', () => {
+describe.skipIf(!existsSync(file111))('HLG on GR IV 1.11: the fourth and fifth feature bytes', () => {
   it('reads back alone, behind a zero third byte, and behind a third byte with the battery percentage', async () => {
     const eng = await Engine.open(new Uint8Array(readFileSync(file111)));
     expect(eng.info.version).toBe('1.11');

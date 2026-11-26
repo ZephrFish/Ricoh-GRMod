@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // @mock-exempt: host = HTTP boundary (in-memory file store), engine = Web Worker boundary, pixels/preview = browser canvas (same pattern as qol-app.test.mjs)
-// Review hotfixes: project import vs a pending undo, undo caps, toast-bound undo, family-wide undo, menu shortcut guard,
-// compareWith in the export, the interface language on import, and the export / import wording.
+// Review hotfixes of the fork's own tools: project import vs a pending undo (upstream's flushDeleted), the menu shortcut
+// guard, compareWith in the export, the interface language on import, and the export / import wording.
+// The undo caps, toast-bound undo and family-wide undo are upstream's now (ui/test/undo.test.mjs).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -46,7 +47,7 @@ const lastToast = () => store.getState().toasts.at(-1);
 const projectText = (extra = {}) => JSON.stringify({ format: 'grmod-project', formatVersion: 1, appVersion: '1', exported: '', project: { v: 1, model: 'HDF', lang: 'en', ...extra }, projectGr3: null, files: { 'preset-zz': 'AQID' } });
 const doImport = async (s, text) => { const done = s.importProject(new File([text], 'p.grmod.json')); await flush(); s.answerConfirm(true); await done; };
 
-describe('project import and a pending undo', () => {
+describe('replacing the project while a delete is pending (upstream\'s flushDeleted)', () => {
   it('commits the pending delete before the import writes, and Undo no longer re-inserts the old item', async () => {
     await store.init();
     store.addExtraSlot(); const k = store.getState().extras[0].key;
@@ -64,71 +65,38 @@ describe('project import and a pending undo', () => {
     expect(store.getState().extras).toEqual([]);
     expect(mocks.files.has('preset-zz')).toBe(true);
   });
-});
-
-describe('undo respects the caps', () => {
-  it('refuses to restore an added slot when the list is full again, still deletes the file, and says so', async () => {
-    await store.init();
-    while (store.getState().extras.length < 99) { // fill to whatever the cap is
-      const n = store.getState().extras.length; store.addExtraSlot(); if (store.getState().extras.length === n) break; }
-    const cap = store.getState().extras.length; expect(cap).toBeGreaterThan(0); expect(cap).toBeLessThan(99);
-    const gone = store.getState().extras[0].key;
-    mocks.files.set('preset-' + gone, enc('x'));
-    store.removeExtraSlot(gone);
-    store.addExtraSlot();
-    expect(store.getState().extras).toHaveLength(cap);
-    store.undoDelete();
-    expect(store.getState().extras).toHaveLength(cap);
-    expect(store.getState().extras.map(x => x.key)).not.toContain(gone);
-    expect(mocks.files.has('preset-' + gone)).toBe(false);
-    expect(lastToast().text).toBe(i18n.t('undoFull'));
-  });
-  it('refuses to restore a ratio past the maximum', async () => {
-    await store.init();
-    const cap = store.maxRatios();
-    for (let i = 0; i < cap; i++) store.addRatio(`${i + 2}:1`);
-    await flush();
-    expect(store.getState().ratios).toHaveLength(cap);
-    store.removeRatio(store.getState().ratios[0].id);
-    store.addRatio('99:1'); await flush();
-    store.undoDelete(); await flush();
-    expect(store.getState().ratios).toHaveLength(cap);
-    expect(lastToast().text).toBe(i18n.t('undoFull'));
-  });
-});
-
-describe('an Undo toast is bound to its own delete', () => {
-  it('delete A then B: A\'s toast is dismissed, a stale press restores nothing, B stays undoable', async () => {
-    await store.init();
-    store.addExtraSlot(); store.addExtraSlot();
-    const [a, b] = store.getState().extras.map(x => x.key);
-    store.removeExtraSlot(a); const toastA = lastToast();
-    store.removeExtraSlot(b); const toastB = lastToast();
-    expect(store.getState().toasts.map(x => x.id)).not.toContain(toastA.id);
-    toastA.action.run(); // a press that still got through (the button was already clicked)
-    expect(store.getState().extras).toEqual([]);
-    expect(lastToast().text).toBe(i18n.t('undoGone'));
-    expect(store.undoPending()).toBe(true);
-    toastB.action.run();
-    expect(store.getState().extras.map(x => x.key)).toEqual([b]);
-  });
-});
-
-describe('undo across models of one family', () => {
-  it('HDF to Standard still restores; another family commits instead', async () => {
-    await store.init();
+  // The two other callers of upstream's flushDeleted (ui/src/store/fork.ts): each replaces the whole project.
+  const pendingDelete = async () => {
     store.addExtraSlot(); const k = store.getState().extras[0].key;
-    mocks.files.set('preset-' + k, enc('x'));
+    mocks.files.set('preset-' + k, enc('mine'));
     store.removeExtraSlot(k);
-    store.setModel('STANDARD'); await flush();
     expect(store.undoPending()).toBe(true);
-    store.undoDelete();
-    expect(store.getState().extras.map(x => x.key)).toEqual([k]);
-    store.removeExtraSlot(k);
-    store.setModel('GR3'); await flush();
+    const order = [];
+    mocks.host.storeDel.mockImplementation(async (key) => { order.push('del ' + key); mocks.files.delete(key); });
+    mocks.host.storeSet.mockImplementation(async (key, d) => { order.push('set ' + key); mocks.files.set(key, typeof d === 'string' ? enc(d) : d); });
+    return { k, order };
+  };
+  it('New project commits the pending delete before its snapshot, and Undo no longer re-inserts the slot', async () => {
+    await store.init();
+    const { k, order } = await pendingDelete();
+    const done = store.newProject(); await flush(); store.answerConfirm(true); await done;
+    expect(order[0]).toBe('del preset-' + k); // before the snapshot reads the store
+    expect(order.findIndex((x) => x.startsWith('set snapshot-'))).toBeGreaterThan(0);
+    expect(store.undoPending()).toBe(false);
     store.undoDelete();
     expect(store.getState().extras).toEqual([]);
-    expect(mocks.files.has('preset-' + k)).toBe(false);
+  });
+  it('restoring a snapshot commits the pending delete first, and Undo no longer re-inserts the slot', async () => {
+    await store.init();
+    await doImport(store, projectText()); // the import leaves a snapshot of the project before it
+    await store.openSnapshots();
+    const id = store.getState().snapshotsView.entries[0].id;
+    const { k, order } = await pendingDelete();
+    const done = store.restoreSnapshot(id); await flush(); store.answerConfirm(true); await done;
+    expect(order[0]).toBe('del preset-' + k);
+    expect(store.undoPending()).toBe(false);
+    store.undoDelete();
+    expect(store.getState().extras.map((x) => x.key)).not.toContain(k);
   });
 });
 

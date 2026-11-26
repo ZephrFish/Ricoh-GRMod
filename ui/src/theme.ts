@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /**
- * The app's appearance (this fork): follow the system, or always light, or always dark.
+ * The app's appearance: follow the system, or always light, or always dark.
  *
- * @decision DEC-FORK-THEME-001: upstream's dark theme is the `@media (prefers-color-scheme: dark)` blocks of
+ * @decision DEC-THEME-001: upstream's dark theme is the `@media (prefers-color-scheme: dark)` blocks of
  * styles.css, which follow the system only. Instead of copying their colours under a class (two copies to
  * keep in step on every merge), the choice is applied to those same rules: each such media rule's condition
  * becomes `all` (Dark) or `not all` (Light), and its own text again for Follow system. Upstream can change or

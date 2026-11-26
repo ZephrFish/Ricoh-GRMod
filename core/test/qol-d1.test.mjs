@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // @mock-exempt: engine worker, host bridge, pixels and preview are external boundaries (same pattern as qol-b-ui.test.mjs)
-// QoL batch D1: card preflight, project snapshots, New project and comparing two firmware files, on the real UI store
+// The fork's project snapshots and New project, and its write-protect hint after upstream's card check, on the real UI store
 // with an in-memory host store (storeGet/storeSet/storeDel/storeList behave as the Go host's key/value store does).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -59,47 +59,7 @@ const confirmed = async (p, yes = true) => { await flush(); expect(store.getStat
 const start = async () => { await store.adoptFirmware('fwdc243b.bin', '1.60', new Uint8Array([1])); store.addRatio('4:3'); await flush(); await store.refreshVolumes(); };
 const lastToast = () => store.getState().toasts.at(-1)?.text ?? '';
 
-describe('card preflight', () => {
-  it('refuses a card write when free space is short, says needed vs free, and writes and builds nothing', async () => {
-    await start();
-    mocks.host.volumes.mockResolvedValue([card(300_000)]); // the cached list (8 GB) is stale
-    await confirmed(store.outputFirmware({ kind: 'card' }));
-    expect(mocks.host.write).not.toHaveBeenCalled();
-    expect(mocks.host.move).not.toHaveBeenCalled();
-    expect(mocks.engine.build).not.toHaveBeenCalled();
-    expect(lastToast()).toMatch(/Not enough space on card E:/);
-    expect(lastToast()).toMatch(/needed/); expect(lastToast()).toMatch(/free/);
-    expect(store.getState().busy).toBeUndefined();
-  });
-  it('refuses a stock copy and a writeCopy-sized file the same way, through preflightCard', async () => {
-    await start();
-    const v = card(5 * MB);
-    mocks.host.volumes.mockResolvedValue([v]);
-    expect(await store.preflightCard(v, 4 * MB + 1)).toBe(false);
-    expect(await store.preflightCard(v, 4 * MB)).toBe(true); // exactly the free space once the 1 MiB margin is added
-    expect(await store.preflightCard(v, 3 * MB)).toBe(true);
-  });
-  it('refuses a card that is gone, and writes when the card has room', async () => {
-    await start();
-    mocks.host.volumes.mockResolvedValue([]);
-    await confirmed(store.outputFirmware({ kind: 'card' }));
-    expect(mocks.host.write).not.toHaveBeenCalled();
-    expect(lastToast()).toMatch(/no longer there/);
-    mocks.host.volumes.mockResolvedValue([card(8 * 1024 * MB)]);
-    await store.refreshVolumes();
-    await confirmed(store.outputFirmware({ kind: 'card' }));
-    expect(mocks.host.write).toHaveBeenCalledTimes(1);
-    expect(mocks.engine.build).toHaveBeenCalledTimes(1);
-  });
-  it('does not look at volumes for a folder export, even when the card list says it is full', async () => {
-    await start();
-    mocks.host.volumes.mockClear();
-    mocks.host.volumes.mockResolvedValue([card(1)]);
-    await confirmed(store.outputFirmware({ kind: 'folder' }));
-    expect(mocks.host.write).toHaveBeenCalledTimes(1);
-    // the only volume query is the list refresh after the write, never a check before it
-    for (const o of mocks.host.volumes.mock.invocationCallOrder) expect(o).toBeGreaterThan(mocks.host.write.mock.invocationCallOrder[0]);
-  });
+describe('the write-protect hint (upstream checks the space, ui/test/card-preflight.test.mjs)', () => {
   it('maps a write-protect failure of the host to a write-protect hint', () => {
     for (const m of ['open /card/fwdc243b.bin: read-only file system', 'The media is write protected.', 'permission denied']) expect(store.errorHint('io', m)).toBe('hintWriteProtected');
     expect(store.errorHint('io', 'no space left on device')).toBe('hintCardFull');
@@ -162,6 +122,19 @@ describe('project snapshots', () => {
     await confirmed(store.restoreSnapshot(idx[1].id));
     expect(store.getState().extras).toHaveLength(1);
   });
+  it('reopens the kept official firmware after a restore, although the restore shows the busy overlay meanwhile', async () => {
+    await start();
+    expect(store.getState().info).toBeTruthy();
+    expect([...mem.keys()].some((k) => k.startsWith('firmware-'))).toBe(true);
+    await store.takeSnapshot('build');
+    const id = snapIndex()[0].id;
+    mocks.engine.open.mockClear();
+    await store.openSnapshots(); await flush();
+    await confirmed(store.restoreSnapshot(id));
+    expect(mocks.engine.open).toHaveBeenCalledTimes(1);
+    expect(store.getState().info?.version).toBe('1.60');
+    expect(store.getState().busy).toBeUndefined();
+  });
   it('restoring the oldest of a full list works even though the new snapshot prunes it', async () => {
     for (let i = 0; i < 12; i++) { store.setSoft(i % 2 === 0); store.setAdjSlots(5 + (i % 3)); store.setDateStamp(i % 4 < 2); await store.takeSnapshot('build'); }
     expect(snapIndex().length).toBe(10);
@@ -220,40 +193,5 @@ describe('New project', () => {
     await confirmed(store.newProject(), false);
     expect(store.getState().soft).toBe(true);
     expect(snapIndex()).toEqual([]);
-  });
-});
-
-describe('compare two firmware files', () => {
-  const sum = (over = {}) => ({ kind: 'modified', verified: true, changedBytes: 12, sha256: 'x', slots: [{ id: 'CY', names: { en: 'Yellow' }, icon: new Uint8Array(0), colorChanged: false, iconChanged: false, nameChanged: false }],
-    ratios: [], softFocus: [], adjSoftFocus: false, dateStamp: false, monoUnlock: false, hlgPhoto: false, extraSlots: [], ...over });
-  const file = (name) => ({ name, size: 20_000_000, arrayBuffer: async () => new Uint8Array([1]).buffer });
-  it('shows both summaries and marks only the rows that differ', async () => {
-    await store.adoptFirmware('fwdc243b.bin', '1.60', new Uint8Array([1]));
-    const a = sum(), b = sum({ kind: 'official', changedBytes: 0, ratios: [{ name: 'Wide', ratio: '16:9', sizes: [[1, 1]] }], dateStamp: true, slots: [{ id: 'CY', names: { en: 'Yellow' }, icon: new Uint8Array(0), colorChanged: true, iconChanged: false, nameChanged: false }] });
-    mocks.engine.inspect.mockResolvedValueOnce(a).mockResolvedValueOnce(b);
-    await store.inspectFile(file('a.bin'));
-    await store.inspectCompare(file('b.bin'));
-    const v = store.getState().inspectView;
-    expect(v.other).toMatchObject({ name: 'b.bin', busy: false, summary: b });
-    const { compareRows } = await import('../../ui/src/compare');
-    const rows = compareRows(v.summary, v.other.summary, store.getState().lang);
-    const diff = rows.filter((r) => r.differs).map((r) => r.label);
-    expect(diff).toEqual(expect.arrayContaining(['Type', 'Added aspect ratios', 'Slots · Yellow']));
-    expect(rows.find((r) => r.label === 'Verified')).toMatchObject({ differs: false });
-    expect(rows.find((r) => r.label === 'Added aspect ratios')).toMatchObject({ a: 'none', b: 'Wide (16:9)' });
-    expect(rows.filter((r) => !r.differs).length).toBeGreaterThan(5);
-    // single-file view returns when the compare is closed or a new first file is chosen
-    store.closeCompare(); expect(store.getState().inspectView.other).toBeUndefined();
-    await store.inspectCompare(file('b.bin'));
-    mocks.engine.inspect.mockResolvedValueOnce(a);
-    await store.inspectFile(file('c.bin'));
-    expect(store.getState().inspectView.other).toBeUndefined();
-  });
-  it('reports an unreadable second file without losing the first', async () => {
-    await store.adoptFirmware('fwdc243b.bin', '1.60', new Uint8Array([1]));
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    mocks.engine.inspect.mockResolvedValueOnce(sum()).mockRejectedValueOnce(new Error('bad'));
-    await store.inspectFile(file('a.bin')); await store.inspectCompare(file('junk.bin'));
-    expect(store.getState().inspectView).toMatchObject({ summary: expect.anything(), other: { error: 'unreadable', busy: false } });
   });
 });

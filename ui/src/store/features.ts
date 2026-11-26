@@ -36,12 +36,8 @@ export function setMonoUnlock(monoUnlock: boolean): void {
   if (monoUnlock && !state.info?.features.monoUnlock) return;
   set({ monoUnlock }); scheduleSave();
 }
-export function monoUnlockOn(s: State = state): boolean {
-  if (state.info?.family === 'gr3x') return !!s.monoUnlock && (state.info?.features.monoUnlock ?? false);
-  return !!s.monoUnlock && s.model !== 'MONO';
-}
-/** HLG HDR photo output on slot 22 (HDR Tone). */
-/** HLG photo and the HDR gain map exclude each other (see `installExtensions`): turning one on turns the other off. */
+export function monoUnlockOn(s: State = state): boolean { return !!s.monoUnlock && s.model !== 'MONO' && !!s.info?.features.monoUnlock; }
+/** HLG HDR photo output on slot 22 (HDR Tone). HLG photo and the HDR gain map exclude each other (see `installExtensions`): turning one on turns the other off. */
 export function setHlgPhoto(hlgPhoto: boolean): void { set(hlgPhoto ? { hlgPhoto, hdr: false } : { hlgPhoto }); scheduleSave(); }
 export function hlgPhotoOn(s: State = state): boolean {
   return !!s.hlgPhoto && s.model !== 'MONO' && !isGr3(s.model) && !!s.info?.features.hlgPhoto;
@@ -120,6 +116,18 @@ export function setFlashPlus(on: boolean): void {
   set({ directFlash: on && !!f?.directFlash, flashTtl: on && !!f?.flashTtl }); scheduleSave();
 }
 export function flashPlusOn(s: State = state): boolean { return directFlashOn(s) || flashTtlOn(s); }
+/** Subject recognition for photo AF (GR IV 1.20 / 1.21). */
+export function setSubjectAf(subjectAf: boolean): void {
+  if (subjectAf && !state.info?.features.subjectAf) return;
+  set({ subjectAf }); scheduleSave();
+}
+export function subjectAfOn(s: State = state): boolean { return !!s.subjectAf && !!s.info?.features.subjectAf; }
+/** The mode dial's lock button protects the picture in single-picture playback (GR IV 1.20 / 1.21). */
+export function setLockProtect(lockProtect: boolean): void {
+  if (lockProtect && !state.info?.features.lockProtect) return;
+  set({ lockProtect }); scheduleSave();
+}
+export function lockProtectOn(s: State = state): boolean { return !!s.lockProtect && !!s.info?.features.lockProtect; }
 export function setVideoAf(videoAf: boolean): void {
   if (videoAf && !state.info?.features.videoAf) return;
   set({ videoAf }); scheduleSave();
@@ -130,6 +138,12 @@ export function setAwbLearn(awbLearn: boolean): void {
   set({ awbLearn }); scheduleSave();
 }
 export function awbLearnOn(s: State = state): boolean { return !!s.awbLearn && !!s.info?.features.awbLearn; }
+export function setWbPerLook(wbPerLook: boolean): void {
+  if (wbPerLook && !state.info?.features.wbPerLook) return;
+  set({ wbPerLook }); scheduleSave();
+}
+/** White balance per look: offered on GR IV 1.20 / 1.21, built only with at least one added look (output.ts). */
+export function wbPerLookOn(s: State = state): boolean { return !!s.wbPerLook && !!s.info?.features.wbPerLook; }
 export function setMovieExposure(movieExposure: boolean): void {
   if (movieExposure && !state.info?.features.movieExposure) return;
   set({ movieExposure }); scheduleSave();
@@ -169,7 +183,7 @@ export function setAdjSlots(adjSlots: number): void {
 /** The ADJ lever slots the build gets (5: none added). */
 export function adjSlotsOf(s: State = state): number { const max = s.info?.features.maxAdjSlots ?? 5; return s.adjSlots > 5 && s.adjSlots <= max ? s.adjSlots : 5; }
 /** Any addition that is not a slot or a ratio. */
-export function extrasOn(s: State = state): boolean { return !!brightAutoOf(s) || exposurePreviewOn(s) || filmGrainOn(s) || flashTtlOn(s) || videoAfOn(s) || awbLearnOn(s) || movieExposureOn(s) || sensorShiftOn(s) || movie4kOn(s) || movieSrOn(s) || distanceFeetOn(s) || constantLightOn(s) || softOn(s) || !!s.dateStamp || monoUnlockOn(s) || hlgPhotoOn(s) || hasLookLayout(s) || directFlashOn(s) || adjSlotsOf(s) > 5 || hdrOn(s) || batteryOn(s) || (!!customGridOf(s) || (!!s.customGrid && !!s.info?.features.framing && framingValuesOn(s))) || shadowLearnOn(s); }
+export function extrasOn(s: State = state): boolean { return !!brightAutoOf(s) || exposurePreviewOn(s) || filmGrainOn(s) || flashTtlOn(s) || subjectAfOn(s) || lockProtectOn(s) || videoAfOn(s) || awbLearnOn(s) || wbPerLookOn(s) || movieExposureOn(s) || sensorShiftOn(s) || movie4kOn(s) || movieSrOn(s) || distanceFeetOn(s) || constantLightOn(s) || softOn(s) || !!s.dateStamp || monoUnlockOn(s) || hlgPhotoOn(s) || hasLookLayout(s) || directFlashOn(s) || adjSlotsOf(s) > 5 || hdrOn(s) || batteryOn(s) || (!!customGridOf(s) || (!!s.customGrid && !!s.info?.features.framing && framingValuesOn(s))) || shadowLearnOn(s); }
 const MINUS = '\u2212';
 const strengthLabel = (st: SoftFocusStrength | 'custom'): string => t(st === 'weak' ? 'softWeak' : st === 'medium' ? 'softMedium' : st === 'strong' ? 'softStrong' : 'softCustom');
 /** "−2 weak / −3 medium" (−1 first), for confirmations and the copies page. */
