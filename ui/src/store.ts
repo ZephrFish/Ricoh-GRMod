@@ -21,7 +21,7 @@
  *   copies    firmware copies on the card and their backups
  *   cube      a slot's look exported as a .cube
  *   inspect   inspecting and comparing firmware files
- *   fork      the fork's own parts: keyboard shortcuts
+ *   fork      the fork's own parts: project export / import, snapshots, new project, keyboard shortcuts
  */
 export * from './store/core';
 export * from './store/families';

@@ -12,6 +12,7 @@ import type { Crop } from '../pixels';
 import type { InspectView } from './inspect';
 import { SUPPORTED_LINES } from '../releases.gen';
 import type { Key } from '../i18n';
+import type { SnapshotEntry } from './fork';
 import type { LibraryEntry } from './library';
 
 /** `extras`: the additions (switches, the custom grid); 0.8.16 and earlier had a page of its own for the grid (`grid`). */
@@ -164,6 +165,8 @@ export interface State {
   inspectView?: InspectView;
   busy?: string; toasts: Toast[]; confirm?: Confirm; cropId?: string; onlineOpen: boolean;
   tour?: TourState; toursSeen: TourId[];
+  /** The fork's "Restore an earlier version" dialog (open while set; store/fork.ts). */
+  snapshotsView?: { entries: SnapshotEntry[]; busy: boolean };
   /** Android: a firmware file on its way to the camera over Wi-Fi (camera.tsx shows the dialog while it is set). */
   push?: { file: Uint8Array; label: string; stock: boolean };
 }
