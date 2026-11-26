@@ -618,15 +618,25 @@ export const UI_LANG_NAMES: Record<UiLang, string> = { zh: '简体中文', 'zh-T
 /** Every dictionary (tests compare them). */
 export const DICTS: Record<UiLang, Dict> = { zh, 'zh-TW': zhTW, en, ja, ko, es, de };
 export const isUiLang = (v: unknown): v is UiLang => typeof v === 'string' && (UI_LANGS as readonly string[]).includes(v);
-/** The interface language the user picked in the phone app ('' = as the system), kept in the web view's storage. */
+/**
+ * @decision DEC-QOL-LANG-002
+ * @title Upstream's seven-language mechanism, with the fork's English default
+ * @status accepted
+ * @rationale Supersedes DEC-QOL-LANG-001's two-language switch: upstream (0.9.x) owns the language list, the menu and
+ *   the reload-on-change flow, so the fork only keeps its default. With nothing stored the app and the camera are
+ *   English, not the system's language; an explicit "Follow system" is written to storage as 'auto' ('' is its
+ *   in-memory form, as upstream uses it). Project import and snapshot restore never change the language
+ *   (store.ts applyProjectExport).
+ */
+/** The interface language the user picked ('' = as the system), kept in the web view's storage; English when nothing was ever stored. */
 const UI_LANG_KEY = 'grmod.uiLang';
 export function uiLangPref(): '' | UiLang {
-  try { const v = localStorage.getItem(UI_LANG_KEY); return isUiLang(v) ? v : ''; } catch { return ''; }
+  try { const v = localStorage.getItem(UI_LANG_KEY); return isUiLang(v) ? v : v === 'auto' ? '' : 'en'; } catch { return 'en'; }
 }
 /** Changes the interface language; the page reloads in it unless `reload` is false (store.ts setAppLanguage saves the work first). */
 export function setUiLangPref(v: '' | UiLang, reload = true): void {
-  try { if (v) localStorage.setItem(UI_LANG_KEY, v); else localStorage.removeItem(UI_LANG_KEY); } catch { /* not kept */ }
-  if (reload) window.setTimeout(() => window.location.reload(), 120);
+  try { localStorage.setItem(UI_LANG_KEY, v || 'auto'); } catch { /* not kept */ }
+  if (reload && typeof window !== 'undefined') window.setTimeout(() => window.location.reload(), 120);
 }
 /** The system's language among the interface languages: its first one GR Mod has, else English. */
 export function systemUiLang(): UiLang {
@@ -646,6 +656,8 @@ export const NOTES_LANG: 'zh' | 'en' = UI_LANG === 'zh' || UI_LANG === 'zh-TW' ?
 export const WIDE_PUNCT = UI_LANG === 'zh' || UI_LANG === 'zh-TW' || UI_LANG === 'ja';
 const dict = DICTS[UI_LANG];
 try { document.documentElement.lang = UI_LANG === 'zh' ? 'zh-CN' : UI_LANG; } catch { /* no document (tests) */ }
+/** The language t() speaks, for code that formats text itself and for the tests. */
+export const uiLangCode = (): UiLang => UI_LANG;
 /** The phone app (Android, iOS): its own wording where the desktop's would be wrong (no dragging, no card). */
 const capx = (globalThis as unknown as { Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string } }).Capacitor;
 const PHONE = !!capx?.isNativePlatform?.() && ['android', 'ios'].includes(capx.getPlatform?.() ?? '');
