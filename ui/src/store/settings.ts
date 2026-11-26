@@ -3,7 +3,7 @@ import { engine, EngineError } from '../engine';
 import { host } from '../host';
 import { isUiLang, setUiLangPref, t, uiLangPref } from '../i18n';
 import type { UiLang } from '../i18n';
-import { ExtrasView, Page, State, TOUR_IDS, TourId, cameraLang, fail, isGr3, set, slotOf, state, supportedList, toast } from './core';
+import { ExtrasView, Page, State, TOUR_IDS, TourId, cameraLang, fail, isGr3, set, slotOf, state, supportedList, toast, isBadFirmwareCode } from './core';
 import { LEGACY_FW_GROUP_NAME, cancelSave, enterFamily, familyOf, fwGroupOf, fwKey, keptFirmware, leaveFamily, saveProject, scheduleSave } from './families';
 import { allSlotKeys, renderIcon, runPreset } from './slots';
 import { encodeWall } from './wall';
@@ -140,7 +140,7 @@ export async function openFirmware(raw: Uint8Array, name: string, persist: boole
   } catch (e) {
     set({ fwBusy: false, info: undefined, raw: undefined, fwName: undefined });
     scheduleSave();
-    if (e instanceof EngineError && (e.code === 'unsupported-firmware' || e.code.startsWith('bad-') || e.code === 'too-short')) toast(t('badFirmware', { list: supportedList() }), 'error');
+    if (e instanceof EngineError && isBadFirmwareCode(e.code)) toast(t('badFirmware', { list: supportedList() }), 'error');
     else fail(e);
     return false;
   }

@@ -180,6 +180,7 @@ const zh = {
   navDate: '时间戳', dateSub: '将日期（可附加影像控制名称）打印在照片上', dateLine: '时间戳  ·  [拍摄辅助] › [拍摄时间戳]（\'26 10 08 / 2026.10.08 17:34，各可附加名称）',
   navAdjSlots: 'ADJ 栏目数', adjSlotsSub: '增加 ADJ 拨杆的栏目数量', adjSlotsLine: 'ADJ 栏目  ·  {n} 个（在[自定义设定] › [ADJ 模式设定]中设定）',
   navBrightAuto: '显示屏自动亮度', brightAutoOff: '自动亮度 · 原厂', brightAutoBalanced: '自动亮度 · 稍亮', brightAutoBright: '自动亮度 · 最亮',
+  closeLabel: '关闭',
   photoFitTitle: '按真实照片拟合 LUT', photoFitSub: '导入 .cube 时，多用真实照片里的颜色（天空、灰、肤色）来拟合，更接近原 LUT；只有更接近时才采用。对之后导入的 .cube 生效，已导入的保持不变。',
   navShadow: '改进版阴影校正', shadowSub: '阴影校正设为[自动]时，根据画面估计暗部提亮程度（原厂的[自动]因计算溢出，实拍时基本不进行校正）。固定档位和[关闭]保持不变。',
   shadowLine: '阴影校正 · 学习型自动  ·  阴影校正选[自动]时生效',
@@ -308,6 +309,16 @@ const zh = {
   libSortNew: '最新在前',
   libSortName: '按名称',
   libNoMatch: '没有匹配的预设',
+  // The fork's own: save warning, error hints, keyboard shortcuts, the summary before a folder export
+  saveFailed: '项目没有保存成功，关闭程序后改动可能丢失。请检查磁盘空间和权限',
+  hintFirmware: '固件文件不对、已损坏或不受支持，请使用官方原始固件', hintUnsupportedHere: '这台相机的固件不支持该功能',
+  hintConflict: 'HLG 照片模式不能与 HDR 增益图同时开启，请关掉其中一个', hintFwFull: '固件里放不下这些改动，请减少关机画面或胶片数量',
+  hintTooMany: '添加的比例或图片超过上限，请减少一些', hintCardFull: '存储卡或磁盘已满，请腾出空间后重试',
+  hintRemoved: '存储卡或磁盘已断开或未就绪，请重新插入后重试', hintNotFound: '找不到文件，它可能已被移动，或存储卡已拔出',
+  hintDenied: '没有权限访问该位置，请换一个文件夹，或检查存储卡是否写保护', hintOffline: '连不上 GR Mod 程序，请关闭窗口后重新打开',
+  exportConfirmTitle: '导出固件', exportConfirmOk: '导出',
+  shortcutsMenu: '键盘快捷键', shortcutsHint: '{m}+E 导出到文件夹 · {m}+Z 撤销删除 · 影像控制页 ← → 切换槽位 · 长宽比页 ↑ ↓ 切换比例', exportFolderKey: '导出到文件夹（{m}+E）',
+  hintWriteProtected: '存储卡可能处于写保护状态，请拨开卡侧的锁定开关后重试',
 };
 const en: typeof zh = {
   app: 'GR Mod',
@@ -484,6 +495,7 @@ const en: typeof zh = {
   navDate: 'Date imprint', dateSub: 'Print the date (and the look\'s name) on photos', dateLine: 'Date imprint  ·  Shooting Assist › Date Imprint (\'26 10 08 / 2026.10.08 17:34, each with or without the look\'s name)',
   navAdjSlots: 'ADJ lever items', adjSlotsSub: 'More items on the ADJ lever', adjSlotsLine: 'ADJ lever  ·  {n} items (set in Customize Settings › ADJ Mode Setting)',
   navBrightAuto: 'Auto screen brightness', brightAutoOff: 'Auto brightness · stock', brightAutoBalanced: 'Auto brightness · brighter', brightAutoBright: 'Auto brightness · brightest',
+  closeLabel: 'Close',
   photoFitTitle: 'Fit LUTs to real photos', photoFitSub: 'Fits .cube presets with the colours of real photos as well (sky, greys, skin), for a closer match to the LUT; kept only when it comes out closer. Applies to .cube presets imported from now on; those already imported stay as they are.',
   navShadow: 'Improved Shadow Correction', shadowSub: 'With Shadow Correction on Auto, the camera estimates from the scene how much to lift the shadows (its own Auto overflows and hardly ever corrects on real photos). The fixed levels and Off are unchanged.',
   shadowLine: 'Shadow Correction · learned Auto  ·  when Shadow Correction is set to Auto',
@@ -610,6 +622,16 @@ const en: typeof zh = {
   libSortNew: 'Newest first',
   libSortName: 'By name',
   libNoMatch: 'No preset matches',
+  // The fork's own: save warning, error hints, keyboard shortcuts, the summary before a folder export
+  saveFailed: 'The project could not be saved, so recent changes may be lost on exit. Check disk space and permissions',
+  hintFirmware: 'The firmware file is wrong, damaged or unsupported. Use the original official firmware', hintUnsupportedHere: 'This camera\'s firmware does not support that feature',
+  hintConflict: 'HLG photo mode and the HDR gain map cannot both be on. Turn one of them off', hintFwFull: 'The firmware has no room for all these changes. Use fewer power-off pictures or films',
+  hintTooMany: 'Too many added ratios or pictures. Remove some', hintCardFull: 'The card or disk is full. Free some space and try again',
+  hintRemoved: 'The card or disk was removed or is not ready. Reinsert it and try again', hintNotFound: 'File not found. It may have been moved, or the card was removed',
+  hintDenied: 'Permission denied. Pick another folder, or check that the card is not write-protected', hintOffline: 'Cannot reach the GR Mod program. Close this window and open it again',
+  exportConfirmTitle: 'Export firmware', exportConfirmOk: 'Export',
+  shortcutsMenu: 'Keyboard shortcuts', shortcutsHint: '{m}+E export to a folder · {m}+Z undo a delete · Left / Right: slot on Image Control · Up / Down: ratio on Aspect ratio', exportFolderKey: 'Export to a folder ({m}+E)',
+  hintWriteProtected: 'The card may be write-protected. Slide its lock switch to unlocked and try again',
 };
 export type Key = keyof typeof zh;
 /** One language's texts: every entry of the Chinese ones. */

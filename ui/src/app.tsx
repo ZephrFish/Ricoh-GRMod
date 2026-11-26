@@ -1,5 +1,5 @@
 import type { CameraModel } from '@grmod/core';
-import { Component, useLayoutEffect, useRef, useState } from 'react';
+import { Component, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ErrorInfo } from 'react';
 import { GlassDefs, GlassFilter, useGlass, useSize } from './glass';
 import { Busy, ConfirmDialog, Hint, Ico, MobileSheet, Select, Toasts, useDismiss } from './components';
@@ -19,7 +19,7 @@ import { CropEditor, ExtrasPage, ImageControlPage, RatioPage, WallpaperPage, clo
 import { Tour, replayTour, restartTours } from './tour';
 import { UpdatePill, UpdateWatcher, checkForUpdate, openWhatsNew } from './updates';
 import {
-  getState, isGr3, backupCopies, extrasOn, copyList, deleteCopies, hasNameErrors, hasRatioErrors, ratioSpecs, revealBackups, writableCopy, writeCopy, menuPictures, outputFirmware, pendingChanges, refreshVolumes, scheduleSave, selectVolume, setAppLanguage, setModel, setPage, setShowAll, useStore, wallReady,
+  getState, isGr3, backupCopies, extrasOn, copyList, deleteCopies, hasNameErrors, hasRatioErrors, ratioSpecs, revealBackups, writableCopy, writeCopy, menuPictures, outputFirmware, handleShortcut, modKeyName, toast, pendingChanges, refreshVolumes, scheduleSave, selectVolume, setAppLanguage, setModel, setPage, setShowAll, useStore, wallReady,
 } from './store';
 import type { State } from './store';
 
@@ -134,7 +134,7 @@ function OutputBar() {
       </div>
       <span className="grow" />
       {s.page === 'copies' && <CopyActions />}
-      {s.page !== 'copies' && <button className="btn" data-tour="export" disabled={!can} title={t('exportFolder')} onClick={() => run('folder')}>{Ico.folder}<span className="out-label">{t('exportFolder')}</span></button>}
+      {s.page !== 'copies' && <button className="btn" data-tour="export" disabled={!can} title={t('exportFolderKey', { m: modKeyName() })} onClick={() => run('folder')}>{Ico.folder}<span className="out-label">{t('exportFolder')}</span></button>}
       {s.page !== 'copies' && <button className="btn primary" data-tour="write" disabled={!can || !vol} onClick={() => run('card')}>{t('writeCard')}</button>}
     </footer>
   );
@@ -151,6 +151,7 @@ function HelpMenu() {
       {open && (
         <div className="menu up" role="menu">
           <button role="menuitem" onClick={() => { setOpen(false); replayTour(); }}>{t('tourReplay')}</button>
+          <button role="menuitem" onClick={() => { setOpen(false); toast(t('shortcutsHint', { m: modKeyName() }), 'info'); }}>{t('shortcutsMenu')}</button>
           <button role="menuitem" onClick={() => { setOpen(false); restartTours(); }}>{t('tourRestart')}</button>
           {host.available && <button role="menuitem" onClick={() => { setOpen(false); void checkForUpdate(false); }}>{t('updCheck')}</button>}
         </div>
@@ -165,6 +166,7 @@ export function App() {
   const menuPicsReady = useStore((s) => !!s.info?.capabilities.menuPictures);
   const fwOpen = useStore((s) => !!s.info);
   const ready = useStore((s) => s.ready);
+  useEffect(() => { const key = (e: KeyboardEvent): void => { handleShortcut(e); }; window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key); }, []);
   if (!host.available) return <div className="nohost">{t('hostMissing')}</div>;
   if (isMobile) return <Crashed><MobileApp /></Crashed>;
   return (
