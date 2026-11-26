@@ -44,6 +44,8 @@ beforeEach(async () => {
   vi.stubGlobal('document', { hidden: true });
   store = await import('../src/store');
   await store.adoptFirmware('fwdc248b.bin', '1.11', new Uint8Array([1]));
+  // The fork's photo-weighted .cube fit is on by default and would change the fitting options these tests compare; off here (core/test/photo-fit-ui.test.mjs tests it with the library and batch import).
+  store.setPhotoFit(false);
   await store.loadPresetFile('CY', file('warm.cube', 'LUT_3D_SIZE 2 warm'));
   mocks.engine.convert.mockClear();
 });

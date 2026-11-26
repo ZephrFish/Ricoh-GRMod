@@ -1,7 +1,7 @@
 import { MAX_EXTRA_SLOTS } from '@grmod/core';
-import type { FirmwareInfo, LangCode, SlotId } from '@grmod/core';
+import type { FirmwareInfo, LangCode, PresetResult, SlotId } from '@grmod/core';
 import { engine, EngineError } from '../engine';
-import { host } from '../host';
+import { host, sha256Hex } from '../host';
 import { t } from '../i18n';
 import type { Key } from '../i18n';
 import { ensureIconFont, imageIcon, loadBitmap, textIcon } from '../pixels';
@@ -17,31 +17,58 @@ const PRESET_ERRORS: Record<string, Key> = {
   'not-cube': 'errNotXmp', 'bad-cube': 'errBadCube', 'gr3x-cube-only': 'gr3xCubeOnly',
 };
 /** The newest conversion of each slot: an older one that finishes later is dropped. */
+/**
+ * The fitting options a slot's conversion runs with. GR IV added slots also try hue sectors (the
+ * conversion keeps them only when they come out closer); `photoFit` (a GR IV .cube imported with the
+ * photo-weighted fit) is the preset's own. Shared by runPreset and the preset library's compatibility
+ * check (fitKeyOf), so the two cannot disagree.
+ */
+export function fitOptions(id: SlotKey, kind: 'xmp' | 'cube', photoFit = false): { hue?: boolean; photoFit?: boolean } {
+  const hue = isExtra(id) && state.info?.family !== 'gr3x';
+  return { ...(hue ? { hue: true } : {}), ...(photoFit && kind === 'cube' && state.info?.family === 'gr4' ? { photoFit: true } : {}) };
+}
+/** Whether a .cube imported now gets the photo-weighted fit (the switch; GR IV only). */
+export const photoFitForImport = (kind: 'xmp' | 'cube'): boolean => kind === 'cube' && state.photoFit && state.info?.family === 'gr4';
 export const presetRuns = new Map<SlotKey, number>();
 let presetRun = 0;
 /** A new conversion run number (the preset library makes a running conversion stale with it). */
 export function nextPresetRun(): number { return ++presetRun; }
-/**
- * The fitting options a slot's conversion runs with: GR IV added slots also try hue sectors (the
- * conversion keeps them only when they come out closer). Shared by runPreset and the preset library's
- * compatibility check, so the two cannot disagree.
- */
-export function fitOptions(id: SlotKey): { hue?: boolean } {
-  return isExtra(id) && state.info?.family !== 'gr3x' ? { hue: true } : {};
+/** Bumped when the photo-weighted fit changes, so saved results of an older fit are not used. */
+const FIT_CACHE_VERSION = 1;
+/** A photo-weighted fit takes seconds (several fits): its result is saved, keyed by the LUT, the options and the firmware. */
+async function fitCacheKey(text: string, kind: string, hue: boolean): Promise<string | null> {
+  if (!host.available || !state.info) return null;
+  // The host's store keys are at most 64 characters (shell/internal/server/store.go): 'fit-' and 40 hex digits (160 bits).
+  try { return 'fit-' + (await sha256Hex(new TextEncoder().encode(JSON.stringify([FIT_CACHE_VERSION, state.info.sha256, kind, hue, text])))).slice(0, 40); } catch { return null; }
 }
-export async function runPreset(id: SlotKey, fileName: string, kind: 'xmp' | 'cube', text: string): Promise<void> {
-  patchSlot(id, { preset: { fileName, kind, text, busy: !!state.info?.capabilities.presets } });
+function resultToJson(r: PresetResult): string {
+  return JSON.stringify({ ...r, params: { ...r.params, ck: r.params.ck.map((c) => Array.from(c)) }, matrixQ13: Array.from(r.matrixQ13), curves: r.curves.map((c) => Array.from(c)), ...(r.postQ9 ? { postQ9: Array.from(r.postQ9) } : {}) });
+}
+function resultFromJson(s: string): PresetResult | null {
+  try {
+    const j = JSON.parse(s);
+    if (!j || !j.params || !Array.isArray(j.params.ck) || !Array.isArray(j.matrixQ13) || !Array.isArray(j.curves) || j.curves.length !== 3) return null;
+    return { ...j, params: { ...j.params, ck: j.params.ck.map((c: number[]) => Float64Array.from(c)) }, matrixQ13: Int16Array.from(j.matrixQ13), curves: j.curves.map((c: number[]) => Uint16Array.from(c)) as PresetResult['curves'], ...(j.postQ9 ? { postQ9: Int16Array.from(j.postQ9) } : {}) };
+  } catch { return null; }
+}
+export async function runPreset(id: SlotKey, fileName: string, kind: 'xmp' | 'cube', text: string, photoFitFlag = false): Promise<void> {
+  const photoFit = photoFitFlag && kind === 'cube';
+  patchSlot(id, { preset: { fileName, kind, text, busy: !!state.info?.capabilities.presets, ...(photoFit ? { photoFit } : {}) } });
   if (!state.info?.capabilities.presets) return;
   const run = ++presetRun;
   presetRuns.set(id, run);
   try {
-    const result = await engine.convert(kind, text, fitOptions(id));
+    const opts = fitOptions(id, kind, photoFit);
+    const cacheKey = opts.photoFit ? await fitCacheKey(text, kind, !!opts.hue) : null;
+    const cached = cacheKey ? await host.storeGet(cacheKey).then((b) => (b ? resultFromJson(new TextDecoder().decode(b)) : null), () => null) : null;
+    const result = cached ?? await engine.convert(kind, text, opts);
+    if (cacheKey && !cached) void host.storeSet(cacheKey, resultToJson(result)).catch(() => undefined);
     if (presetRuns.get(id) !== run || slotOf(id)?.preset?.text !== text) return; // replaced, removed or converted again meanwhile
-    patchSlot(id, { preset: { fileName, kind, text, busy: false, result } });
+    patchSlot(id, { preset: { fileName, kind, text, busy: false, result, ...(photoFit ? { photoFit } : {}) } });
   } catch (e) {
     if (presetRuns.get(id) !== run || slotOf(id)?.preset?.text !== text) return;
     const code = e instanceof EngineError ? e.code : '';
-    patchSlot(id, { preset: { fileName, kind, text, busy: false, error: PRESET_ERRORS[code] ? t(PRESET_ERRORS[code]) : t('errNotXmp') } });
+    patchSlot(id, { preset: { fileName, kind, text, busy: false, error: PRESET_ERRORS[code] ? t(PRESET_ERRORS[code]) : t('errNotXmp'), ...(photoFit ? { photoFit } : {}) } });
   }
 }
 /** Text of a preset file whatever its encoding: UTF-8, UTF-16 (with or without BOM) or GB18030. */
@@ -62,7 +89,7 @@ export async function loadPresetFile(id: SlotKey, file: File): Promise<void> {
   const kind: 'xmp' | 'cube' = lower.endsWith('.cube') ? 'cube' : lower.endsWith('.xmp') ? 'xmp' : /LUT_(3D|1D)_SIZE/i.test(text) ? 'cube' : 'xmp';
   setActiveSlot(id);
   if (host.available) await host.storeSet(presetKey(id), text).catch(() => undefined);
-  await runPreset(id, file.name, kind, text);
+  await runPreset(id, file.name, kind, text, photoFitForImport(kind));
   scheduleSave();
 }
 export function removePreset(id: SlotKey): void {

@@ -9,6 +9,13 @@ import { framingProblem, framingValues } from '@grmod/core';
 /** The framing guides have a preset of their own (store/framing.ts framingOf, without importing it here). */
 const framingValuesOn = (s: State): boolean => framingProblem(s.framing) === null && framingValues(s.framing).length > 0;
 
+// ------------------------------------------------------------------ import fitting
+/** GR IV: whether .cube presets imported from now on also fit with real picture colours. Presets already imported keep how they were fitted; importing one again uses this. */
+export function setPhotoFit(value: boolean): void {
+  if (state.info?.family !== 'gr4') return;
+  set({ photoFit: value }); scheduleSave();
+}
+
 // ------------------------------------------------------------------ soft focus
 /**
  * The soft focus switch: on, the firmware gets soft focus as a function of the ADJ lever (off /

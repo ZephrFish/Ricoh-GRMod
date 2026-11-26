@@ -6,7 +6,7 @@ import type { SlotKey, State } from './core';
 import { familyOf, presetKey, scheduleSave } from './families';
 import type { Family } from './families';
 import { setActiveSlot } from './photo';
-import { fitOptions, nextPresetRun, presetRuns, runPreset } from './slots';
+import { fitOptions, nextPresetRun, photoFitForImport, presetRuns, runPreset } from './slots';
 
 /**
  * The user's own preset library: looks kept outside the project, so a look imported once can go on
@@ -49,9 +49,10 @@ const libFitKey = (id: string): string => 'library-' + id + '-fit';
  * It starts with the app's version: a stored fit is only reused by the version that made it, so a later version
  * with a better fit refits the stored source once instead of reusing an older result.
  */
-function fitKeyOf(id: SlotKey, kind: 'xmp' | 'cube'): string | undefined {
+function fitKeyOf(id: SlotKey, kind: 'xmp' | 'cube', photoFit = false): string | undefined {
   if (!state.info?.capabilities.presets) return undefined;
-  return [host.info?.version ?? '', familyOf(state.model), kind, JSON.stringify(fitOptions(id))].join('|');
+  // The fork's photo-weighted .cube fit (fitOptions' `photoFit`) is one of the options: off, the key is upstream's.
+  return [host.info?.version ?? '', familyOf(state.model), kind, JSON.stringify(fitOptions(id, kind, photoFit))].join('|');
 }
 const TYPED: Record<string, new (a: number[]) => ArrayLike<number>> = { Int16Array, Uint16Array, Float64Array, Float32Array, Uint8Array } as never;
 /** A fit result as JSON; typed arrays are tagged `{ __ta, data }` so that reading it back gives the same arrays. */
@@ -103,7 +104,7 @@ export function closeLibrary(): void { set({ libraryPicker: undefined }); }
 /** Keep the fitted preset of a slot (with its source file) in the library. False when there is nothing fitted to keep or it could not be written. */
 export async function saveToLibrary(id: SlotKey, name: string = defaultLibraryName(id)): Promise<boolean> {
   const p = slotOf(id)?.preset;
-  const key = p?.result ? fitKeyOf(id, p.kind) : undefined;
+  const key = p?.result ? fitKeyOf(id, p.kind, p.photoFit === true) : undefined;
   const clean = name.trim().slice(0, 60);
   if (!host.available || !p?.result || !clean) return false;
   await loadLibrary();
@@ -131,14 +132,15 @@ export async function applyFromLibrary(id: SlotKey, entryId: string): Promise<bo
   const text = new TextDecoder().decode(src);
   setActiveSlot(id);
   await host.storeSet(presetKey(id), text).catch(() => undefined);
-  const key = fitKeyOf(id, e.kind);
+  const photoFit = photoFitForImport(e.kind); // an entry put on a slot is fitted as a file imported now would be
+  const key = fitKeyOf(id, e.kind, photoFit);
   const stored = key && e.fit === key ? await host.storeGet(libFitKey(e.id)).catch(() => null) : null;
   const result = stored ? unpackFit(new TextDecoder().decode(stored)) : undefined;
   if (result) {
     presetRuns.set(id, nextPresetRun()); // a conversion still running for this slot is now stale
-    patchSlot(id, { preset: { fileName: e.fileName, kind: e.kind, text, busy: false, result } });
+    patchSlot(id, { preset: { fileName: e.fileName, kind: e.kind, text, busy: false, result, ...(photoFit ? { photoFit: true } : {}) } });
   } else {
-    await runPreset(id, e.fileName, e.kind, text);
+    await runPreset(id, e.fileName, e.kind, text, photoFit);
     // keep the new fit for the next time, when the slot's options are the ones the entry was saved for or it had none (an older app's)
     const fresh = slotOf(id)?.preset;
     if (key && fresh?.result && fresh.text === text && (!e.fit || e.fit.split('|').slice(1).join('|') === key.split('|').slice(1).join('|'))) {
