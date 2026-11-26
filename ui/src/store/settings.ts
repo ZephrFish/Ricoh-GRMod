@@ -58,16 +58,16 @@ export function setPage(page: Page): void {
 }
 export async function setAppLanguage(v: '' | UiLang): Promise<void> {
   if (v === uiLangPref()) return;
-  setUiLangPref(v, false);
+  setUiLangPref(v, false); // not reloaded here: the work is saved first
   try { sessionStorage.setItem('grmod.uiLangAdopted', v); } catch { /* none */ }
   cancelSave();
   if (host.available && state.ready) await saveProject();
-  window.setTimeout(() => window.location.reload(), 60);
+  if (typeof window !== 'undefined') window.setTimeout(() => window.location.reload(), 60);
 }
 export function langOf(doc: { uiLang?: string }): { lang: LangCode; langAuto: boolean } {
   // The app language is kept by the page (localStorage) and in the saved work: the desktop page's storage goes with
   // its port, so a saved choice the page has lost is taken back (once: the page reloads in it).
-  const saved = isUiLang(doc.uiLang) || doc.uiLang === '' ? doc.uiLang : undefined;
+  const saved = isUiLang(doc.uiLang) ? doc.uiLang : doc.uiLang === '' || doc.uiLang === 'auto' ? '' : undefined; // 'auto' is what the fork's earlier live switch saved
   if (saved !== undefined && saved !== uiLangPref()) {
     let reloadOnce = false;
     try { reloadOnce = sessionStorage.getItem('grmod.uiLangAdopted') !== saved; sessionStorage.setItem('grmod.uiLangAdopted', saved); } catch { /* no storage: no reload */ }
