@@ -317,4 +317,8 @@ export const ko: Dict = {
   libSortNew: '최신순',
   libSortName: '이름순',
   libNoMatch: '일치하는 프리셋이 없습니다',
+  // The fork's own texts (upstream has none for them), in English until they are translated.
+  navHlg: 'HLG Photo',
+  hlgSub: 'In-camera BT.2100 HLG HDR photos (via HDR Tone slot)',
+  hlgLine: 'HLG Photo  ·  In-camera BT.2100 HLG (Rec.2020 + CICP)',
 };

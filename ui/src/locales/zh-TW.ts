@@ -317,4 +317,8 @@ export const zhTW: Dict = {
   libSortNew: '最新在前',
   libSortName: '依名稱',
   libNoMatch: '沒有相符的預設',
+  // The fork's own texts (upstream has none for them), in English until they are translated.
+  navHlg: 'HLG Photo',
+  hlgSub: 'In-camera BT.2100 HLG HDR photos (via HDR Tone slot)',
+  hlgLine: 'HLG Photo  ·  In-camera BT.2100 HLG (Rec.2020 + CICP)',
 };
