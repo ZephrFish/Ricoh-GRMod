@@ -321,4 +321,7 @@ export const ja: Dict = {
   navHlg: 'HLG Photo',
   hlgSub: 'In-camera BT.2100 HLG HDR photos (via HDR Tone slot)',
   hlgLine: 'HLG Photo  ·  In-camera BT.2100 HLG (Rec.2020 + CICP)',
+  wallBuiltIn: 'Built-in pictures',
+  wallBuiltInHint: 'Click one to add it; crop and rename it like any other picture.',
+  wallBuiltInFull: 'The list is full: remove a picture first.',
 };
