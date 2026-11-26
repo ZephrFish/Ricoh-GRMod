@@ -5,7 +5,7 @@ import { FirmwareHero } from '../firmware';
 import { t } from '../i18n';
 import {
   useStore, loadFirmwareFile, gridOffered, setSoft, setDateStamp, setMonoUnlock, setFlashPlus, flashPlusOn, setAdjSlots, adjSlotsOf, setHdr, setExposurePreview, setFilmGrain,
-  setShadowLearn, setBattery, setSubjectAf, setLockProtect, setVideoAf, setMovieExposure, setAwbLearn, setWbPerLook, setConstantLight, setSensorShift, setMovie4k, setMovieSr, setDistanceFeet, setBrightAuto, setCustomGrid, setHlgPhoto, setPhotoFit,
+  setShadowLearn, setBattery, setSubjectAf, setLockProtect, setVideoAf, setDimLightAf, setMovieExposure, setAwbLearn, setWbPerLook, setConstantLight, setSensorShift, setMovie4k, setMovieSr, setDistanceFeet, setBrightAuto, setCustomGrid, setHlgPhoto, setPhotoFit,
 } from '../store';
 import { isFirmware } from './files';
 import { GridDetail, GridThumb, closeGrid, openGrid, useGridArrival } from './grid';
@@ -38,7 +38,7 @@ function Capsule({ icon, title, sub, on, control, foot, tour, onOpen, morph }: {
 }
 
 /** A switch of an addition. */
-function FeatureCapsule({ on, onChange, ...rest }: { icon: ReactNode; title: string; sub: string; on: boolean; onChange: (v: boolean) => void; tour?: string }) {
+function FeatureCapsule({ on, onChange, ...rest }: { icon: ReactNode; title: string; sub?: string; on: boolean; onChange: (v: boolean) => void; tour?: string }) {
   return <Capsule {...rest} on={on} control={<Switch checked={on} onChange={onChange} label={rest.title} />} />;
 }
 
@@ -99,6 +99,8 @@ function ExtrasList() {
   const lockOk = useStore((s) => !!s.info?.features.lockProtect);
   const vaf = useStore((s) => s.videoAf);
   const vafOk = useStore((s) => !!s.info?.features.videoAf);
+  const dimAf = useStore((s) => s.dimLightAf);
+  const dimAfOk = useStore((s) => !!s.info?.features.dimLightAf);
   const mexp = useStore((s) => s.movieExposure);
   const mexpOk = useStore((s) => !!s.info?.features.movieExposure);
   const awb = useStore((s) => s.awbLearn);
@@ -138,6 +140,7 @@ function ExtrasList() {
       )}
       {safOk && <FeatureCapsule icon={Ico.subject} title={t('navSubjectAf')} sub={t('subjectAfSub')} on={saf} onChange={setSubjectAf} tour="ex-f-saf" />}
       {vafOk && <FeatureCapsule icon={Ico.movie} title={t('navVideoAf')} sub={t('videoAfSub')} on={vaf} onChange={setVideoAf} tour="ex-f-vaf" />}
+      {dimAfOk && <FeatureCapsule icon={Ico.af} title={t('navDimAf')} on={dimAf} onChange={setDimLightAf} tour="ex-f-dimaf" />}
       {mexpOk && <FeatureCapsule icon={Ico.movieExp} title={t('navMovieExp')} sub={t('movieExpSub')} on={mexp} onChange={setMovieExposure} tour="ex-f-mexp" />}
       {m4kOk && <FeatureCapsule icon={Ico.movie4k} title={t('navMovie4k')} sub={t('movie4kSub')} on={m4k} onChange={setMovie4k} tour="ex-f-4k" />}
       {msrOk && <FeatureCapsule icon={Ico.movieSr} title={t('navMovieSr')} sub={t('movieSrSub')} on={msr} onChange={setMovieSr} tour="ex-f-msr" />}
