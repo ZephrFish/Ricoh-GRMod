@@ -488,7 +488,7 @@ export function Toasts() {
         <div key={x.id} className={`toast ${x.kind}`} role="status">
           <span className="toast-text">{x.text}</span>
           {x.action && <button className="toast-action" onClick={() => { x.action!.run(); dismissToast(x.id); }}>{x.action.label}</button>}
-          <button className="toast-x" aria-label="close" onClick={() => dismissToast(x.id)}>{Ico.x}</button>
+          <button className="toast-x" aria-label={t('closeLabel')} onClick={() => dismissToast(x.id)}>{Ico.x}</button>
         </div>
       ))}
     </div>
@@ -600,9 +600,10 @@ export function ConfirmDialog() {
   const c = useStore((s) => s.confirm);
   useEffect(() => {
     if (!c) return;
-    const key = (e: KeyboardEvent): void => { if (e.key === 'Escape') answerConfirm(false); };
-    window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
+    // Capture phase and stopped: a confirmation sits on top of the dialog that asked (the library's delete), so one Escape closes only it.
+    const key = (e: KeyboardEvent): void => { if (e.key === 'Escape') { e.stopPropagation(); answerConfirm(false); } };
+    window.addEventListener('keydown', key, true);
+    return () => window.removeEventListener('keydown', key, true);
   }, [c]);
   if (!c) return null;
   return (

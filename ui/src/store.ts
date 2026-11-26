@@ -21,6 +21,7 @@
  *   copies    firmware copies on the card and their backups
  *   cube      a slot's look exported as a .cube
  *   inspect   inspecting and comparing firmware files
+ *   fork      the fork's own parts: keyboard shortcuts
  */
 export * from './store/core';
 export * from './store/families';
@@ -41,3 +42,4 @@ export * from './store/output';
 export * from './store/copies';
 export * from './store/cube';
 export * from './store/inspect';
+export * from './store/fork'; // the fork's own parts (see store/fork.ts)
