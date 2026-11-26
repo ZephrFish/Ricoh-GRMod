@@ -49,6 +49,8 @@ function RatioPane({ r }: { r?: RatioItem }) {
   const menu = useStore((s) => !!s.info?.features.shadeMenu);
   const shade = useStore((s) => (s.ratioShade || menu) && !!s.info?.features.ratioShade);
   const tone = useStore((s) => (menu ? 'level-75' : `tone-${s.ratioShadeTone}`));
+  // The GR IV's live view of an added ratio is black outside the photo area (without the live-view shade); the preview shows it so.
+  const gr4 = useStore((s) => s.info?.family === 'gr4');
   const photo = useMemo(() => previewPhoto(), [rev]); // eslint-disable-line react-hooks/exhaustive-deps
   const ref = useRef<HTMLCanvasElement>(null);
   const showPhoto = backdrop === 'photo' && !!photo;
@@ -69,7 +71,7 @@ function RatioPane({ r }: { r?: RatioItem }) {
         <Segmented tour="ratio-backdrop" value={backdrop} onChange={setRatioBackdrop} options={[{ value: 'photo', label: t('previewPhoto') }, { value: 'gray', label: t('ratioGray') }]} />
       </div>
       <div className="ratio-body" data-tour="ratio-frame" data-tour-fit="">
-        <div className={`ratio-frame ${showPhoto ? '' : 'gray'} ${shade ? `live-shade ${tone}` : ''}`}>
+        <div className={`ratio-frame ${showPhoto ? '' : 'gray'} ${shade ? `live-shade ${tone}` : gr4 ? 'camera-black' : ''}`}>
           {showPhoto && <canvas ref={ref} className="ratio-photo" />}
           {sc && (
             <>
