@@ -5,7 +5,7 @@ import { FirmwareHero } from '../firmware';
 import { t } from '../i18n';
 import {
   useStore, loadFirmwareFile, gridOffered, setSoft, setDateStamp, setMonoUnlock, setFlashPlus, flashPlusOn, setAdjSlots, adjSlotsOf, setHdr, setExposurePreview, setFilmGrain,
-  setShadowLearn, setBattery, setSubjectAf, setLockProtect, setVideoAf, setDimLightAf, setMovieExposure, setAwbLearn, setWbPerLook, setConstantLight, setSensorShift, setMovie4k, setMovieSr, setDistanceFeet, setBrightAuto, setCustomGrid, setHlgPhoto,
+  setShadowLearn, setBattery, setSubjectAf, setLockProtect, setVideoAf, setDimLightAf, setMovieExposure, setAwbLearn, setWbPerLook, setConstantLight, setSensorShift, setMovie4k, setMovieSr, setDistanceFeet, setBrightAuto, setCustomGrid, setHlgPhoto, setPhotoFit,
 } from '../store';
 import { isFirmware } from './files';
 import { GridDetail, GridThumb, closeGrid, openGrid, useGridArrival } from './grid';
@@ -80,6 +80,9 @@ function ExtrasList() {
   const hdr = useStore((s) => s.hdr);
   const brightAuto = useStore((s) => s.brightAuto);
   const brightAutoOk = useStore((s) => !!s.info?.features.brightAuto);
+  const photoFit = useStore((s) => s.photoFit);
+  // Fitting LUTs to real photos acts only on GR IV firmware.
+  const gr4 = useStore((s) => s.info?.family === 'gr4');
   const hdrOk = useStore((s) => !!s.info?.features.hdrGainMap);
   const preview = useStore((s) => s.exposurePreview);
   const previewOk = useStore((s) => !!s.info?.features.exposurePreview);
@@ -162,6 +165,7 @@ function ExtrasList() {
           value={brightAuto || 'off'} onChange={(v) => setBrightAuto(v === 'off' ? false : v as 'bright' | 'balanced')}
           options={([['off', 'brightAutoOff'], ['balanced', 'brightAutoBalanced'], ['bright', 'brightAutoBright']] as const).map(([value, key]) => ({ value, label: level(key) }))} />
       )}
+      {gr4 && <FeatureCapsule icon={Ico.image} title={t('photoFitTitle')} sub={t('photoFitSub')} on={photoFit} onChange={setPhotoFit} />}
     </div></div>
   );
 }

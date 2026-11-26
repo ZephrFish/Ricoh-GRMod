@@ -318,6 +318,8 @@ export const ja: Dict = {
   libSortName: '名前順',
   libNoMatch: '一致するプリセットはありません',
   // The fork's own texts (upstream has none for them), in English until they are translated.
+  photoFitTitle: 'Fit LUTs to real photos',
+  photoFitSub: 'Fits .cube presets with the colours of real photos as well (sky, greys, skin), for a closer match to the LUT; kept only when it comes out closer. Applies to .cube presets imported from now on; those already imported stay as they are.',
   navHlg: 'HLG Photo',
   hlgSub: 'In-camera BT.2100 HLG HDR photos (via HDR Tone slot)',
   hlgLine: 'HLG Photo  ·  In-camera BT.2100 HLG (Rec.2020 + CICP)',

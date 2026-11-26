@@ -64,7 +64,7 @@ export function duplicateExtraSlot(key: string): string | undefined {
     return { extras, lookOrder: order, lookHidden: hidden ? [...s.lookHidden, newKey] : s.lookHidden, activeSlot: newKey };
   });
   if (p && host.available) void host.storeSet(presetKey(newKey), p.text).catch(() => undefined);
-  if (p?.busy) void runPreset(newKey, p.fileName, p.kind, p.text); // the source's conversion is not finished: the copy runs its own
+  if (p?.busy) void runPreset(newKey, p.fileName, p.kind, p.text, p.photoFit === true); // the source's conversion is not finished: the copy runs its own
   if (!copy.icon.pixels) void renderIcon(newKey);
   scheduleSave();
   toast(t('extraDuplicated', { name: extraName(copy) }), 'ok');

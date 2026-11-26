@@ -131,7 +131,7 @@ export async function openFirmware(raw: Uint8Array, name: string, persist: boole
     for (const id of info.capabilities.presets ? allSlotKeys() : []) {
       void renderIcon(id);
       const p = slotOf(id)?.preset;
-      if (p && !p.result && !p.busy) void runPreset(id, p.fileName, p.kind, p.text);
+      if (p && !p.result && !p.busy) void runPreset(id, p.fileName, p.kind, p.text, p.photoFit === true);
     }
     // Encoded again for every firmware: GR IV and GR III store the pictures differently (4:2:2 / 4:2:0).
     if (info.capabilities.wallpaper || info.capabilities.menuPictures) for (const w of state.wall) void encodeWall(w.id);
