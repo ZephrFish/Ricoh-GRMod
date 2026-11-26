@@ -309,16 +309,24 @@ const zh = {
   libSortNew: '最新在前',
   libSortName: '按名称',
   libNoMatch: '没有匹配的预设',
-  // The fork's own: save warning, error hints, keyboard shortcuts, the summary before a folder export
+  // The fork's own: save warning, error hints, project export / import, snapshots, New project, keyboard shortcuts, the summary before a folder export
   saveFailed: '项目没有保存成功，关闭程序后改动可能丢失。请检查磁盘空间和权限',
   hintFirmware: '固件文件不对、已损坏或不受支持，请使用官方原始固件', hintUnsupportedHere: '这台相机的固件不支持该功能',
   hintConflict: 'HLG 照片模式不能与 HDR 增益图同时开启，请关掉其中一个', hintFwFull: '固件里放不下这些改动，请减少关机画面或胶片数量',
   hintTooMany: '添加的比例或图片超过上限，请减少一些', hintCardFull: '存储卡或磁盘已满，请腾出空间后重试',
   hintRemoved: '存储卡或磁盘已断开或未就绪，请重新插入后重试', hintNotFound: '找不到文件，它可能已被移动，或存储卡已拔出',
   hintDenied: '没有权限访问该位置，请换一个文件夹，或检查存储卡是否写保护', hintOffline: '连不上 GR Mod 程序，请关闭窗口后重新打开',
+  projectMenu: '项目', projectExport: '导出项目…', projectImport: '导入项目…', projectWorking: '正在处理项目…',
+  projectExported: '项目已导出（含 {n} 个附属文件）', projectExported1: '项目已导出（含 1 个附属文件）', projectExported0: '项目已导出', projectImportOk: '导入', projectImported: '项目已导入', projectBad: '这不是有效的 GR Mod 项目文件', projectTooNew: '这个项目文件来自更新的 GR Mod，请先更新',
+  projectImportTitle: '导入项目', projectImportLine: '文件来自 GR Mod {v}，含 {n} 个附属文件', projectImportWarn: '当前项目（影像控制、比例、关机画面和设置）将被替换。官方固件不受影响',
   exportConfirmTitle: '导出固件', exportConfirmOk: '导出',
   shortcutsMenu: '键盘快捷键', shortcutsHint: '{m}+E 导出到文件夹 · {m}+Z 撤销删除 · 影像控制页 ← → 切换槽位 · 长宽比页 ↑ ↓ 切换比例', exportFolderKey: '导出到文件夹（{m}+E）',
   hintWriteProtected: '存储卡可能处于写保护状态，请拨开卡侧的锁定开关后重试',
+  snapshotFailed: '无法保存项目的自动备份。本次操作不受影响', snapshotTitle: '恢复较早的版本', snapshotEmpty: '还没有备份。导入项目、新建项目或生成固件时会自动保存。', projectRestore: '恢复较早的版本…',
+  snapshotRestoreBtn: '恢复', snapshotRestoreTitle: '恢复较早的版本', snapshotRestoreOk: '恢复', snapshotRestoreWarn: '当前项目将被替换。恢复前会先备份当前状态，之后可以再恢复回来', snapshotRestored: '已恢复所选版本', snapshotMissing: '这份备份已丢失或无法读取',
+  snapshotSlots: '槽位 {n}', snapshotExtras: '新增槽位 {n}', snapshotRatios: '比例 {n}', snapshotPictures: '关机画面 {n}',
+  snapshotReason_import: '导入前', snapshotReason_new: '新建项目前', snapshotReason_build: '生成固件后', snapshotReason_restore: '恢复前',
+  projectNew: '新建项目…', newProjectTitle: '新建项目', newProjectLine: '当前相机的影像控制、新增槽位、比例、关机画面和开关将被清空', newProjectWarn: '清空前会自动备份，可在“恢复较早的版本”中找回。官方固件、预设库、界面语言和另一类相机的项目不受影响', newProjectOk: '新建', newProjectDone: '已新建项目',
 };
 const en: typeof zh = {
   app: 'GR Mod',
@@ -622,16 +630,24 @@ const en: typeof zh = {
   libSortNew: 'Newest first',
   libSortName: 'By name',
   libNoMatch: 'No preset matches',
-  // The fork's own: save warning, error hints, keyboard shortcuts, the summary before a folder export
+  // The fork's own: save warning, error hints, project export / import, snapshots, New project, keyboard shortcuts, the summary before a folder export
   saveFailed: 'The project could not be saved, so recent changes may be lost on exit. Check disk space and permissions',
   hintFirmware: 'The firmware file is wrong, damaged or unsupported. Use the original official firmware', hintUnsupportedHere: 'This camera\'s firmware does not support that feature',
   hintConflict: 'HLG photo mode and the HDR gain map cannot both be on. Turn one of them off', hintFwFull: 'The firmware has no room for all these changes. Use fewer power-off pictures or films',
   hintTooMany: 'Too many added ratios or pictures. Remove some', hintCardFull: 'The card or disk is full. Free some space and try again',
   hintRemoved: 'The card or disk was removed or is not ready. Reinsert it and try again', hintNotFound: 'File not found. It may have been moved, or the card was removed',
   hintDenied: 'Permission denied. Pick another folder, or check that the card is not write-protected', hintOffline: 'Cannot reach the GR Mod program. Close this window and open it again',
+  projectMenu: 'Project', projectExport: 'Export project…', projectImport: 'Import project…', projectWorking: 'Working on the project…',
+  projectExported: 'Project exported ({n} attached files)', projectExported1: 'Project exported (1 attached file)', projectExported0: 'Project exported', projectImportOk: 'Import', projectImported: 'Project imported', projectBad: 'This is not a valid GR Mod project file', projectTooNew: 'This project file comes from a newer GR Mod. Update first',
+  projectImportTitle: 'Import project', projectImportLine: 'File from GR Mod {v}, with {n} attached files', projectImportWarn: 'The current project (Image Control, ratios, power-off pictures and settings) will be replaced. The official firmware is not touched',
   exportConfirmTitle: 'Export firmware', exportConfirmOk: 'Export',
   shortcutsMenu: 'Keyboard shortcuts', shortcutsHint: '{m}+E export to a folder · {m}+Z undo a delete · Left / Right: slot on Image Control · Up / Down: ratio on Aspect ratio', exportFolderKey: 'Export to a folder ({m}+E)',
   hintWriteProtected: 'The card may be write-protected. Slide its lock switch to unlocked and try again',
+  snapshotFailed: 'Could not keep an automatic backup of the project. Your action is not affected', snapshotTitle: 'Restore an earlier version', snapshotEmpty: 'No backups yet. One is kept when you import a project, start a new one or build a firmware.', projectRestore: 'Restore an earlier version…',
+  snapshotRestoreBtn: 'Restore', snapshotRestoreTitle: 'Restore an earlier version', snapshotRestoreOk: 'Restore', snapshotRestoreWarn: 'The current project will be replaced. It is backed up first, so you can come back to it', snapshotRestored: 'Earlier version restored', snapshotMissing: 'This backup is missing or cannot be read',
+  snapshotSlots: 'Slots: {n}', snapshotExtras: 'Added slots: {n}', snapshotRatios: 'Ratios: {n}', snapshotPictures: 'Pictures: {n}',
+  snapshotReason_import: 'Before an import', snapshotReason_new: 'Before a new project', snapshotReason_build: 'After a build', snapshotReason_restore: 'Before a restore',
+  projectNew: 'New project…', newProjectTitle: 'New project', newProjectLine: 'The open camera\'s Image Control, added slots, ratios, power-off pictures and switches are cleared', newProjectWarn: 'A backup is kept first (Restore an earlier version). The official firmware, the preset library, the interface language and the other camera family\'s project are not touched', newProjectOk: 'Start new', newProjectDone: 'New project started',
 };
 export type Key = keyof typeof zh;
 /** One language's texts: every entry of the Chinese ones. */

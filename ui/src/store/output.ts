@@ -15,6 +15,7 @@ import { GR3X_SOFT_FOCUS, adjSlotsOf, batteryOn, brightAutoOf, customGridOf, dir
 import { hasRatioErrors, ratioShadeOn, ratioSpecs, toneLabel } from './ratios';
 import { canEject } from './photo';
 import { fmtSize, recordBuild, refreshCopies } from './copies';
+import { takeSnapshot } from './fork';
 import { framingOf } from './framing';
 
 // ------------------------------------------------------------------ volumes
@@ -291,6 +292,7 @@ export async function outputFirmware(dest: Dest, stock = false): Promise<void> {
     else await runPlan(target.root, [{ op: 'write', path: [firmwareFilename()], data: file }]);
     set({ busy: undefined });
     doneToast(target.root, target.volume, moved, firmwareFilename());
+    if (!stock) void takeSnapshot('build');
   } catch (e) { set({ busy: undefined }); fail(e); }
   void refreshVolumes();
 }
