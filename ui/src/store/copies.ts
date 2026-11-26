@@ -161,6 +161,7 @@ export function describeCopy(summary: FirmwareSummary, s: State = state): string
   if (summary.brightAuto) lines.push(t(summary.brightAuto === 'balanced' ? 'brightAutoBalanced' : 'brightAutoBright'));
   if (summary.dateStamp) lines.push(t('dateLine'));
   if (summary.monoUnlock) lines.push(t(state.info?.family === 'gr3x' ? 'gr3xReplicaLine' : 'monoLine'));
+  if (summary.hlgPhoto) lines.push(t('hlgLine'));
   if (summary.directFlash) lines.push(t('flashLine'));
   if (summary.hdrGainMap) lines.push(t('hdrLine'));
   if (summary.exposurePreview) lines.push(t(summary.directFlash ? 'previewLine' : 'previewLineNoFlash'));

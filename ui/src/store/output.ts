@@ -11,7 +11,7 @@ import { scheduleSave } from './families';
 import { nameProblem } from './slots';
 import { extraSpecs, hasExtraErrors, lookLayoutSpec } from './looks';
 import { menuPictures, menuReady } from './wall';
-import { GR3X_SOFT_FOCUS, adjSlotsOf, batteryOn, brightAutoOf, customGridOf, directFlashOn, exposurePreviewOn, filmGrainOn, flashTtlOn, hdrOn, subjectAfOn, lockProtectOn, videoAfOn, dimLightAfOn, awbLearnOn, wbPerLookOn, constantLightOn, movieExposureOn, sensorShiftOn, movie4kOn, movieSrOn, distanceFeetOn, monoUnlockOn, shadowLearnOn, softOn } from './features';
+import { GR3X_SOFT_FOCUS, adjSlotsOf, batteryOn, brightAutoOf, customGridOf, directFlashOn, exposurePreviewOn, filmGrainOn, flashTtlOn, hdrOn, subjectAfOn, lockProtectOn, videoAfOn, dimLightAfOn, awbLearnOn, wbPerLookOn, constantLightOn, movieExposureOn, sensorShiftOn, movie4kOn, movieSrOn, distanceFeetOn, monoUnlockOn, shadowLearnOn, softOn, hlgPhotoOn } from './features';
 import { hasRatioErrors, ratioShadeOn, ratioSpecs, toneLabel } from './ratios';
 import { canEject } from './photo';
 import { fmtSize, recordBuild, refreshCopies } from './copies';
@@ -168,6 +168,7 @@ export async function outputFirmware(dest: Dest, stock = false): Promise<void> {
   const soft = !stock && softOn();
   const dateStamp = !stock && !!state.dateStamp && !!state.info.features.dateStamp;
   const monoUnlock = !stock && monoUnlockOn();
+  const hlgPhoto = !stock && hlgPhotoOn();
   const directFlash = !stock && directFlashOn();
   const hdr = !stock && hdrOn();
   const exposurePreview = !stock && exposurePreviewOn();
@@ -205,7 +206,7 @@ export async function outputFirmware(dest: Dest, stock = false): Promise<void> {
   const pictures = noPictures ? [] : menuPictures();
   const films = filmCountChoosable() ? state.filmCount : 0;
   const lookLayout = stock ? undefined : lookLayoutSpec();
-  if (!stock && changes.length === 0 && ratios.length === 0 && !soft && !dateStamp && !monoUnlock && !directFlash && !hdr && !exposurePreview && !filmGrain && !shadowLearn && !battery && !customGrid && !framing && !flashTtl && !subjectAf && !lockProtect && !videoAf && !dimLightAf && !awbLearn && !movieExposure && !sensorShift && !movie4k && !movieSr && !distanceFeet && !constantLight && !brightAuto && adjSlots === 5 && extras.length === 0 && pictures.length === 0 && films === 0 && !lookLayout) { toast(t('nothingToDo'), 'info'); return; }
+  if (!stock && changes.length === 0 && ratios.length === 0 && !soft && !dateStamp && !monoUnlock && !hlgPhoto && !directFlash && !hdr && !exposurePreview && !filmGrain && !shadowLearn && !battery && !customGrid && !framing && !flashTtl && !subjectAf && !lockProtect && !videoAf && !dimLightAf && !awbLearn && !movieExposure && !sensorShift && !movie4k && !movieSr && !distanceFeet && !constantLight && !brightAuto && adjSlots === 5 && extras.length === 0 && pictures.length === 0 && films === 0 && !lookLayout) { toast(t('nothingToDo'), 'info'); return; }
   const fresh = newFirmwareWarning(sourceInfo);
   // The cannot-go-back warning is a paragraph (the dialog's lines are cut to one line each).
   // GR III / IIIx cannot take a firmware over Wi-Fi (only the GR IV's camera has that interface).
@@ -224,6 +225,7 @@ export async function outputFirmware(dest: Dest, stock = false): Promise<void> {
     if (dateStamp) lines.push(t('navDate'));
     if (monoUnlock) lines.push(t(state.info?.family === 'gr3x' ? 'gr3xReplicaTitle' : 'navMono'));
     if (brightAuto) lines.push(t('navBrightAuto'));
+    if (hlgPhoto) lines.push(t('navHlg'));
     if (directFlash) lines.push(t('navFlash'));
     if (hdr) lines.push(t('navHdr'));
     if (exposurePreview) lines.push(t('navPreview'));
@@ -263,7 +265,7 @@ export async function outputFirmware(dest: Dest, stock = false): Promise<void> {
       set({ busy: t('building') });
       const clarity = soft && sourceInfo.features.softFocus === 'clarity' ? [...GR3X_SOFT_FOCUS] : [];
       const built = await engine.build(changes.map((c) => c.request), ratios, clarity,
-        { ...(brightAuto ? { brightAuto } : {}), adjSoftFocus: soft && sourceInfo.features.softFocus === 'adj', dateStamp, monoUnlock, ...(directFlash ? { directFlash } : {}), ...(ratioShade ? { ratioShade, ratioShadeTone: state.ratioShadeTone } : {}), ...(hdr ? { hdrGainMap: true } : {}), ...(exposurePreview ? { exposurePreview: true } : {}), ...(shadowLearn ? { shadowLearn: true } : {}), ...(battery ? { batteryPercent: true } : {}), ...(customGrid ? { customGrid } : {}), ...(framing ? { framing } : {}), ...(filmGrain ? { filmGrain: true } : {}), ...(flashTtl ? { flashTtl: true } : {}), ...(subjectAf ? { subjectAf: true } : {}), ...(lockProtect ? { lockProtect: true } : {}), ...(videoAf ? { videoAf: true } : {}), ...(dimLightAf ? { dimLightAf: true } : {}), ...(awbLearn ? { awbLearn: true } : {}), ...(wbPerLook ? { wbPerLook: true } : {}), ...(halationAll ? { halationAll: true } : {}), ...(movieExposure ? { movieExposure: true } : {}), ...(sensorShift ? { sensorShift: true } : {}), ...(movie4k ? { movie4k: true } : {}), ...(movieSr ? { movieSr: true } : {}), ...(distanceFeet ? { distanceFeet: true } : {}), ...(constantLight ? { constantLight: true } : {}), ...(adjSlots > 5 ? { adjSlots } : {}), ...(extras.length ? { extraSlots: extras } : {}), ...(pictures.length ? { shutdownPictures: pictures } : {}),
+        { ...(brightAuto ? { brightAuto } : {}), adjSoftFocus: soft && sourceInfo.features.softFocus === 'adj', dateStamp, monoUnlock, ...(hlgPhoto ? { hlgPhoto } : {}), ...(directFlash ? { directFlash } : {}), ...(ratioShade ? { ratioShade, ratioShadeTone: state.ratioShadeTone } : {}), ...(hdr ? { hdrGainMap: true } : {}), ...(exposurePreview ? { exposurePreview: true } : {}), ...(shadowLearn ? { shadowLearn: true } : {}), ...(battery ? { batteryPercent: true } : {}), ...(customGrid ? { customGrid } : {}), ...(framing ? { framing } : {}), ...(filmGrain ? { filmGrain: true } : {}), ...(flashTtl ? { flashTtl: true } : {}), ...(subjectAf ? { subjectAf: true } : {}), ...(lockProtect ? { lockProtect: true } : {}), ...(videoAf ? { videoAf: true } : {}), ...(dimLightAf ? { dimLightAf: true } : {}), ...(awbLearn ? { awbLearn: true } : {}), ...(wbPerLook ? { wbPerLook: true } : {}), ...(halationAll ? { halationAll: true } : {}), ...(movieExposure ? { movieExposure: true } : {}), ...(sensorShift ? { sensorShift: true } : {}), ...(movie4k ? { movie4k: true } : {}), ...(movieSr ? { movieSr: true } : {}), ...(distanceFeet ? { distanceFeet: true } : {}), ...(constantLight ? { constantLight: true } : {}), ...(adjSlots > 5 ? { adjSlots } : {}), ...(extras.length ? { extraSlots: extras } : {}), ...(pictures.length ? { shutdownPictures: pictures } : {}),
           ...(films ? { filmCount: films } : {}), ...(lookLayout ? { lookLayout } : {}) });
       if (!Object.values(built.checks).every((v) => v === true)) throw new EngineError('selfcheck-failed', 'self-check');
       file = built.file;

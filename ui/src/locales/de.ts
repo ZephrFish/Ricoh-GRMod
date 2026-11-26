@@ -317,4 +317,8 @@ export const de: Dict = {
   libSortNew: 'Neueste zuerst',
   libSortName: 'Nach Name',
   libNoMatch: 'Kein Preset passt',
+  // The fork's own texts (upstream has none for them), in English until they are translated.
+  navHlg: 'HLG Photo',
+  hlgSub: 'In-camera BT.2100 HLG HDR photos (via HDR Tone slot)',
+  hlgLine: 'HLG Photo  ·  In-camera BT.2100 HLG (Rec.2020 + CICP)',
 };
